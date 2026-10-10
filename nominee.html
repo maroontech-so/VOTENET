@@ -1,0 +1,2328 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Nominee Dashboard — VoteNet.io</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <style>
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            body {
+                background: #f8fafc;
+                color: #1d1d1f;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            /* =========================================================
+   VIEW SYSTEM — bulletproof against Tailwind's utility classes
+   ========================================================= */
+            .view {
+                display: none !important;
+            }
+            .view.active {
+                display: block !important;
+            }
+            #view-auth.view.active {
+                display: flex !important;
+            }
+            #view-dash.view.active {
+                display: flex !important;
+                flex-direction: column;
+            }
+
+            .card {
+                background: #fff;
+                border: 1px solid #eef0f3;
+                border-radius: 18px;
+                box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            }
+            .card-hover:hover {
+                box-shadow: 0 12px 28px -12px rgba(16, 24, 40, 0.12);
+                transform: translateY(-2px);
+            }
+            .card,
+            .card-hover {
+                transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+            }
+            .btn {
+                background: #2563eb;
+                color: #fff;
+                border-radius: 12px;
+                padding: 12px 22px;
+                font-weight: 600;
+                transition: all 0.15s;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+            }
+            .btn:hover {
+                background: #1d4ed8;
+                transform: translateY(-1px);
+            }
+            .btn:active {
+                transform: translateY(0);
+            }
+            .btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none;
+            }
+            .btn-outline {
+                background: #fff;
+                color: #374151;
+                border: 1px solid #e5e7eb;
+            }
+            .btn-outline:hover {
+                background: #f9fafb;
+                border-color: #d1d5db;
+            }
+            .btn-purple {
+                background: #9333ea;
+            }
+            .btn-purple:hover {
+                background: #7e22ce;
+            }
+            .btn-green {
+                background: #16a34a;
+            }
+            .btn-green:hover {
+                background: #15803d;
+            }
+            .btn-sm {
+                padding: 8px 14px;
+                font-size: 13px;
+                border-radius: 10px;
+            }
+            .input {
+                width: 100%;
+                padding: 12px 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                font-size: 15px;
+                background: #fff;
+                transition: all 0.15s;
+            }
+            .input:focus {
+                outline: none;
+                border-color: #2563eb;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            }
+            @keyframes fadeUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            @keyframes pulseSoft {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.55;
+                }
+            }
+            .pulse-soft {
+                animation: pulseSoft 2s ease-in-out infinite;
+            }
+            #toast {
+                position: fixed;
+                bottom: -100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(15, 23, 42, 0.95);
+                color: white;
+                padding: 14px 26px;
+                border-radius: 980px;
+                transition: bottom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                z-index: 300;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                font-weight: 500;
+                box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.35);
+                backdrop-filter: blur(10px);
+            }
+            #toast.show {
+                bottom: 32px;
+            }
+            .modal {
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.6);
+                backdrop-filter: blur(8px);
+                z-index: 200;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 16px;
+            }
+            .modal.show {
+                display: flex;
+            }
+            .modal-panel {
+                animation: fadeUp 0.25s ease;
+            }
+            .tab-btn {
+                padding: 14px 4px 12px;
+                font-size: 14px;
+                font-weight: 600;
+                border-bottom: 2px solid transparent;
+                transition: all 0.15s;
+                background: none;
+                cursor: pointer;
+                border-top: none;
+                border-left: none;
+                border-right: none;
+                color: #6b7280;
+            }
+            .tab-btn.active {
+                color: #2563eb;
+                border-bottom-color: #2563eb;
+            }
+            .photo-picker {
+                position: relative;
+                width: 140px;
+                height: 140px;
+                border-radius: 20px;
+                overflow: hidden;
+                border: 2px dashed #d1d5db;
+                background: #f9fafb;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                margin: 0 auto;
+            }
+            .photo-picker:hover {
+                border-color: #2563eb;
+                background: #eff6ff;
+            }
+            .photo-picker img {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .photo-picker .placeholder {
+                text-align: center;
+                color: #9ca3af;
+                padding: 8px;
+            }
+            .photo-picker .placeholder i {
+                font-size: 30px;
+                display: block;
+                margin-bottom: 4px;
+            }
+            .photo-picker .placeholder span {
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .photo-picker .overlay {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.6);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.2s;
+                font-size: 12px;
+                font-weight: 600;
+                gap: 4px;
+            }
+            .photo-picker:hover .overlay {
+                opacity: 1;
+            }
+            .upload-bar {
+                height: 4px;
+                background: #e5e7eb;
+                border-radius: 2px;
+                overflow: hidden;
+                margin-top: 10px;
+                display: none;
+                max-width: 140px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .upload-bar.show {
+                display: block;
+            }
+            .upload-bar > div {
+                height: 100%;
+                background: #2563eb;
+                width: 0;
+                transition: width 0.3s;
+            }
+            .lb-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 14px;
+                border-radius: 12px;
+                margin-bottom: 8px;
+                border: 1px solid transparent;
+                transition: all 0.2s;
+            }
+            .lb-row.me {
+                background: #eff6ff;
+                border-color: #2563eb;
+                box-shadow: 0 6px 18px -8px rgba(37, 99, 235, 0.4);
+                position: relative;
+                overflow: hidden;
+            }
+            .lb-row.me::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 4px;
+                background: #2563eb;
+            }
+            .lb-row.other {
+                background: #f9fafb;
+                border-color: #f3f4f6;
+            }
+            .lb-rank {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                font-size: 13px;
+                flex-shrink: 0;
+            }
+            .lb-row.me .lb-rank {
+                background: #2563eb;
+                color: white;
+            }
+            .lb-row.other .lb-rank {
+                background: #e5e7eb;
+                color: #6b7280;
+            }
+            .unlock-opt {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                padding: 14px;
+                border: 1.5px solid #e5e7eb;
+                border-radius: 14px;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .unlock-opt:hover {
+                border-color: #93c5fd;
+                background: #f8fafc;
+            }
+            .unlock-opt.selected {
+                border-color: #2563eb;
+                background: #eff6ff;
+            }
+            .unlock-opt input {
+                display: none;
+            }
+            .social-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                transition: all 0.2s;
+            }
+            .err-banner {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                color: #991b1b;
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-size: 13px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            /* password field */
+            .input-wrap {
+                position: relative;
+            }
+            .input-wrap .input {
+                padding-right: 48px;
+            }
+            .pw-toggle {
+                position: absolute;
+                top: 50%;
+                right: 6px;
+                transform: translateY(-50%);
+                width: 34px;
+                height: 34px;
+                border-radius: 10px;
+                border: none;
+                background: transparent;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #9ca3af;
+                cursor: pointer;
+                transition: all 0.15s;
+                font-size: 18px;
+            }
+            .pw-toggle:hover {
+                color: #2563eb;
+                background: #eff6ff;
+            }
+            .strength {
+                display: flex;
+                gap: 4px;
+                margin-top: 8px;
+            }
+            .strength i {
+                flex: 1;
+                height: 4px;
+                border-radius: 999px;
+                background: #e5e7eb;
+                transition: background 0.25s;
+            }
+            .strength.s1 i:nth-child(-n + 1) {
+                background: #ef4444;
+            }
+            .strength.s2 i:nth-child(-n + 2) {
+                background: #f59e0b;
+            }
+            .strength.s3 i:nth-child(-n + 3) {
+                background: #3b82f6;
+            }
+            .strength.s4 i:nth-child(-n + 4) {
+                background: #16a34a;
+            }
+            .field-msg {
+                font-size: 11px;
+                margin-top: 6px;
+                font-weight: 500;
+            }
+            .field-msg.err {
+                color: #dc2626;
+            }
+            .field-msg.ok {
+                color: #16a34a;
+            }
+            .input.invalid {
+                border-color: #fca5a5;
+                background: #fef2f2;
+            }
+            .input.valid {
+                border-color: #86efac;
+            }
+        </style>
+    </head>
+    <body class="min-h-screen">
+        <!-- AUTH -->
+        <section
+            id="view-auth"
+            class="view active min-h-screen items-center justify-center p-4"
+        >
+            <div
+                class="w-full max-w-4xl card overflow-hidden grid md:grid-cols-2"
+            >
+                <div
+                    class="hidden md:block relative bg-slate-900 p-10 text-white"
+                >
+                    <img
+                        src="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"
+                        class="absolute inset-0 w-full h-full object-cover opacity-30"
+                        alt=""
+                    />
+                    <div
+                        class="relative z-10 h-full flex flex-col justify-between"
+                    >
+                        <a
+                            href="/"
+                            class="flex items-center gap-2 font-bold text-lg"
+                        >
+                            <i
+                                class="ph-fill ph-trophy text-blue-400 text-2xl"
+                            ></i>
+                            VoteNet<span class="text-white/50 font-normal"
+                                >.io</span
+                            >
+                        </a>
+                        <div>
+                            <h2
+                                class="text-3xl font-extrabold mb-3 tracking-tight"
+                            >
+                                Join the race.
+                            </h2>
+                            <p class="text-white/70 leading-relaxed">
+                                Register as a nominee, track your campaign in
+                                real time, and turn every shilling of support
+                                into votes.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-8 sm:p-10">
+                    <a
+                        href="/"
+                        class="text-sm text-gray-500 hover:text-gray-900 inline-flex items-center gap-1 mb-6"
+                        ><i class="ph ph-arrow-left"></i> Back to voting</a
+                    >
+                    <div class="flex border-b border-gray-200 mb-6">
+                        <button
+                            id="tab-register"
+                            type="button"
+                            class="tab-btn active flex-1"
+                            onclick="toggleAuth('register')"
+                        >
+                            Create Account
+                        </button>
+                        <button
+                            id="tab-login"
+                            type="button"
+                            class="tab-btn flex-1"
+                            onclick="toggleAuth('login')"
+                        >
+                            Sign In
+                        </button>
+                    </div>
+
+                    <!-- REGISTER -->
+                    <div id="form-register" class="space-y-4">
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Full Name</label
+                            >
+                            <input
+                                type="text"
+                                id="reg-name"
+                                class="input"
+                                placeholder="Jane Doe"
+                                autocomplete="name"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Email</label
+                            >
+                            <input
+                                type="email"
+                                id="reg-email"
+                                class="input"
+                                placeholder="jane@example.com"
+                                autocomplete="email"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Password</label
+                            >
+                            <div class="input-wrap">
+                                <input
+                                    type="password"
+                                    id="reg-pass"
+                                    class="input"
+                                    placeholder="••••••••"
+                                    autocomplete="new-password"
+                                    oninput="onPasswordInput()"
+                                />
+                                <button
+                                    type="button"
+                                    class="pw-toggle"
+                                    onclick="togglePassword('reg-pass', this)"
+                                    aria-label="Show password"
+                                >
+                                    <i class="ph ph-eye"></i>
+                                </button>
+                            </div>
+                            <div class="strength" id="pw-strength">
+                                <i></i><i></i><i></i><i></i>
+                            </div>
+                            <p id="pw-msg" class="field-msg text-gray-400">
+                                At least 8 characters, including a number.
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Confirm Password</label
+                            >
+                            <div class="input-wrap">
+                                <input
+                                    type="password"
+                                    id="reg-pass2"
+                                    class="input"
+                                    placeholder="••••••••"
+                                    autocomplete="new-password"
+                                    oninput="onConfirmInput()"
+                                />
+                                <button
+                                    type="button"
+                                    class="pw-toggle"
+                                    onclick="togglePassword('reg-pass2', this)"
+                                    aria-label="Show password"
+                                >
+                                    <i class="ph ph-eye"></i>
+                                </button>
+                            </div>
+                            <p id="confirm-msg" class="field-msg text-gray-400">
+                                Re-enter your password.
+                            </p>
+                        </div>
+                        <button
+                            id="reg-btn"
+                            type="button"
+                            onclick="handleRegister()"
+                            class="btn w-full py-3.5"
+                        >
+                            <i class="ph ph-user-plus"></i> Create Account
+                        </button>
+                    </div>
+
+                    <!-- LOGIN -->
+                    <div id="form-login" class="space-y-4 hidden">
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Email</label
+                            >
+                            <input
+                                type="email"
+                                id="login-email"
+                                class="input"
+                                placeholder="jane@example.com"
+                                autocomplete="email"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Password</label
+                            >
+                            <div class="input-wrap">
+                                <input
+                                    type="password"
+                                    id="login-pass"
+                                    class="input"
+                                    placeholder="••••••••"
+                                    autocomplete="current-password"
+                                />
+                                <button
+                                    type="button"
+                                    class="pw-toggle"
+                                    onclick="togglePassword('login-pass', this)"
+                                    aria-label="Show password"
+                                >
+                                    <i class="ph ph-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button
+                            id="login-btn"
+                            type="button"
+                            onclick="handleLogin()"
+                            class="btn w-full py-3.5"
+                        >
+                            <i class="ph ph-sign-in"></i> Sign In
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ONBOARD -->
+        <section id="view-onboard" class="view min-h-screen py-10 px-4">
+            <div class="max-w-5xl mx-auto card p-8 sm:p-10">
+                <div class="text-center mb-8">
+                    <div
+                        class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    >
+                        <i class="ph ph-sparkle text-2xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-1">
+                        Complete Your Nomination
+                    </h2>
+                    <p class="text-gray-500 max-w-lg mx-auto">
+                        Pick a category, add a profile photo, and write a short
+                        bio that tells voters why you deserve to win.
+                    </p>
+                </div>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="space-y-5">
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
+                                >Profile Photo</label
+                            >
+                            <div
+                                class="photo-picker"
+                                onclick="
+                                    document
+                                        .getElementById('ob-img-file')
+                                        .click()
+                                "
+                            >
+                                <div
+                                    class="placeholder"
+                                    id="picker-placeholder"
+                                >
+                                    <i class="ph ph-camera"></i
+                                    ><span>Tap to choose</span>
+                                </div>
+                                <img
+                                    id="ob-img-preview"
+                                    class="hidden"
+                                    alt=""
+                                />
+                                <div class="overlay">
+                                    <i class="ph ph-pencil-simple"></i> Change
+                                </div>
+                            </div>
+                            <input
+                                type="file"
+                                id="ob-img-file"
+                                accept="image/*"
+                                class="hidden"
+                                onchange="handleImage(event)"
+                            />
+                            <div class="upload-bar" id="upload-bar">
+                                <div id="upload-progress"></div>
+                            </div>
+                            <p
+                                class="text-[11px] text-gray-400 text-center mt-3"
+                            >
+                                JPG, PNG or WebP · max 10 MB
+                            </p>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Display Name</label
+                            >
+                            <input
+                                id="ob-name"
+                                class="input"
+                                placeholder="Your public voting name"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Category</label
+                            >
+                            <select id="ob-cat" class="input"></select>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-5">
+                        <div class="flex-grow">
+                            <label
+                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                                >Short Bio</label
+                            >
+                            <textarea
+                                id="ob-desc"
+                                class="input resize-none h-full min-h-[200px]"
+                                placeholder="Share your story — achievements, mission, why voters should choose you."
+                            ></textarea>
+                        </div>
+                        <button
+                            id="publish-btn"
+                            onclick="submitNomination()"
+                            class="btn btn-green w-full py-3.5"
+                        >
+                            <i class="ph ph-rocket-launch"></i> Publish
+                            Nomination
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- DASHBOARD -->
+        <section id="view-dash" class="view min-h-screen">
+            <header
+                class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-gray-200/70"
+            >
+                <div
+                    class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between"
+                >
+                    <a
+                        href="/"
+                        class="flex items-center gap-2 font-bold text-lg"
+                    >
+                        <i class="ph-fill ph-trophy text-blue-600 text-2xl"></i>
+                        VoteNet<span class="text-gray-400 font-normal"
+                            >.io</span
+                        >
+                    </a>
+                    <div class="flex items-center gap-3">
+                        <span
+                            class="hidden sm:inline-block text-xs font-medium text-gray-500"
+                            >Nominee Portal</span
+                        >
+                        <button
+                            onclick="logout()"
+                            class="text-sm text-red-500 hover:text-red-700 font-medium"
+                        >
+                            Sign out
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="max-w-7xl mx-auto w-full px-4 py-6 sm:py-8 space-y-6">
+                <div id="dashboard-error" class="hidden err-banner">
+                    <i class="ph ph-warning-circle text-lg"></i>
+                    <span id="dashboard-error-msg" class="flex-1"
+                        >Something went wrong loading your dashboard.</span
+                    >
+                    <button
+                        onclick="loadDashboard()"
+                        class="font-semibold underline"
+                    >
+                        Retry
+                    </button>
+                </div>
+
+                <!-- =========================================================
+         PROFILE HERO — full image + big vote counter
+         ========================================================= -->
+                <div class="card overflow-hidden">
+                    <div class="flex flex-col md:flex-row">
+                        <!-- Full profile image (no rounding, no crop) -->
+                        <div
+                            class="relative md:w-2/5 lg:w-1/3 aspect-square md:aspect-auto md:min-h-[440px] bg-gray-100 shrink-0"
+                        >
+                            <img
+                                id="d-img"
+                                class="absolute inset-0 w-full h-full object-cover"
+                                alt=""
+                            />
+                            <div
+                                class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none"
+                            ></div>
+                            
+                        </div>
+
+                        <!-- Info column -->
+                        <div class="flex-1 p-6 sm:p-8 flex flex-col">
+                            <!-- Big votes immediately alongside the photo -->
+                            <div class="mb-6">
+                                <p
+                                    class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2"
+                                >
+                                    <i class="ph-fill ph-check-circle"></i>
+                                    Total Verified Votes
+                                </p>
+                                <div
+                                    class="flex items-baseline gap-3 flex-wrap"
+                                >
+                                    <span
+                                        id="d-votes"
+                                        class="text-6xl sm:text-7xl font-extrabold text-gray-900 tracking-tighter"
+                                        >0</span
+                                    >
+                                    <span
+                                        class="text-sm font-medium text-gray-500"
+                                        >votes counted</span
+                                    >
+                                </div>
+                            </div>
+
+                            <div class="border-t border-gray-100 pt-6 mb-6">
+                                <div
+                                    class="flex flex-wrap items-center gap-3 mb-2"
+                                >
+                                    <h1
+                                        id="d-name"
+                                        class="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight"
+                                    >
+                                        —
+                                    </h1>
+                                    <span
+                                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-gray-100 text-gray-700 border border-gray-200"
+                                    >
+                                        <i
+                                            class="ph ph-hash text-gray-400 text-[10px] mr-1"
+                                        ></i
+                                        ><span id="d-code">—</span>
+                                    </span>
+                                </div>
+                                <p
+                                    class="text-blue-600 font-semibold flex items-center gap-2"
+                                >
+                                    <i class="ph ph-medal"></i>
+                                    <span id="d-cat">—</span>
+                                </p>
+                            </div>
+
+                            <div
+                                class="flex flex-col sm:flex-row gap-2 mt-auto"
+                            >
+                                <button
+                                    id="unlock-btn"
+                                    onclick="openUnlock()"
+                                    class="btn flex-1"
+                                >
+                                    <i class="ph ph-lock-open"></i> Unlock
+                                    Leaderboard
+                                </button>
+                                <button
+                                    onclick="openChangeCategory()"
+                                    class="btn btn-purple flex-1"
+                                >
+                                    <i class="ph ph-swap"></i> Change Category ·
+                                    KSH 50
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 space-y-6">
+                        <!-- Campaign link -->
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3
+                                    class="text-lg font-bold flex items-center gap-2"
+                                >
+                                    <i class="ph ph-link text-blue-600"></i>
+                                    Your Public Campaign Link
+                                </h3>
+                                <span
+                                    class="text-xs font-semibold bg-green-100 text-green-700 px-2.5 py-1 rounded-md"
+                                    >Active</span
+                                >
+                            </div>
+                            <p class="text-sm text-gray-500 mb-5">
+                                Share this unique link with supporters — it
+                                opens your voting card directly.
+                            </p>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <div class="relative flex-1">
+                                    <div
+                                        class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
+                                    >
+                                        <i
+                                            class="ph ph-globe text-gray-400"
+                                        ></i>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        readonly
+                                        id="d-link"
+                                        class="input pl-11 bg-gray-50 font-mono text-sm"
+                                    />
+                                </div>
+                                <button
+                                    onclick="copyLink()"
+                                    class="btn w-full sm:w-auto"
+                                >
+                                    <i class="ph ph-copy"></i> Copy
+                                </button>
+                            </div>
+                            <div class="mt-6 pt-5 border-t border-gray-100">
+                                <p
+                                    class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3"
+                                >
+                                    Share
+                                </p>
+                                <div class="flex gap-3 flex-wrap">
+                                    <button
+                                        onclick="shareTo('whatsapp')"
+                                        class="social-btn bg-green-500/10 text-green-600 hover:bg-green-500 hover:text-white"
+                                        title="WhatsApp"
+                                    >
+                                        <i class="ph-fill ph-whatsapp-logo"></i>
+                                    </button>
+                                    <button
+                                        onclick="shareTo('twitter')"
+                                        class="social-btn bg-sky-500/10 text-sky-600 hover:bg-sky-500 hover:text-white"
+                                        title="Twitter / X"
+                                    >
+                                        <i class="ph-fill ph-twitter-logo"></i>
+                                    </button>
+                                    <button
+                                        onclick="shareTo('facebook')"
+                                        class="social-btn bg-blue-600/10 text-blue-700 hover:bg-blue-600 hover:text-white"
+                                        title="Facebook"
+                                    >
+                                        <i class="ph-fill ph-facebook-logo"></i>
+                                    </button>
+                                    <button
+                                        onclick="shareTo('telegram')"
+                                        class="social-btn bg-sky-400/10 text-sky-500 hover:bg-sky-400 hover:text-white"
+                                        title="Telegram"
+                                    >
+                                        <i class="ph-fill ph-telegram-logo"></i>
+                                    </button>
+                                    <button
+                                        onclick="shareTo('native')"
+                                        class="social-btn bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                        title="More"
+                                    >
+                                        <i class="ph ph-share-network"></i>
+                                    </button>
+                                    <button
+                                        onclick="openQR()"
+                                        class="social-btn bg-indigo-500/10 text-indigo-600 hover:bg-indigo-600 hover:text-white"
+                                        title="Show QR Code"
+                                    >
+                                        <i class="ph ph-qr-code"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity -->
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3
+                                    class="text-base font-bold flex items-center gap-2"
+                                >
+                                    <i
+                                        class="ph ph-clock-counter-clockwise text-blue-600"
+                                    ></i>
+                                    Recent Activity
+                                </h3>
+                                <button
+                                    onclick="loadDashboard()"
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                                >
+                                    <i class="ph ph-arrow-clockwise"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                            <div id="activity-list" class="space-y-2 text-sm">
+                                <div
+                                    class="text-center py-6 text-gray-400 text-xs"
+                                >
+                                    Loading…
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div
+                            class="card overflow-hidden flex flex-col max-h-[560px]"
+                        >
+                            <div
+                                class="p-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between"
+                            >
+                                <h3
+                                    class="font-bold flex items-center gap-2 text-sm"
+                                >
+                                    <i
+                                        class="ph ph-list-numbers text-gray-500"
+                                    ></i>
+                                    Category Leaderboard
+                                </h3>
+                                <span
+                                    id="lb-badge"
+                                    class="px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1"
+                                >
+                                    <i class="ph ph-lock text-xs"></i> Locked
+                                </span>
+                            </div>
+
+                            <div
+                                id="lb-locked"
+                                class="p-5 flex-1 bg-gray-50/60 flex flex-col items-center justify-center text-center border-b border-gray-100"
+                            >
+                                <div
+                                    class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100 mb-4 text-gray-300"
+                                >
+                                    <i class="ph ph-crown text-3xl"></i>
+                                </div>
+                                <h4 class="text-gray-800 font-semibold mb-1.5">
+                                    Curious about your rank?
+                                </h4>
+                                <p
+                                    class="text-xs text-gray-500 mb-5 max-w-[220px] leading-relaxed"
+                                >
+                                    See your exact position and how you compare
+                                    to competitors in your category.
+                                </p>
+                                <button
+                                    onclick="openUnlock()"
+                                    class="btn btn-sm w-full max-w-[240px]"
+                                >
+                                    <i class="ph ph-key"></i> Unlock Leaderboard
+                                </button>
+                            </div>
+
+                            <div
+                                id="rel-board"
+                                class="p-5 space-y-2 overflow-y-auto"
+                            ></div>
+                            <div
+                                id="full-board"
+                                class="hidden p-4 space-y-2 overflow-y-auto"
+                            ></div>
+                        </div>
+
+                        <div class="card p-5 bg-blue-50 border-blue-100">
+                            <div class="flex items-start gap-3">
+                                <div class="text-blue-500 shrink-0 mt-0.5">
+                                    <i class="ph-fill ph-lightbulb text-xl"></i>
+                                </div>
+                                <div>
+                                    <h4
+                                        class="font-bold text-blue-900 text-sm mb-1"
+                                    >
+                                        Campaign Tip
+                                    </h4>
+                                    <p
+                                        class="text-xs text-blue-700 leading-relaxed"
+                                    >
+                                        Nominees who share their QR code at
+                                        events get up to 3× more votes. Print it
+                                        and stick it on your posters.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-8"></div>
+            </main>
+        </section>
+
+        <!-- CHANGE CATEGORY MODAL -->
+        <div id="change-cat-modal" class="modal">
+            <div class="modal-panel card w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('change-cat-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div id="cc-form">
+                    <div
+                        class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mb-3"
+                    >
+                        <i class="ph ph-swap text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-1">Change Category</h3>
+                    <p class="text-sm text-gray-500 mb-5">
+                        Move your nomination to a different category. Cost:
+                        <span class="font-semibold text-gray-900">KSH 50</span>.
+                    </p>
+                    <label
+                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >New Category</label
+                    >
+                    <select id="new-cat-select" class="input mb-4"></select>
+                    <label
+                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >M-Pesa Phone</label
+                    >
+                    <input
+                        type="tel"
+                        id="change-phone"
+                        class="input mb-5"
+                        placeholder="07XX XXX XXX"
+                    />
+                    <div class="flex gap-2">
+                        <button
+                            onclick="closeModal('change-cat-modal')"
+                            class="btn btn-outline flex-1"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            id="change-pay-btn"
+                            onclick="submitChangeCategory()"
+                            class="btn btn-purple flex-1"
+                        >
+                            Pay KSH 50
+                        </button>
+                    </div>
+                </div>
+                <div id="cc-loading" class="hidden text-center py-8">
+                    <div
+                        class="w-12 h-12 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"
+                    ></div>
+                    <p class="font-semibold">Check your phone</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Enter your M-Pesa PIN to confirm.
+                    </p>
+                    <p
+                        class="text-[10px] text-gray-400 font-mono mt-3"
+                        id="cc-ref"
+                    ></p>
+                </div>
+                <div id="cc-success" class="hidden text-center py-4">
+                    <div
+                        class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"
+                    >
+                        <i
+                            class="ph-fill ph-check-circle text-green-600 text-4xl"
+                        ></i>
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Thank you!</h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Your category has been updated.
+                    </p>
+                    <button
+                        onclick="
+                            closeModal('change-cat-modal');
+                            loadDashboard();
+                        "
+                        class="btn w-full"
+                    >
+                        Continue
+                    </button>
+                </div>
+                <div id="cc-failed" class="hidden text-center py-4">
+                    <div
+                        class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4"
+                    >
+                        <i
+                            class="ph-fill ph-x-circle text-red-600 text-4xl"
+                        ></i>
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Payment failed</h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                        No money has been deducted. You can try again.
+                    </p>
+                    <div class="flex gap-2">
+                        <button
+                            onclick="resetChangeCategoryModal()"
+                            class="btn btn-outline flex-1"
+                        >
+                            Retry
+                        </button>
+                        <button
+                            onclick="closeModal('change-cat-modal')"
+                            class="btn flex-1"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UNLOCK MODAL -->
+        <div id="unlock-modal" class="modal">
+            <div class="modal-panel card w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('unlock-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div id="unlock-form">
+                    <div
+                        class="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-3"
+                    >
+                        <i class="ph ph-lock-open text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-1">
+                        Unlock Full Leaderboard
+                    </h3>
+                    <p class="text-sm text-gray-500 mb-5">
+                        See your exact rank plus every competitor in your
+                        category.
+                    </p>
+                    <div class="space-y-3 mb-5">
+                        <label
+                            class="unlock-opt selected"
+                            id="opt-once"
+                            onclick="selectUnlock('once')"
+                        >
+                            <input
+                                type="radio"
+                                name="unlock-type"
+                                value="once"
+                                checked
+                            />
+                            <div
+                                class="w-10 h-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0"
+                            >
+                                <i class="ph ph-eye"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm">
+                                    One-time view
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    Single peek at the full leaderboard
+                                </div>
+                            </div>
+                            <div class="font-bold text-blue-600">KSH 10</div>
+                        </label>
+                        <label
+                            class="unlock-opt"
+                            id="opt-2h"
+                            onclick="selectUnlock('2h')"
+                        >
+                            <input type="radio" name="unlock-type" value="2h" />
+                            <div
+                                class="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center shrink-0"
+                            >
+                                <i class="ph ph-clock"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-semibold text-sm">
+                                    2-hour access
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    Unlimited refreshes for 2 hours
+                                </div>
+                            </div>
+                            <div class="font-bold text-blue-600">KSH 25</div>
+                        </label>
+                    </div>
+                    <label
+                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >M-Pesa Phone</label
+                    >
+                    <input
+                        type="tel"
+                        id="unlock-phone"
+                        class="input mb-5"
+                        placeholder="07XX XXX XXX"
+                    />
+                    <div class="flex gap-2">
+                        <button
+                            onclick="closeModal('unlock-modal')"
+                            class="btn btn-outline flex-1"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            id="unlock-pay-btn"
+                            onclick="submitUnlock()"
+                            class="btn flex-1"
+                        >
+                            Pay & Unlock
+                        </button>
+                    </div>
+                </div>
+                <div id="unlock-loading" class="hidden text-center py-8">
+                    <div
+                        class="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"
+                    ></div>
+                    <p class="font-semibold">Check your phone</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Enter your M-Pesa PIN to confirm.
+                    </p>
+                    <p
+                        class="text-[10px] text-gray-400 font-mono mt-3"
+                        id="unlock-ref"
+                    ></p>
+                </div>
+                <div id="unlock-success" class="hidden text-center py-4">
+                    <div
+                        class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"
+                    >
+                        <i
+                            class="ph-fill ph-check-circle text-green-600 text-4xl"
+                        ></i>
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Thank you!</h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Your leaderboard is unlocked.
+                    </p>
+                    <button
+                        onclick="
+                            closeModal('unlock-modal');
+                            loadDashboard();
+                        "
+                        class="btn w-full"
+                    >
+                        View Leaderboard
+                    </button>
+                </div>
+                <div id="unlock-failed" class="hidden text-center py-4">
+                    <div
+                        class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4"
+                    >
+                        <i
+                            class="ph-fill ph-x-circle text-red-600 text-4xl"
+                        ></i>
+                    </div>
+                    <h4 class="text-xl font-bold mb-2">Payment failed</h4>
+                    <p class="text-sm text-gray-600 mb-4">
+                        No money has been deducted.
+                    </p>
+                    <div class="flex gap-2">
+                        <button
+                            onclick="resetUnlockModal()"
+                            class="btn btn-outline flex-1"
+                        >
+                            Try Again
+                        </button>
+                        <button
+                            onclick="closeModal('unlock-modal')"
+                            class="btn flex-1"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR MODAL -->
+        <div id="qr-modal" class="modal">
+            <div
+                class="modal-panel card w-full max-w-sm p-6 relative text-center"
+            >
+                <button
+                    onclick="closeModal('qr-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div
+                    class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mb-3 mx-auto"
+                >
+                    <i class="ph ph-qr-code text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-1">Scan to Vote</h3>
+                <p class="text-sm text-gray-500 mb-5">
+                    Point any phone camera at the code below to open your voting
+                    card.
+                </p>
+                <div
+                    class="bg-white p-4 rounded-2xl border-2 border-gray-100 mb-4 inline-block"
+                >
+                    <img id="qr-img" class="w-64 h-64" alt="QR Code" />
+                </div>
+                <p
+                    class="text-xs font-mono text-gray-400 break-all mb-5 px-2"
+                    id="qr-url"
+                ></p>
+                <div class="flex gap-2">
+                    <button
+                        onclick="downloadQR()"
+                        class="btn btn-outline flex-1"
+                    >
+                        <i class="ph ph-download"></i> Save
+                    </button>
+                    <button onclick="closeModal('qr-modal')" class="btn flex-1">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast">
+            <i class="ph ph-check-circle text-green-400 text-xl"></i
+            ><span id="toast-msg"></span>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+
+            /* ---------- TOKEN HELPERS ---------- */
+            function getToken() {
+                const t = localStorage.getItem("vn_token");
+                if (!t || t === "undefined" || t === "null" || t === "")
+                    return null;
+                return t;
+            }
+            function setToken(t) {
+                if (
+                    !t ||
+                    typeof t !== "string" ||
+                    t === "undefined" ||
+                    t === "null"
+                )
+                    return false;
+                localStorage.setItem("vn_token", t);
+                return true;
+            }
+            function clearToken() {
+                localStorage.removeItem("vn_token");
+            }
+
+            let categories = [],
+                nominee = null,
+                selectedFile = null,
+                uploadedUrl = null;
+            let currentUnlockType = "once";
+            let pollTimers = { change: null, unlock: null };
+
+            /* ---------- UTILS ---------- */
+            function toast(msg, ok = true) {
+                const t = $("toast");
+                t.querySelector("i").className = ok
+                    ? "ph-fill ph-check-circle text-green-400 text-xl"
+                    : "ph-fill ph-warning-circle text-red-400 text-xl";
+                $("toast-msg").innerText = msg;
+                t.classList.add("show");
+                clearTimeout(window.__toastTimer);
+                window.__toastTimer = setTimeout(
+                    () => t.classList.remove("show"),
+                    3000,
+                );
+            }
+
+            function setBusy(btnId, busy, labelHtml) {
+                const btn = $(btnId);
+                if (!btn) return;
+                if (busy) {
+                    btn.dataset.originalHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML =
+                        labelHtml ||
+                        '<i class="ph ph-spinner animate-spin text-lg"></i> Working…';
+                } else {
+                    btn.disabled = false;
+                    if (btn.dataset.originalHtml) {
+                        btn.innerHTML = btn.dataset.originalHtml;
+                        delete btn.dataset.originalHtml;
+                    }
+                }
+            }
+
+            async function api(url, opts = {}) {
+                const h = {
+                    "Content-Type": "application/json",
+                    ...(opts.headers || {}),
+                };
+                const token = getToken();
+                if (token) h.Authorization = "Bearer " + token;
+                const res = await fetch(url, { ...opts, headers: h });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const err = new Error(
+                        data.error ||
+                            data.message ||
+                            `Request failed (${res.status})`,
+                    );
+                    err.status = res.status;
+                    throw err;
+                }
+                return data;
+            }
+
+            function showView(id) {
+                document
+                    .querySelectorAll(".view")
+                    .forEach((v) => v.classList.remove("active"));
+                $(id).classList.add("active");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+
+            function closeModal(id) {
+                $(id).classList.remove("show");
+            }
+
+            function toggleAuth(type) {
+                $("tab-register").classList.toggle(
+                    "active",
+                    type === "register",
+                );
+                $("tab-login").classList.toggle("active", type === "login");
+                $("form-register").classList.toggle(
+                    "hidden",
+                    type !== "register",
+                );
+                $("form-login").classList.toggle("hidden", type !== "login");
+                setTimeout(() => {
+                    const first =
+                        type === "register" ? $("reg-name") : $("login-email");
+                    if (first) first.focus();
+                }, 50);
+            }
+
+            /* ---------- PASSWORD UI ---------- */
+            function togglePassword(inputId, btn) {
+                const input = $(inputId);
+                if (!input) return;
+                const show = input.type === "password";
+                input.type = show ? "text" : "password";
+                const icon = btn.querySelector("i");
+                if (icon)
+                    icon.className = show ? "ph ph-eye-slash" : "ph ph-eye";
+            }
+
+            function passwordScore(pw) {
+                let s = 0;
+                if (!pw) return 0;
+                if (pw.length >= 8) s++;
+                if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+                if (/\d/.test(pw)) s++;
+                if (/[^A-Za-z0-9]/.test(pw) && pw.length >= 10) s++;
+                return Math.min(s, 4);
+            }
+            const PW_LABELS = ["Too weak", "Weak", "Fair", "Good", "Strong"];
+
+            function onPasswordInput() {
+                const pw = $("reg-pass").value;
+                const s = passwordScore(pw);
+                $("pw-strength").className = "strength" + (s ? " s" + s : "");
+                const msg = $("pw-msg");
+                if (!pw) {
+                    msg.className = "field-msg text-gray-400";
+                    msg.innerText =
+                        "At least 8 characters, including a number.";
+                } else if (pw.length < 8) {
+                    msg.className = "field-msg err";
+                    msg.innerText = "Password must be at least 8 characters.";
+                } else if (!/\d/.test(pw)) {
+                    msg.className = "field-msg err";
+                    msg.innerText = "Password must contain a number.";
+                } else {
+                    msg.className = "field-msg ok";
+                    msg.innerText = "Strength: " + PW_LABELS[s];
+                }
+                if ($("reg-pass2").value) onConfirmInput();
+            }
+
+            function onConfirmInput() {
+                const pw = $("reg-pass").value;
+                const pw2 = $("reg-pass2").value;
+                const msg = $("confirm-msg");
+                const input = $("reg-pass2");
+                if (!pw2) {
+                    msg.className = "field-msg text-gray-400";
+                    msg.innerText = "Re-enter your password.";
+                    input.classList.remove("valid", "invalid");
+                } else if (pw === pw2) {
+                    msg.className = "field-msg ok";
+                    msg.innerText = "Passwords match.";
+                    input.classList.add("valid");
+                    input.classList.remove("invalid");
+                } else {
+                    msg.className = "field-msg err";
+                    msg.innerText = "Passwords do not match.";
+                    input.classList.add("invalid");
+                    input.classList.remove("valid");
+                }
+            }
+
+            /* ---------- AUTH ---------- */
+            function isValidEmail(e) {
+                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+            }
+
+            async function handleRegister() {
+                const name = $("reg-name").value.trim();
+                const email = $("reg-email").value.trim();
+                const password = $("reg-pass").value;
+                const password2 = $("reg-pass2").value;
+
+                if (!name) {
+                    toast("Please enter your full name", false);
+                    return;
+                }
+                if (!email || !isValidEmail(email)) {
+                    toast("Please enter a valid email", false);
+                    return;
+                }
+                if (password.length < 8) {
+                    toast("Password must be at least 8 characters", false);
+                    return;
+                }
+                if (!/\d/.test(password)) {
+                    toast("Password must contain a number", false);
+                    return;
+                }
+                if (password !== password2) {
+                    toast("Passwords do not match", false);
+                    return;
+                }
+
+                setBusy(
+                    "reg-btn",
+                    true,
+                    '<i class="ph ph-spinner animate-spin text-lg"></i> Creating…',
+                );
+                try {
+                    const d = await api("/api/auth/register", {
+                        method: "POST",
+                        body: JSON.stringify({ name, email, password }),
+                    });
+                    const token = d.token || d.accessToken || d.access_token;
+                    if (!setToken(token))
+                        throw new Error(
+                            "Server did not return a valid session token",
+                        );
+                    $("ob-name").value = (d.user && d.user.name) || name;
+                    await loadCategories();
+                    showView("view-onboard");
+                    toast("Account created — set up your nomination");
+                } catch (e) {
+                    console.error("[Register]", e);
+                    toast(e.message || "Registration failed", false);
+                } finally {
+                    setBusy("reg-btn", false);
+                }
+            }
+
+            async function handleLogin() {
+                const email = $("login-email").value.trim();
+                const password = $("login-pass").value;
+
+                if (!email || !password) {
+                    toast("Enter email and password", false);
+                    return;
+                }
+                if (!isValidEmail(email)) {
+                    toast("Please enter a valid email", false);
+                    return;
+                }
+
+                setBusy(
+                    "login-btn",
+                    true,
+                    '<i class="ph ph-spinner animate-spin text-lg"></i> Signing in…',
+                );
+                try {
+                    const raw = await api("/api/auth/login", {
+                        method: "POST",
+                        body: JSON.stringify({ email, password }),
+                    });
+                    const d = raw.data || raw;
+                    const token =
+                        d.token || d.accessToken || d.access_token || d.jwt;
+                    if (!setToken(token))
+                        throw new Error(
+                            "Server did not return a valid session token",
+                        );
+
+                    // Source of truth is /api/nominee/me — not a possibly-stale flag
+                    try {
+                        await loadDashboard({ fromLogin: true });
+                        toast("Welcome back!");
+                    } catch (inner) {
+                        if (inner.status === 401) {
+                            clearToken();
+                            showView("view-auth");
+                            toast(
+                                "Session rejected — please sign in again",
+                                false,
+                            );
+                        } else if (
+                            inner.status === 404 ||
+                            (inner.message &&
+                                inner.message.includes("Not a nominee"))
+                        ) {
+                            $("ob-name").value = (d.user && d.user.name) || "";
+                            await loadCategories();
+                            showView("view-onboard");
+                            toast("Set up your nomination to get started");
+                        } else {
+                            throw inner;
+                        }
+                    }
+                } catch (e) {
+                    console.error("[Login]", e);
+                    clearToken();
+                    toast(e.message || "Login failed", false);
+                } finally {
+                    setBusy("login-btn", false);
+                }
+            }
+
+            function logout() {
+                clearToken();
+                location.reload();
+            }
+
+            /* ---------- CATEGORIES ---------- */
+            async function loadCategories() {
+                try {
+                    categories = await api("/api/categories");
+                } catch {
+                    categories = [];
+                }
+                if (!categories.length) {
+                    $("ob-cat").innerHTML =
+                        '<option value="">No categories — contact the administrator</option>';
+                } else {
+                    $("ob-cat").innerHTML = categories
+                        .map(
+                            (c) => `<option value="${c.id}">${c.name}</option>`,
+                        )
+                        .join("");
+                }
+                const others = categories.filter(
+                    (c) => !nominee || c.id !== nominee.category_id,
+                );
+                $("new-cat-select").innerHTML = others.length
+                    ? others
+                          .map(
+                              (c) =>
+                                  `<option value="${c.id}">${c.name}</option>`,
+                          )
+                          .join("")
+                    : '<option value="">No other categories available</option>';
+            }
+
+            /* ---------- IMAGE UPLOAD ---------- */
+            function handleImage(event) {
+                const f = event.target.files[0];
+                if (!f) return;
+                if (!f.type.startsWith("image/")) {
+                    toast("Please choose an image file", false);
+                    return;
+                }
+                if (f.size > 10 * 1024 * 1024) {
+                    toast("Image must be under 10 MB", false);
+                    return;
+                }
+                selectedFile = f;
+                uploadedUrl = null;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    $("ob-img-preview").src = e.target.result;
+                    $("ob-img-preview").classList.remove("hidden");
+                    $("picker-placeholder").classList.add("hidden");
+                };
+                reader.readAsDataURL(f);
+            }
+
+            function uploadImage() {
+                return new Promise((resolve, reject) => {
+                    if (!selectedFile) return resolve(null);
+                    const fd = new FormData();
+                    fd.append("image", selectedFile);
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload");
+                    xhr.setRequestHeader(
+                        "Authorization",
+                        "Bearer " + getToken(),
+                    );
+                    $("upload-bar").classList.add("show");
+                    $("upload-progress").style.width = "0%";
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable)
+                            $("upload-progress").style.width =
+                                Math.round((e.loaded / e.total) * 100) + "%";
+                    };
+                    xhr.onload = () => {
+                        $("upload-bar").classList.remove("show");
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const d = JSON.parse(xhr.responseText);
+                                uploadedUrl = d.url;
+                                resolve(d.url);
+                            } catch {
+                                reject(new Error("Invalid response"));
+                            }
+                        } else {
+                            try {
+                                reject(
+                                    new Error(
+                                        JSON.parse(xhr.responseText).error ||
+                                            "Upload failed",
+                                    ),
+                                );
+                            } catch {
+                                reject(new Error("Upload failed"));
+                            }
+                        }
+                    };
+                    xhr.onerror = () => {
+                        $("upload-bar").classList.remove("show");
+                        reject(new Error("Network error"));
+                    };
+                    xhr.send(fd);
+                });
+            }
+
+            async function submitNomination() {
+                const name = $("ob-name").value.trim();
+                const categoryId = $("ob-cat").value;
+                const desc = $("ob-desc").value.trim();
+                if (!name || !categoryId) {
+                    toast("Name and category required", false);
+                    return;
+                }
+                const btn = $("publish-btn");
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin text-lg"></i> Publishing…';
+                try {
+                    let imgUrl = uploadedUrl;
+                    if (selectedFile && !imgUrl) imgUrl = await uploadImage();
+                    await api("/api/nominee/register", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            name,
+                            categoryId,
+                            img: imgUrl || "",
+                            desc,
+                        }),
+                    });
+                    toast("Nomination published!");
+                    await loadDashboard();
+                } catch (e) {
+                    toast(e.message, false);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML =
+                        '<i class="ph ph-rocket-launch"></i> Publish Nomination';
+                }
+            }
+
+            /* ---------- DASHBOARD ---------- */
+            async function loadDashboard(opts = {}) {
+                const fromLogin = !!opts.fromLogin;
+                if (!getToken()) {
+                    showView("view-auth");
+                    return;
+                }
+
+                // Hide auth and any other view immediately
+                showView("view-dash");
+
+                try {
+                    const d = await api("/api/nominee/me");
+                    nominee = d.nominee;
+                    $("dashboard-error").classList.add("hidden");
+
+                    $("d-img").src =
+                        nominee.img ||
+                        `https://placehold.co/800x800/1e293b/ffffff?text=${encodeURIComponent(nominee.name[0] || "?")}`;
+                    $("d-name").innerText = nominee.name;
+                    $("d-cat").innerText = nominee.category;
+                    $("d-code").innerText = nominee.code;
+                    $("d-votes").innerText = (
+                        nominee.votes || 0
+                    ).toLocaleString();
+                    $("d-link").value =
+                        `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
+
+                    await loadCategories();
+                    renderLeaderboard(d.leaderboard, d.leaderboardAccess);
+                    renderActivity();
+                } catch (e) {
+                    if (e.status === 401) {
+                        clearToken();
+                        if (fromLogin) throw e;
+                        showView("view-auth");
+                        return;
+                    }
+                    if (
+                        e.status === 404 ||
+                        (e.message && e.message.includes("Not a nominee"))
+                    ) {
+                        await loadCategories();
+                        showView("view-onboard");
+                        return;
+                    }
+                    $("dashboard-error-msg").innerText =
+                        e.message ||
+                        "Something went wrong loading your dashboard.";
+                    $("dashboard-error").classList.remove("hidden");
+                    console.error("[Dashboard]", e);
+                }
+            }
+
+            function renderLeaderboard(board, access) {
+                const row = (icon, label, votes, me) => `
+    <div class="lb-row ${me ? "me" : "other"}">
+      <div class="flex items-center gap-3 relative z-10">
+        <div class="lb-rank"><i class="${icon}"></i></div>
+        <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs text-gray-500 font-medium"}">${label}</span>
+      </div>
+      <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs font-mono text-gray-500"}">${(votes || 0).toLocaleString()}</span>
+    </div>`;
+                let relHTML = "";
+                if (board && board.above)
+                    relHTML += row(
+                        "ph ph-arrow-up",
+                        "Competitor Ahead",
+                        board.above.votes,
+                        false,
+                    );
+                if (board && board.self)
+                    relHTML += row("ph ph-user", "You", board.self.votes, true);
+                if (board && board.below)
+                    relHTML += row(
+                        "ph ph-arrow-down",
+                        "Competitor Behind",
+                        board.below.votes,
+                        false,
+                    );
+                $("rel-board").innerHTML =
+                    relHTML ||
+                    '<div class="text-center py-6 text-gray-400 text-xs">No ranking data yet.</div>';
+
+                const allowed = access && access.allowed;
+                if (allowed) {
+                    $("lb-locked").classList.add("hidden");
+                    $("rel-board").classList.add("hidden");
+                    $("full-board").classList.remove("hidden");
+                    $("unlock-btn").classList.add("hidden");
+
+                    const badge = $("lb-badge");
+                    badge.className =
+                        "px-2.5 py-1 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1 " +
+                        (access.type === "permanent"
+                            ? "bg-green-100 text-green-700"
+                            : access.type === "timed"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-purple-100 text-purple-700");
+                    badge.innerHTML =
+                        '<i class="ph ph-lock-open text-xs"></i> ' +
+                        (access.type === "permanent"
+                            ? "Full"
+                            : access.type === "timed"
+                              ? "2h"
+                              : "Credits");
+
+                    loadFullLeaderboard();
+                } else {
+                    $("lb-locked").classList.remove("hidden");
+                    $("rel-board").classList.remove("hidden");
+                    $("full-board").classList.add("hidden");
+                    $("unlock-btn").classList.remove("hidden");
+                    $("lb-badge").className =
+                        "px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1";
+                    $("lb-badge").innerHTML =
+                        '<i class="ph ph-lock text-xs"></i> Locked';
+                }
+            }
+
+            async function loadFullLeaderboard() {
+                try {
+                    const d = await api("/api/nominee/leaderboard");
+                    $("full-board").innerHTML = d.leaderboard
+                        .map(
+                            (r) => `
+      <div class="lb-row ${r.isMe ? "me" : "other"}">
+        <div class="flex items-center gap-3 relative z-10 min-w-0">
+          <div class="lb-rank">${r.rank}</div>
+          <div class="min-w-0">
+            <div class="text-sm font-semibold truncate">${r.name}${r.isMe ? ' <span class="text-blue-600 text-xs">(You)</span>' : ""}</div>
+            <div class="text-[10px] font-mono text-gray-500">${r.code}</div>
+          </div>
+        </div>
+        <div class="text-sm font-mono font-bold ${r.isMe ? "text-blue-700" : "text-gray-700"} relative z-10">${(r.votes || 0).toLocaleString()}</div>
+      </div>
+    `,
+                        )
+                        .join("");
+                    if (d.access && d.access.type === "credits")
+                        setTimeout(() => loadDashboard(), 300);
+                } catch (e) {
+                    if (e.status === 402)
+                        setTimeout(() => loadDashboard(), 200);
+                }
+            }
+
+            function renderActivity() {
+                const list = $("activity-list");
+                if (!nominee) return;
+                if ((nominee.votes || 0) === 0) {
+                    list.innerHTML =
+                        '<div class="text-center py-6 text-gray-400 text-xs"><i class="ph ph-hourglass text-2xl block mb-2 opacity-50"></i>No activity yet. Share your link or QR code to get started.</div>';
+                } else {
+                    list.innerHTML = `
+      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="ph-fill ph-check-circle"></i></div>
+          <div>
+            <div class="font-semibold text-sm">${nominee.votes.toLocaleString()} votes received</div>
+            <div class="text-xs text-gray-500">Keep sharing to climb the leaderboard</div>
+          </div>
+        </div>
+      </div>`;
+                }
+            }
+
+            /* ---------- SHARE ---------- */
+            function copyLink() {
+                const i = $("d-link");
+                i.select();
+                i.setSelectionRange(0, 99999);
+                try {
+                    document.execCommand("copy");
+                    toast("Link copied");
+                } catch {
+                    toast("Copy failed", false);
+                }
+            }
+
+            function shareTo(platform) {
+                const shareUrl = $("d-link").value;
+                const url = encodeURIComponent(shareUrl);
+                const text = encodeURIComponent(
+                    `Vote for ${nominee?.name || "me"} on VoteNet!`,
+                );
+                const links = {
+                    whatsapp: `https://wa.me/?text=${text}%20${url}`,
+                    twitter: `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
+                    facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+                    telegram: `https://t.me/share/url?url=${url}&text=${text}`,
+                };
+                if (platform === "native" && navigator.share) {
+                    navigator
+                        .share({
+                            title: "VoteNet",
+                            text: `Vote for ${nominee?.name || "me"}`,
+                            url: shareUrl,
+                        })
+                        .catch(() => {});
+                    return;
+                }
+                if (links[platform])
+                    window.open(
+                        links[platform],
+                        "_blank",
+                        "noopener,width=600,height=500",
+                    );
+            }
+
+            /* ---------- QR CODE ---------- */
+            function openQR() {
+                const shareUrl = $("d-link").value;
+                if (!shareUrl) return;
+                const qrEndpoint = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=8&data=${encodeURIComponent(shareUrl)}`;
+                $("qr-img").src = qrEndpoint;
+                $("qr-url").innerText = shareUrl;
+                $("qr-modal").classList.add("show");
+            }
+
+            async function downloadQR() {
+                const src = $("qr-img").src;
+                if (!src) return;
+                try {
+                    const res = await fetch(src);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `votenet-qr-${nominee?.code || "nominee"}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    toast("QR code saved");
+                } catch (e) {
+                    toast("Download failed", false);
+                }
+            }
+
+            /* ---------- CHANGE CATEGORY ---------- */
+            function openChangeCategory() {
+                if (!nominee) return;
+                const others = categories.filter(
+                    (c) => c.id !== nominee.category_id,
+                );
+                $("new-cat-select").innerHTML = others.length
+                    ? others
+                          .map(
+                              (c) =>
+                                  `<option value="${c.id}">${c.name}</option>`,
+                          )
+                          .join("")
+                    : '<option value="">No other categories available</option>';
+                $("change-phone").value = "";
+                $("cc-form").classList.remove("hidden");
+                $("cc-loading").classList.add("hidden");
+                $("cc-success").classList.add("hidden");
+                $("cc-failed").classList.add("hidden");
+                $("change-cat-modal").classList.add("show");
+            }
+            function resetChangeCategoryModal() {
+                $("cc-failed").classList.add("hidden");
+                $("cc-form").classList.remove("hidden");
+            }
+            async function submitChangeCategory() {
+                const newCategoryId = $("new-cat-select").value;
+                const phone = $("change-phone").value.trim();
+                if (!newCategoryId) {
+                    toast("Select a category", false);
+                    return;
+                }
+                if (!phone) {
+                    toast("Enter M-Pesa number", false);
+                    return;
+                }
+                $("cc-form").classList.add("hidden");
+                $("cc-loading").classList.remove("hidden");
+                try {
+                    const d = await api("/api/nominee/change-category", {
+                        method: "POST",
+                        body: JSON.stringify({ newCategoryId, phone }),
+                    });
+                    $("cc-ref").innerText = d.reference;
+                    pollPayment(d.reference, "change");
+                } catch (e) {
+                    $("cc-loading").classList.add("hidden");
+                    $("cc-failed").classList.remove("hidden");
+                    $("cc-failed").querySelector("p").innerText = e.message;
+                }
+            }
+
+            /* ---------- UNLOCK ---------- */
+            function openUnlock() {
+                $("unlock-phone").value = "";
+                selectUnlock("once");
+                $("unlock-form").classList.remove("hidden");
+                $("unlock-loading").classList.add("hidden");
+                $("unlock-success").classList.add("hidden");
+                $("unlock-failed").classList.add("hidden");
+                $("unlock-modal").classList.add("show");
+            }
+            function selectUnlock(type) {
+                currentUnlockType = type;
+                $("opt-once").classList.toggle("selected", type === "once");
+                $("opt-2h").classList.toggle("selected", type === "2h");
+                const radio = document.querySelector(
+                    `input[name="unlock-type"][value="${type}"]`,
+                );
+                if (radio) radio.checked = true;
+            }
+            function resetUnlockModal() {
+                $("unlock-failed").classList.add("hidden");
+                $("unlock-form").classList.remove("hidden");
+            }
+            async function submitUnlock() {
+                const phone = $("unlock-phone").value.trim();
+                if (!phone) {
+                    toast("Enter M-Pesa number", false);
+                    return;
+                }
+                $("unlock-form").classList.add("hidden");
+                $("unlock-loading").classList.remove("hidden");
+                try {
+                    const d = await api("/api/nominee/unlock-leaderboard", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            type: currentUnlockType,
+                            phone,
+                        }),
+                    });
+                    $("unlock-ref").innerText = d.reference;
+                    pollPayment(d.reference, "unlock");
+                } catch (e) {
+                    $("unlock-loading").classList.add("hidden");
+                    $("unlock-failed").classList.remove("hidden");
+                    $("unlock-failed").querySelector("p").innerText = e.message;
+                }
+            }
+
+            /* ---------- POLLING ---------- */
+            function pollPayment(reference, kind) {
+                if (pollTimers[kind]) clearInterval(pollTimers[kind]);
+                const startedAt = Date.now();
+                const timeoutMs = 3 * 60 * 1000;
+                pollTimers[kind] = setInterval(async () => {
+                    if (Date.now() - startedAt > timeoutMs) {
+                        clearInterval(pollTimers[kind]);
+                        pollTimers[kind] = null;
+                        const lId =
+                            kind === "change" ? "cc-loading" : "unlock-loading";
+                        const fId =
+                            kind === "change" ? "cc-failed" : "unlock-failed";
+                        $(lId).classList.add("hidden");
+                        $(fId).classList.remove("hidden");
+                        $(fId).querySelector("p").innerText =
+                            "Still processing. If you confirmed payment, refresh the page in a moment.";
+                        return;
+                    }
+                    try {
+                        const s = await api(
+                            "/api/transactions/status/" + reference,
+                        );
+                        if (s.status === "success") {
+                            clearInterval(pollTimers[kind]);
+                            pollTimers[kind] = null;
+                            const lId =
+                                kind === "change"
+                                    ? "cc-loading"
+                                    : "unlock-loading";
+                            const sId =
+                                kind === "change"
+                                    ? "cc-success"
+                                    : "unlock-success";
+                            $(lId).classList.add("hidden");
+                            $(sId).classList.remove("hidden");
+                        } else if (
+                            s.status === "failed" ||
+                            s.status === "abandoned"
+                        ) {
+                            clearInterval(pollTimers[kind]);
+                            pollTimers[kind] = null;
+                            const lId =
+                                kind === "change"
+                                    ? "cc-loading"
+                                    : "unlock-loading";
+                            const fId =
+                                kind === "change"
+                                    ? "cc-failed"
+                                    : "unlock-failed";
+                            $(lId).classList.add("hidden");
+                            $(fId).classList.remove("hidden");
+                        }
+                    } catch (e) {
+                        if (e.status === 404) {
+                            clearInterval(pollTimers[kind]);
+                            pollTimers[kind] = null;
+                            const lId =
+                                kind === "change"
+                                    ? "cc-loading"
+                                    : "unlock-loading";
+                            const fId =
+                                kind === "change"
+                                    ? "cc-failed"
+                                    : "unlock-failed";
+                            $(lId).classList.add("hidden");
+                            $(fId).classList.remove("hidden");
+                        }
+                    }
+                }, 2000);
+            }
+
+            /* ---------- ENTER KEY SUBMIT ---------- */
+            document.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter") return;
+                const authVisible = $("view-auth").classList.contains("active");
+                if (!authVisible) return;
+                const isRegister =
+                    !$("form-register").classList.contains("hidden");
+                if (isRegister) handleRegister();
+                else handleLogin();
+            });
+
+            /* ---------- BOOT ---------- */
+            (async () => {
+                if (!getToken()) {
+                    showView("view-auth");
+                    return;
+                }
+                await loadDashboard();
+            })();
+        </script>
+    </body>
+</html>

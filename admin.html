@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin — VoteNet.io</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            body {
+                background: #f9fafb;
+                color: #1d1d1f;
+            }
+            .glass {
+                background: rgba(255, 255, 255, 0.78);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.55);
+                border-radius: 20px;
+                box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
+            }
+            .btn {
+                background: #3f51b5;
+                color: white;
+                border-radius: 10px;
+                padding: 10px 18px;
+                font-weight: 500;
+                transition: all 0.15s;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+            }
+            .btn:hover {
+                background: #303f9f;
+            }
+            .btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .btn-outline {
+                background: white;
+                color: #333;
+                border: 1px solid #d1d5db;
+            }
+            .btn-outline:hover {
+                background: #f9fafb;
+            }
+            .btn-danger {
+                background: #dc2626;
+            }
+            .btn-danger:hover {
+                background: #b91c1c;
+            }
+            .btn-sm {
+                padding: 6px 12px;
+                font-size: 12px;
+                border-radius: 8px;
+            }
+            .input {
+                width: 100%;
+                padding: 10px 14px;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                font-size: 14px;
+                background: white;
+                transition: all 0.15s;
+            }
+            .input:focus {
+                outline: none;
+                border-color: #3f51b5;
+                box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.15);
+            }
+            .nav-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 11px 20px;
+                font-size: 14px;
+                color: #4b5563;
+                border-left: 3px solid transparent;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .nav-item:hover {
+                background: #f9fafb;
+                color: #111827;
+            }
+            .nav-item.active {
+                background: #e8eaf6;
+                color: #3f51b5;
+                font-weight: 600;
+                border-left-color: #3f51b5;
+            }
+            .nav-item i {
+                font-size: 18px;
+            }
+            .modal {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.55);
+                backdrop-filter: blur(6px);
+                z-index: 100;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 16px;
+            }
+            .modal.show {
+                display: flex;
+            }
+            #toast {
+                position: fixed;
+                bottom: -100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 980px;
+                transition: bottom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                z-index: 200;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                font-weight: 500;
+            }
+            #toast.show {
+                bottom: 30px;
+            }
+            .stat-card {
+                background: white;
+                border-radius: 14px;
+                border: 1px solid #f3f4f6;
+                padding: 20px;
+                transition: all 0.2s;
+            }
+            .stat-card:hover {
+                box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.1);
+                transform: translateY(-2px);
+            }
+            .icon-bubble {
+                width: 40px;
+                height: 40px;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+            }
+            table tbody tr {
+                transition: background 0.15s;
+            }
+            table tbody tr:hover {
+                background: #f9fafb;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- =================== LOGIN =================== -->
+        <div
+            id="login-view"
+            class="min-h-screen flex items-center justify-center p-4"
+        >
+            <div class="glass p-8 max-w-md w-full">
+                <div class="text-center mb-6">
+                    <i
+                        class="ph-fill ph-shield-check text-5xl text-indigo-600"
+                    ></i>
+                    <h2 class="text-2xl font-bold mt-3">Admin Login</h2>
+                    <p class="text-gray-500 text-sm mt-1">
+                        Sign in with your admin credentials.
+                    </p>
+                </div>
+                <div class="space-y-3">
+                    <input
+                        type="text"
+                        id="login-username"
+                        class="input"
+                        placeholder="Username"
+                        autocomplete="username"
+                        onkeydown="if (event.key === 'Enter') doLogin();"
+                    />
+                    <input
+                        type="password"
+                        id="login-password"
+                        class="input"
+                        placeholder="Password"
+                        autocomplete="current-password"
+                        onkeydown="if (event.key === 'Enter') doLogin();"
+                    />
+                    <button onclick="doLogin()" class="btn w-full py-3">
+                        Sign In
+                    </button>
+                </div>
+                <a
+                    href="/"
+                    class="block text-center text-sm text-gray-500 hover:text-gray-900 mt-4"
+                    >← Back to public site</a
+                >
+            </div>
+        </div>
+
+        <!-- =================== DASHBOARD =================== -->
+        <div id="dash-view" class="hidden min-h-screen flex flex-col">
+            <header
+                class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-20"
+            >
+                <div class="flex items-center gap-3">
+                    <button
+                        id="menu-toggle"
+                        class="lg:hidden p-2 text-gray-500"
+                    >
+                        <i class="ph ph-list text-xl"></i>
+                    </button>
+                    <a
+                        href="/"
+                        class="flex items-center gap-2 font-bold text-lg"
+                    >
+                        <i
+                            class="ph-fill ph-trophy text-indigo-600 text-2xl"
+                        ></i>
+                        VoteNet<span class="text-gray-400 font-normal"
+                            >.io</span
+                        >
+                    </a>
+                    <span
+                        class="hidden sm:inline-block text-xs font-medium text-gray-400 uppercase tracking-wider ml-2 pl-3 border-l border-gray-200"
+                        >Admin</span
+                    >
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-sm font-semibold" id="admin-name">
+                            —
+                        </div>
+                        <div class="text-xs text-gray-500" id="admin-role">
+                            —
+                        </div>
+                    </div>
+                    <div
+                        class="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold"
+                        id="admin-avatar"
+                    >
+                        A
+                    </div>
+                    <button
+                        onclick="doLogout()"
+                        class="text-sm text-red-500 hover:text-red-700 font-medium ml-2"
+                    >
+                        Logout
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex flex-1 overflow-hidden relative">
+                <div
+                    id="sidebar-overlay"
+                    class="fixed inset-0 bg-gray-800/50 z-30 hidden lg:hidden"
+                ></div>
+
+                <aside
+                    id="sidebar"
+                    class="fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 flex flex-col h-full"
+                >
+                    <nav class="flex-1 overflow-y-auto py-4">
+                        <div
+                            class="px-5 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                        >
+                            Main
+                        </div>
+                        <a
+                            class="nav-item active"
+                            data-tab="overview"
+                            onclick="switchTab('overview')"
+                        >
+                            <i class="ph ph-chart-pie-slice"></i> Overview
+                        </a>
+                        <a
+                            class="nav-item"
+                            data-tab="categories"
+                            onclick="switchTab('categories')"
+                        >
+                            <i class="ph ph-folders"></i> Categories
+                        </a>
+                        <a
+                            class="nav-item"
+                            data-tab="nominees"
+                            onclick="switchTab('nominees')"
+                        >
+                            <i class="ph ph-users-three"></i> Nominees
+                        </a>
+                        <a
+                            class="nav-item"
+                            data-super
+                            data-tab="transactions"
+                            onclick="switchTab('transactions')"
+                        >
+                            <i class="ph ph-receipt"></i> Transactions
+                        </a>
+
+                        <div
+                            class="px-5 mb-2 mt-6 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
+                            data-super
+                        >
+                            Access
+                        </div>
+                        <a
+                            class="nav-item"
+                            data-super
+                            data-tab="admins"
+                            onclick="switchTab('admins')"
+                        >
+                            <i class="ph ph-shield-star"></i> Admin Users
+                        </a>
+                        <a
+                            class="nav-item"
+                            data-super
+                            data-tab="logs"
+                            onclick="switchTab('logs')"
+                        >
+                            <i class="ph ph-list-magnifying-glass"></i> Payment
+                            Logs
+                        </a>
+                    </nav>
+                    <div
+                        class="p-4 border-t border-gray-100 text-xs text-gray-400"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span
+                                class="w-2 h-2 rounded-full bg-green-500"
+                            ></span>
+                            System operational
+                        </div>
+                    </div>
+                </aside>
+
+                <main class="flex-1 overflow-y-auto p-4 lg:p-8">
+                    <!-- OVERVIEW -->
+                    <section id="tab-overview">
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        >
+                            <div>
+                                <h1 class="text-2xl font-bold">Overview</h1>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Real-time metrics across all categories.
+                                </p>
+                            </div>
+                            <div class="flex gap-2" data-super>
+                                <button
+                                    onclick="downloadExport('csv')"
+                                    class="btn btn-outline"
+                                >
+                                    <i class="ph ph-file-csv"></i> CSV
+                                </button>
+                                <button
+                                    onclick="downloadExport('pdf')"
+                                    class="btn"
+                                >
+                                    <i class="ph ph-file-pdf"></i> PDF Report
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Stats grid: layout adapts to role via JS -->
+                        <div
+                            id="stats-grid"
+                            class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8"
+                        >
+                            <div class="stat-card">
+                                <div
+                                    class="flex justify-between items-start mb-3"
+                                >
+                                    <div
+                                        class="icon-bubble bg-indigo-50 text-indigo-600"
+                                    >
+                                        <i class="ph-fill ph-vote"></i>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-medium">
+                                    Total Votes
+                                </div>
+                                <div
+                                    class="text-2xl font-bold mt-1"
+                                    id="s-votes"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div class="stat-card" data-super>
+                                <div
+                                    class="flex justify-between items-start mb-3"
+                                >
+                                    <div
+                                        class="icon-bubble bg-green-50 text-green-600"
+                                    >
+                                        <i class="ph-fill ph-money"></i>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-medium">
+                                    Gross Revenue
+                                </div>
+                                <div
+                                    class="text-2xl font-bold mt-1"
+                                    id="s-gross"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div class="stat-card" data-super>
+                                <div
+                                    class="flex justify-between items-start mb-3"
+                                >
+                                    <div
+                                        class="icon-bubble bg-blue-50 text-blue-600"
+                                    >
+                                        <i class="ph-fill ph-bank"></i>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-medium">
+                                    Platform (10%)
+                                </div>
+                                <div
+                                    class="text-2xl font-bold mt-1"
+                                    id="s-plat"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div class="stat-card" data-super>
+                                <div
+                                    class="flex justify-between items-start mb-3"
+                                >
+                                    <div
+                                        class="icon-bubble bg-orange-50 text-orange-600"
+                                    >
+                                        <i class="ph-fill ph-hourglass"></i>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-medium">
+                                    Pending Payments
+                                </div>
+                                <div
+                                    class="text-2xl font-bold mt-1"
+                                    id="s-pending"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div
+                                    class="flex justify-between items-start mb-3"
+                                >
+                                    <div
+                                        class="icon-bubble bg-purple-50 text-purple-600"
+                                    >
+                                        <i class="ph-fill ph-users"></i>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-medium">
+                                    Nominees
+                                </div>
+                                <div
+                                    class="text-2xl font-bold mt-1"
+                                    id="s-nominees"
+                                >
+                                    —
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl p-5 lg:col-span-2"
+                            >
+                                <h3 class="font-semibold mb-4">
+                                    Top 5 Nominees
+                                </h3>
+                                <div class="h-72">
+                                    <canvas id="barChart"></canvas>
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl p-5"
+                            >
+                                <h3 class="font-semibold mb-4">
+                                    Votes by Category
+                                </h3>
+                                <div
+                                    class="h-72 flex items-center justify-center"
+                                >
+                                    <canvas id="doughnutChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl p-5"
+                        >
+                            <h3 class="font-semibold mb-4">
+                                Voting Trend (Last 7 Days)
+                            </h3>
+                            <div class="h-72">
+                                <canvas id="lineChart"></canvas>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- CATEGORIES -->
+                    <section id="tab-categories" class="hidden">
+                        <div class="mb-6">
+                            <h1 class="text-2xl font-bold">Categories</h1>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Create, rename, and delete nomination
+                                categories.
+                            </p>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl p-5 mb-6"
+                        >
+                            <h3 class="font-semibold mb-3">Create Category</h3>
+                            <div class="flex gap-2">
+                                <input
+                                    id="new-cat-name"
+                                    class="input flex-1"
+                                    placeholder="e.g. Best Content Creator"
+                                />
+                                <button onclick="createCategory()" class="btn">
+                                    <i class="ph ph-plus"></i> Add
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl overflow-hidden"
+                        >
+                            <div
+                                id="categories-list"
+                                class="divide-y divide-gray-100"
+                            ></div>
+                        </div>
+                    </section>
+
+                    <!-- NOMINEES -->
+                    <section id="tab-nominees" class="hidden">
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        >
+                            <div>
+                                <h1 class="text-2xl font-bold">Nominees</h1>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Manage nominees and their details.
+                                </p>
+                            </div>
+                            <button onclick="openAddNominee()" class="btn">
+                                <i class="ph ph-user-plus"></i> Add Nominee
+                            </button>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl overflow-hidden"
+                        >
+                            <div
+                                class="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3"
+                            >
+                                <input
+                                    id="nom-search"
+                                    class="input sm:max-w-xs"
+                                    placeholder="Search by name or code…"
+                                    oninput="renderNomineeList()"
+                                />
+                                <select
+                                    id="nom-cat-filter"
+                                    class="input sm:max-w-xs"
+                                    onchange="renderNomineeList()"
+                                >
+                                    <option value="">All categories</option>
+                                </select>
+                            </div>
+                            <div
+                                id="nominees-list"
+                                class="divide-y divide-gray-100"
+                            ></div>
+                        </div>
+                    </section>
+
+                    <!-- TRANSACTIONS (super only) -->
+                    <section id="tab-transactions" class="hidden">
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        >
+                            <div>
+                                <h1 class="text-2xl font-bold">Transactions</h1>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Last 200 transactions with live status.
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button
+                                    onclick="downloadExport('csv')"
+                                    class="btn btn-outline btn-sm"
+                                >
+                                    <i class="ph ph-file-csv"></i> CSV
+                                </button>
+                                <button
+                                    onclick="downloadExport('pdf')"
+                                    class="btn btn-sm"
+                                >
+                                    <i class="ph ph-file-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl overflow-hidden"
+                        >
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead
+                                        class="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider"
+                                    >
+                                        <tr>
+                                            <th class="px-4 py-3">Reference</th>
+                                            <th class="px-4 py-3">Type</th>
+                                            <th class="px-4 py-3">Nominee</th>
+                                            <th class="px-4 py-3">Amount</th>
+                                            <th class="px-4 py-3">Phone</th>
+                                            <th class="px-4 py-3">Status</th>
+                                            <th class="px-4 py-3">Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody
+                                        id="tx-tbody"
+                                        class="divide-y divide-gray-100"
+                                    ></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ADMINS (super only) -->
+                    <section id="tab-admins" class="hidden">
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        >
+                            <div>
+                                <h1 class="text-2xl font-bold">Admin Users</h1>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Create and revoke regular admin accounts.
+                                </p>
+                            </div>
+                            <button onclick="openAddAdmin()" class="btn">
+                                <i class="ph ph-user-plus"></i> New Admin
+                            </button>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl overflow-hidden"
+                        >
+                            <div
+                                id="admins-list"
+                                class="divide-y divide-gray-100"
+                            ></div>
+                        </div>
+                    </section>
+
+                    <!-- LOGS (super only) -->
+                    <section id="tab-logs" class="hidden">
+                        <div class="mb-6">
+                            <h1 class="text-2xl font-bold">Payment Logs</h1>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Full audit trail of every payment event.
+                            </p>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl p-5 mb-4"
+                        >
+                            <div class="flex gap-2">
+                                <input
+                                    id="log-ref"
+                                    class="input flex-1"
+                                    placeholder="Enter a transaction reference to view the trail…"
+                                    onkeydown="
+                                        if (event.key === 'Enter') loadLogs();
+                                    "
+                                />
+                                <button onclick="loadLogs()" class="btn">
+                                    <i class="ph ph-magnifying-glass"></i>
+                                    Search
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="bg-white border border-gray-100 rounded-xl overflow-hidden"
+                        >
+                            <div
+                                id="logs-list"
+                                class="divide-y divide-gray-100 p-4 text-sm text-gray-500"
+                            >
+                                Enter a reference above to view its log.
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+
+        <!-- ============ MODAL: ADD NOMINEE ============ -->
+        <div id="add-nominee-modal" class="modal">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('add-nominee-modal')"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4">Add Nominee</h3>
+                <div class="space-y-3">
+                    <input id="an-name" class="input" placeholder="Full Name" />
+                    <select id="an-category" class="input">
+                        <option value="">Select category</option>
+                    </select>
+                    <input
+                        id="an-desc"
+                        class="input"
+                        placeholder="Short bio (optional)"
+                    />
+                    <input
+                        id="an-img-url"
+                        class="input"
+                        placeholder="Image URL (optional)"
+                    />
+                    <div class="flex gap-2 pt-2">
+                        <button
+                            onclick="closeModal('add-nominee-modal')"
+                            class="btn btn-outline flex-1"
+                        >
+                            Cancel
+                        </button>
+                        <button onclick="createNominee()" class="btn flex-1">
+                            <i class="ph ph-check"></i> Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL: ADD ADMIN ============ -->
+        <div id="add-admin-modal" class="modal">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('add-admin-modal')"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <h3 class="text-xl font-bold mb-4">Create Admin</h3>
+                <div class="space-y-3">
+                    <input
+                        id="aa-username"
+                        class="input"
+                        placeholder="Username"
+                    />
+                    <input
+                        id="aa-display"
+                        class="input"
+                        placeholder="Display name (optional)"
+                    />
+                    <input
+                        id="aa-password"
+                        class="input"
+                        type="password"
+                        placeholder="Password (min 6 chars)"
+                    />
+                    <div class="flex gap-2 pt-2">
+                        <button
+                            onclick="closeModal('add-admin-modal')"
+                            class="btn btn-outline flex-1"
+                        >
+                            Cancel
+                        </button>
+                        <button onclick="createAdmin()" class="btn flex-1">
+                            <i class="ph ph-shield-plus"></i> Create
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast">
+            <i class="ph ph-check-circle text-green-400 text-xl"></i
+            ><span id="toast-msg"></span>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+            const getToken = () => localStorage.getItem("vn_admin_token");
+            const getAdmin = () =>
+                JSON.parse(localStorage.getItem("vn_admin_user") || "null");
+            const setSession = (token, user) => {
+                localStorage.setItem("vn_admin_token", token);
+                localStorage.setItem("vn_admin_user", JSON.stringify(user));
+            };
+            const clearSession = () => {
+                localStorage.removeItem("vn_admin_token");
+                localStorage.removeItem("vn_admin_user");
+            };
+            const isSuper = () => getAdmin()?.role === "super";
+
+            let chartsInitialized = false;
+            let CATEGORIES = [];
+            let NOMINEES = [];
+
+            function toast(msg, ok = true) {
+                const t = $("toast");
+                t.querySelector("i").className = ok
+                    ? "ph-fill ph-check-circle text-green-400 text-xl"
+                    : "ph-fill ph-warning-circle text-red-400 text-xl";
+                $("toast-msg").innerText = msg;
+                t.classList.add("show");
+                setTimeout(() => t.classList.remove("show"), 3000);
+            }
+
+            async function api(url, opts = {}) {
+                const h = { "Content-Type": "application/json" };
+                if (getToken()) h.Authorization = "Bearer " + getToken();
+                const res = await fetch(url, { headers: h, ...opts });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        clearSession();
+                        location.reload();
+                    }
+                    throw new Error(
+                        data.error || `Request failed (${res.status})`,
+                    );
+                }
+                return data;
+            }
+
+            function closeModal(id) {
+                $(id).classList.remove("show");
+            }
+
+            /* ---------- LOGIN ---------- */
+            async function doLogin() {
+                const username = $("login-username").value.trim();
+                const password = $("login-password").value;
+                if (!username || !password) {
+                    toast("Enter username and password", false);
+                    return;
+                }
+                try {
+                    const d = await api("/api/admin/login", {
+                        method: "POST",
+                        body: JSON.stringify({ username, password }),
+                    });
+                    setSession(d.token, d.user);
+                    showDashboard();
+                    toast("Signed in");
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            function doLogout() {
+                clearSession();
+                location.reload();
+            }
+
+            /* ---------- TAB SWITCHING ---------- */
+            function switchTab(tab) {
+                document
+                    .querySelectorAll(".nav-item")
+                    .forEach((el) => el.classList.remove("active"));
+                const nav = document.querySelector(
+                    `.nav-item[data-tab="${tab}"]`,
+                );
+                if (nav) nav.classList.add("active");
+
+                [
+                    "overview",
+                    "categories",
+                    "nominees",
+                    "transactions",
+                    "admins",
+                    "logs",
+                ].forEach((t) => {
+                    $(`tab-${t}`).classList.toggle("hidden", t !== tab);
+                });
+
+                if (window.innerWidth < 1024) closeSidebar();
+
+                if (tab === "overview") loadOverview();
+                if (tab === "categories") loadCategories();
+                if (tab === "nominees") loadNominees();
+                if (tab === "transactions") loadTransactions();
+                if (tab === "admins") loadAdmins();
+            }
+
+            function openSidebar() {
+                $("sidebar").classList.remove("-translate-x-full");
+                $("sidebar-overlay").classList.remove("hidden");
+            }
+            function closeSidebar() {
+                $("sidebar").classList.add("-translate-x-full");
+                $("sidebar-overlay").classList.add("hidden");
+            }
+
+            /* ---------- DASHBOARD INIT ---------- */
+            async function showDashboard() {
+                const user = getAdmin();
+                if (!user) {
+                    clearSession();
+                    location.reload();
+                    return;
+                }
+
+                $("login-view").classList.add("hidden");
+                $("dash-view").classList.remove("hidden");
+
+                $("admin-name").innerText = user.displayName || user.username;
+                $("admin-avatar").innerText = (
+                    user.displayName || user.username
+                )
+                    .charAt(0)
+                    .toUpperCase();
+
+                // Header subtitle — same label for both roles (silent about rank)
+                $("admin-role").innerText = "Administrator";
+
+                // Silent role-based visibility — super sees the extra UI
+                if (!isSuper()) {
+                    document
+                        .querySelectorAll("[data-super]")
+                        .forEach((el) => el.classList.add("hidden"));
+                    // Compact stats grid for regular admins (2 cards + nominees = 3 cards)
+                    $("stats-grid").className =
+                        "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8";
+                }
+
+                await refreshBase();
+                await loadOverview();
+            }
+
+            async function refreshBase() {
+                try {
+                    const [cats, noms] = await Promise.all([
+                        api("/api/categories"),
+                        api("/api/nominees"),
+                    ]);
+                    CATEGORIES = cats;
+                    NOMINEES = noms;
+                    const opts = CATEGORIES.map(
+                        (c) => `<option value="${c.id}">${c.name}</option>`,
+                    ).join("");
+                    $("an-category").innerHTML =
+                        '<option value="">Select category</option>' + opts;
+                    $("nom-cat-filter").innerHTML =
+                        '<option value="">All categories</option>' + opts;
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- OVERVIEW ---------- */
+            async function loadOverview() {
+                try {
+                    const [stats, charts] = await Promise.all([
+                        api("/api/admin/stats"),
+                        api("/api/admin/charts"),
+                    ]);
+                    $("s-votes").innerText = Number(
+                        stats.totalVotes,
+                    ).toLocaleString();
+                    $("s-nominees").innerText = Number(
+                        stats.nomineesCount,
+                    ).toLocaleString();
+
+                    if (isSuper()) {
+                        $("s-gross").innerText =
+                            "KES " +
+                            Number(stats.grossRevenue || 0).toLocaleString();
+                        $("s-plat").innerText =
+                            "KES " +
+                            Number(stats.platformRevenue || 0).toLocaleString();
+                        $("s-pending").innerText = stats.pendingPayments || 0;
+                    }
+                    renderCharts(charts);
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            function renderCharts(data) {
+                if (chartsInitialized) {
+                    Chart.helpers.each(Chart.instances, (instance) =>
+                        instance.destroy(),
+                    );
+                }
+                Chart.defaults.font.family = "Inter, sans-serif";
+                Chart.defaults.color = "#6b7280";
+
+                const barEl = $("barChart");
+                if (barEl) {
+                    const labels = data.topNominees.map((n) => n.name);
+                    const values = data.topNominees.map((n) => n.votes || 0);
+                    new Chart(barEl.getContext("2d"), {
+                        type: "bar",
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: "Votes",
+                                    data: values,
+                                    backgroundColor: [
+                                        "#3F51B5",
+                                        "#5C6BC0",
+                                        "#7986CB",
+                                        "#9FA8DA",
+                                        "#C5CAE9",
+                                    ],
+                                    borderRadius: 6,
+                                    barPercentage: 0.6,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { color: "#f3f4f6" },
+                                    border: { display: false },
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    border: { display: false },
+                                },
+                            },
+                        },
+                    });
+                }
+
+                const doEl = $("doughnutChart");
+                if (doEl) {
+                    const labels = data.categoryDistribution.map((c) => c.name);
+                    const values = data.categoryDistribution.map(
+                        (c) => c.votes || 0,
+                    );
+                    const palette = [
+                        "#3F51B5",
+                        "#10B981",
+                        "#F59E0B",
+                        "#8B5CF6",
+                        "#EC4899",
+                        "#06B6D4",
+                        "#EF4444",
+                        "#84CC16",
+                    ];
+                    new Chart(doEl.getContext("2d"), {
+                        type: "doughnut",
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    data: values,
+                                    backgroundColor: labels.map(
+                                        (_, i) => palette[i % palette.length],
+                                    ),
+                                    borderWidth: 2,
+                                    borderColor: "#ffffff",
+                                    hoverOffset: 4,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: "68%",
+                            plugins: {
+                                legend: {
+                                    position: "right",
+                                    labels: {
+                                        usePointStyle: true,
+                                        boxWidth: 8,
+                                        padding: 14,
+                                        font: { size: 11 },
+                                    },
+                                },
+                            },
+                        },
+                    });
+                }
+
+                const lineEl = $("lineChart");
+                if (lineEl) {
+                    const labels = data.dailyVotes.map((d) => d.day);
+                    const values = data.dailyVotes.map((d) => d.votes || 0);
+                    const ctx = lineEl.getContext("2d");
+                    const grad = ctx.createLinearGradient(0, 0, 0, 300);
+                    grad.addColorStop(0, "rgba(63,81,181,0.35)");
+                    grad.addColorStop(1, "rgba(63,81,181,0)");
+                    new Chart(ctx, {
+                        type: "line",
+                        data: {
+                            labels,
+                            datasets: [
+                                {
+                                    label: "Votes",
+                                    data: values,
+                                    borderColor: "#3F51B5",
+                                    backgroundColor: grad,
+                                    borderWidth: 2,
+                                    pointBackgroundColor: "#fff",
+                                    pointBorderColor: "#3F51B5",
+                                    pointBorderWidth: 2,
+                                    pointRadius: 4,
+                                    fill: true,
+                                    tension: 0.4,
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { color: "#f3f4f6" },
+                                    border: { display: false },
+                                },
+                                x: {
+                                    grid: { display: false },
+                                    border: { display: false },
+                                },
+                            },
+                        },
+                    });
+                }
+                chartsInitialized = true;
+            }
+
+            /* ---------- CATEGORIES ---------- */
+            async function loadCategories() {
+                await refreshBase();
+                const list = $("categories-list");
+                if (!CATEGORIES.length) {
+                    list.innerHTML =
+                        '<div class="p-6 text-center text-gray-400">No categories yet.</div>';
+                    return;
+                }
+                const counts = {};
+                for (const n of NOMINEES)
+                    counts[n.category_id] = (counts[n.category_id] || 0) + 1;
+                list.innerHTML = CATEGORIES.map(
+                    (c) => `
+    <div class="flex items-center justify-between p-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="ph ph-folder"></i></div>
+        <div class="min-w-0">
+          <div class="font-semibold truncate">${c.name}</div>
+          <div class="text-xs text-gray-500">${counts[c.id] || 0} nominees</div>
+        </div>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button onclick="editCategory('${c.id}','${c.name.replace(/'/g, "\\'")}')" class="btn btn-outline btn-sm"><i class="ph ph-pencil"></i> Rename</button>
+        <button onclick="deleteCategory('${c.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
+      </div>
+    </div>
+  `,
+                ).join("");
+            }
+
+            async function createCategory() {
+                const name = $("new-cat-name").value.trim();
+                if (!name) {
+                    toast("Enter a name", false);
+                    return;
+                }
+                try {
+                    await api("/api/admin/categories", {
+                        method: "POST",
+                        body: JSON.stringify({ name }),
+                    });
+                    $("new-cat-name").value = "";
+                    toast("Category created");
+                    loadCategories();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            async function editCategory(id, current) {
+                const next = prompt("New category name:", current);
+                if (next === null) return;
+                const trimmed = next.trim();
+                if (!trimmed || trimmed === current) return;
+                try {
+                    await api("/api/admin/categories/" + id, {
+                        method: "PATCH",
+                        body: JSON.stringify({ name: trimmed }),
+                    });
+                    toast("Category renamed");
+                    loadCategories();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            async function deleteCategory(id) {
+                if (!confirm("Delete this category? This cannot be undone."))
+                    return;
+                try {
+                    await api("/api/admin/categories/" + id, {
+                        method: "DELETE",
+                    });
+                    toast("Category deleted");
+                    loadCategories();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- NOMINEES ---------- */
+            async function loadNominees() {
+                await refreshBase();
+                renderNomineeList();
+            }
+
+            function renderNomineeList() {
+                const q = ($("nom-search").value || "").trim().toLowerCase();
+                const catId = $("nom-cat-filter").value;
+                const filtered = NOMINEES.filter((n) => {
+                    if (catId && n.category_id !== catId) return false;
+                    if (!q) return true;
+                    return (
+                        n.name.toLowerCase().includes(q) ||
+                        n.code.toLowerCase().includes(q)
+                    );
+                });
+
+                const list = $("nominees-list");
+                if (!filtered.length) {
+                    list.innerHTML =
+                        '<div class="p-6 text-center text-gray-400">No nominees found.</div>';
+                    return;
+                }
+                list.innerHTML = filtered
+                    .map(
+                        (n) => `
+    <div class="flex items-center gap-4 p-4">
+      <img src="${n.img || `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent(n.name[0] || "?")}`}" class="w-12 h-12 rounded-lg object-cover">
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold truncate">${n.name}</div>
+        <div class="text-xs text-gray-500">${n.category} · <span class="font-mono">${n.code}</span></div>
+      </div>
+      <div class="text-right hidden sm:block">
+        <div class="text-sm font-bold text-indigo-600">${(n.votes || 0).toLocaleString()}</div>
+        <div class="text-[10px] text-gray-400 uppercase tracking-wider">Votes</div>
+      </div>
+      <button onclick="deleteNominee('${n.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
+    </div>
+  `,
+                    )
+                    .join("");
+            }
+
+            function openAddNominee() {
+                $("an-name").value = "";
+                $("an-desc").value = "";
+                $("an-img-url").value = "";
+                $("add-nominee-modal").classList.add("show");
+            }
+
+            async function createNominee() {
+                const name = $("an-name").value.trim();
+                const categoryId = $("an-category").value;
+                const desc = $("an-desc").value.trim();
+                const img = $("an-img-url").value.trim();
+                if (!name || !categoryId) {
+                    toast("Name and category required", false);
+                    return;
+                }
+                try {
+                    await api("/api/admin/nominees", {
+                        method: "POST",
+                        body: JSON.stringify({ name, categoryId, desc, img }),
+                    });
+                    closeModal("add-nominee-modal");
+                    toast("Nominee added");
+                    loadNominees();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            async function deleteNominee(id) {
+                if (!confirm("Delete this nominee?")) return;
+                try {
+                    await api("/api/admin/nominees/" + id, {
+                        method: "DELETE",
+                    });
+                    toast("Nominee deleted");
+                    loadNominees();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- TRANSACTIONS (super only) ---------- */
+            async function loadTransactions() {
+                try {
+                    const txs = await api("/api/admin/transactions");
+                    const tbody = $("tx-tbody");
+                    if (!txs.length) {
+                        tbody.innerHTML =
+                            '<tr><td colspan="7" class="p-6 text-center text-gray-400">No transactions yet.</td></tr>';
+                        return;
+                    }
+                    const label = (t) =>
+                        ({
+                            vote: "Vote",
+                            category_change: "Category Change",
+                            leaderboard_once: "Leaderboard (1x)",
+                            leaderboard_2h: "Leaderboard (2h)",
+                        })[t] || t;
+                    tbody.innerHTML = txs
+                        .map(
+                            (tx) => `
+      <tr>
+        <td class="px-4 py-3 font-mono text-xs">${tx.reference}</td>
+        <td class="px-4 py-3 text-xs">${label(tx.type)}</td>
+        <td class="px-4 py-3 text-xs">${tx.nominee_name || "—"}</td>
+        <td class="px-4 py-3 text-xs font-semibold">KES ${tx.amount}</td>
+        <td class="px-4 py-3 text-xs">${tx.phone}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+              tx.status === "success"
+                  ? "bg-green-100 text-green-700"
+                  : tx.status === "pending"
+                    ? "bg-yellow-100 text-yellow-700"
+                    : tx.status === "abandoned"
+                      ? "bg-gray-100 text-gray-600"
+                      : "bg-red-100 text-red-700"
+          }">${tx.status}</span>
+        </td>
+        <td class="px-4 py-3 text-xs text-gray-500">${new Date(tx.created_at).toLocaleString()}</td>
+      </tr>
+    `,
+                        )
+                        .join("");
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- ADMINS (super only) ---------- */
+            async function loadAdmins() {
+                try {
+                    const d = await api("/api/admin/users");
+                    const list = $("admins-list");
+                    const rows = [];
+                    rows.push(`
+      <div class="flex items-center justify-between p-4 bg-indigo-50/50">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><i class="ph-fill ph-shield-star"></i></div>
+          <div>
+            <div class="font-semibold">${d.super.username}</div>
+            <div class="text-xs text-indigo-700">Root account · from .env</div>
+          </div>
+        </div>
+        <span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-indigo-100 text-indigo-700">Root</span>
+      </div>
+    `);
+                    for (const a of d.admins) {
+                        rows.push(`
+        <div class="flex items-center justify-between p-4 ${a.revoked ? "opacity-60" : ""}">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center"><i class="ph ph-user"></i></div>
+            <div>
+              <div class="font-semibold">${a.display_name || a.username} <span class="text-gray-400 text-xs font-normal">@${a.username}</span></div>
+              <div class="text-xs text-gray-500">
+                ${
+                    a.revoked
+                        ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
+                        : `Created ${new Date(a.created_at).toLocaleDateString()}`
+                }
+              </div>
+            </div>
+          </div>
+          ${
+              a.revoked
+                  ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
+                  : `<button onclick="revokeAdmin('${a.id}','${a.username}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`
+          }
+        </div>
+      `);
+                    }
+                    list.innerHTML = rows.join("");
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            function openAddAdmin() {
+                $("aa-username").value = "";
+                $("aa-display").value = "";
+                $("aa-password").value = "";
+                $("add-admin-modal").classList.add("show");
+            }
+
+            async function createAdmin() {
+                const username = $("aa-username").value.trim();
+                const displayName = $("aa-display").value.trim();
+                const password = $("aa-password").value;
+                if (!username || !password) {
+                    toast("Username and password required", false);
+                    return;
+                }
+                try {
+                    await api("/api/admin/users", {
+                        method: "POST",
+                        body: JSON.stringify({
+                            username,
+                            password,
+                            displayName,
+                        }),
+                    });
+                    closeModal("add-admin-modal");
+                    toast("Admin created");
+                    loadAdmins();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            async function revokeAdmin(id, username) {
+                if (!confirm(`Revoke admin access for @${username}?`)) return;
+                try {
+                    await api("/api/admin/users/" + id, { method: "DELETE" });
+                    toast("Admin revoked");
+                    loadAdmins();
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- LOGS (super only) ---------- */
+            async function loadLogs() {
+                const ref = $("log-ref").value.trim();
+                if (!ref) {
+                    toast("Enter a reference", false);
+                    return;
+                }
+                try {
+                    const logs = await api(
+                        "/api/admin/logs/" + encodeURIComponent(ref),
+                    );
+                    const list = $("logs-list");
+                    if (!logs.length) {
+                        list.innerHTML =
+                            '<div class="p-4 text-gray-400 text-center">No logs found for that reference.</div>';
+                        return;
+                    }
+                    list.innerHTML = logs
+                        .map(
+                            (l) => `
+      <div class="p-3 flex items-start gap-3 border-b border-gray-50 last:border-0">
+        <div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
+          <i class="ph ph-activity"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap gap-2 items-baseline">
+            <span class="font-semibold text-sm">${l.event}</span>
+            <span class="text-xs text-gray-400">${new Date(l.created_at).toLocaleString()}</span>
+          </div>
+          ${l.details ? `<div class="text-xs text-gray-500 mt-1 font-mono break-all">${l.details}</div>` : ""}
+        </div>
+      </div>
+    `,
+                        )
+                        .join("");
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- EXPORT (super only) ---------- */
+            async function downloadExport(kind) {
+                try {
+                    const res = await fetch(`/api/admin/export/${kind}`, {
+                        headers: { Authorization: "Bearer " + getToken() },
+                    });
+                    if (!res.ok) throw new Error("Export failed");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `votenet-report-${new Date().toISOString().slice(0, 10)}.${kind}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    toast(`${kind.toUpperCase()} downloaded`);
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            /* ---------- MOBILE SIDEBAR ---------- */
+            $("menu-toggle").addEventListener("click", openSidebar);
+            $("sidebar-overlay").addEventListener("click", closeSidebar);
+
+            /* ---------- BOOT ---------- */
+            (async () => {
+                if (getToken() && getAdmin()) {
+                    try {
+                        await showDashboard();
+                        return;
+                    } catch {
+                        clearSession();
+                    }
+                }
+                $("login-view").classList.remove("hidden");
+            })();
+        </script>
+    </body>
+</html>
