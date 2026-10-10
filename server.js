@@ -1838,8 +1838,207 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
 });
 
 /* ================================================================
-   PAGES
-   ================================================================ */
+    SEO ROUTES
+    ================================================================ */
+app.get("/manifest.json", (req, res) => {
+  res.type("application/manifest+json");
+  res.sendFile(path.join(__dirname, "manifest.json"));
+});
+
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send(`# VoteNet - Gala Awards 2026
+User-agent: *
+Allow: /
+Disallow: /nominee
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://votenet.onrender.com/sitemap.xml
+Host: https://votenet.onrender.com
+`);
+});
+
+app.get("/sitemap.xml", async (req, res) => {
+  try {
+    const nominees = await db
+      .prepare(
+        `SELECT n.code, n.name, n.img, n.updated_at, c.name as category 
+         FROM nominees n JOIN categories c ON n.category_id = c.id 
+         ORDER BY n.votes DESC`
+      )
+      .all();
+
+    const baseUrl = "https://votenet.onrender.com";
+    const now = new Date().toISOString().split("T")[0];
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">`;
+
+    // Home page
+    xml += `
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg</image:loc>
+      <image:title>Gala Awards 2026 - VoteNet</image:title>
+      <image:caption>Vote for your favourite nominees at MKUPLC Gala Awards 2026</image:caption>
+    </image:image>
+  </url>`;
+
+    // Nominee pages (public voting links)
+    for (const n of nominees) {
+      const nomineeUrl = `${baseUrl}/?c=${encodeURIComponent(n.code)}`;
+      xml += `
+  <url>
+    <loc>${nomineeUrl}</loc>
+    <lastmod>${n.updated_at ? n.updated_at.split("T")[0] : now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>${n.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"}</image:loc>
+      <image:title>${n.name} - ${n.category}</image:title>
+      <image:caption>Vote for ${n.name} in ${n.category} at Gala Awards 2026</image:caption>
+    </image:image>
+  </url>`;
+    }
+
+    xml += `
+</urlset>`;
+
+    res.type("application/xml");
+    res.send(xml);
+  } catch (e) {
+    console.error("[Sitemap]", e.message);
+    res.status(500).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://votenet.onrender.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+  }
+});
+
+/* Dynamic nominee meta page for social crawlers (Open Graph, Twitter Cards)
+   This serves a lightweight HTML page with full meta tags for each nominee
+   when their link is shared on social media. */
+app.get("/nominee/:code", async (req, res) => {
+  try {
+    const nominee = await db
+      .prepare(
+        `SELECT n.*, c.name as category FROM nominees n
+         JOIN categories c ON n.category_id = c.id WHERE n.code = ?`
+      )
+      .get(req.params.code);
+
+    if (!nominee) {
+      return res.redirect("/");
+    }
+
+    const baseUrl = "https://votenet.onrender.com";
+    const shareUrl = `${baseUrl}/?c=${encodeURIComponent(nominee.code)}`;
+    const image = nominee.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
+    const title = `${nominee.name} | VoteNet — Gala Awards 2026`;
+    const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
+
+    const html = `<!doctype html>
+<html lang="en" itemscope itemtype="https://schema.org/Person">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0071e3" />
+  <meta name="color-scheme" content="light" />
+  
+  <!-- SEO META -->
+  <title>${title}</title>
+  <meta name="title" content="${title}" />
+  <meta name="description" content="${description}" />
+  <meta name="keywords" content="VoteNet, ${nominee.name}, ${nominee.category}, Gala Awards 2026, MKUPLC, Mount Kenya University Parklands Law Campus, vote for nominee, Kenya university awards" />
+  <meta name="author" content="emojistudios" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="${shareUrl}" />
+  
+  <!-- OPEN GRAPH -->
+  <meta property="og:type" content="profile" />
+  <meta property="og:url" content="${shareUrl}" />
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:image" content="${image}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="${nominee.name} - Gala Awards 2026" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:site_name" content="VoteNet" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="profile:first_name" content="${nominee.name.split(" ")[0]}" />
+  <meta property="profile:last_name" content="${nominee.name.split(" ").slice(1).join(" ")}" />
+  <meta property="profile:username" content="${nominee.code}" />
+  
+  <!-- TWITTER CARDS -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@votenet_ke" />
+  <meta name="twitter:creator" content="@emojistudios" />
+  <meta name="twitter:url" content="${shareUrl}" />
+  <meta name="twitter:title" content="${title}" />
+  <meta name="twitter:description" content="${description}" />
+  <meta name="twitter:image" content="${image}" />
+  <meta name="twitter:image:alt" content="${nominee.name} - Gala Awards 2026" />
+  
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "${nominee.name}",
+    "description": "${(nominee.desc || `Nominee in ${nominee.category} for Gala Awards 2026 at MKUPLC.`).replace(/"/g, '\\"')}",
+    "image": "${image}",
+    "url": "${shareUrl}",
+    "worksFor": {
+      "@type": "Organization",
+      "name": "Mount Kenya University Parklands Law Campus"
+    },
+    "event": {
+      "@type": "Event",
+      "name": "Gala Awards 2026",
+      "location": {
+        "@type": "Place",
+        "name": "Mount Kenya University Parklands Law Campus"
+      },
+      "startDate": "2026-01-01",
+      "endDate": "2026-11-30"
+    }
+  }
+  </script>
+  
+  <!-- REDIRECT FOR HUMANS -->
+  <meta http-equiv="refresh" content="0; url=${shareUrl}" />
+  <link rel="preload" as="image" href="${image}" fetchpriority="high" />
+</head>
+<body>
+  <p>Redirecting to <a href="${shareUrl}">VoteNet</a>...</p>
+  <script>window.location.href = "${shareUrl}";</script>
+</body>
+</html>`;
+
+    res.send(html);
+  } catch (e) {
+    console.error("[Nominee Meta]", e.message);
+    res.redirect("/");
+  }
+});
+
+/* ================================================================
+    PAGES
+    ================================================================ */
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/nominee", (req, res) =>
   res.sendFile(path.join(__dirname, "nominee.html")),

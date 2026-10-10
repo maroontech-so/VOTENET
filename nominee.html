@@ -1,9 +1,73 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" itemscope itemtype="https://schema.org/WebPage">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Nominee Dashboard — VoteNet.io</title>
+        <meta name="theme-color" content="#2563eb" />
+        <meta name="color-scheme" content="light" />
+        
+        <!-- ==================== SEO META TAGS ==================== -->
+        <title>Nominee Dashboard — VoteNet | Gala Awards 2026</title>
+        <meta name="title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
+        <meta name="description" content="Manage your nomination for Gala Awards 2026 at MKUPLC. Track votes, share your campaign link, and unlock leaderboard insights. Built by emojistudios." />
+        <meta name="keywords" content="VoteNet nominee dashboard, Gala Awards 2026, MKUPLC, Mount Kenya University Parklands Law Campus, nominee portal, track votes, campaign link, voting platform" />
+        <meta name="author" content="emojistudios" />
+        <meta name="robots" content="noindex, nofollow" />
+        <link rel="canonical" href="https://votenet.onrender.com/nominee" />
+        <meta name="generator" content="VoteNet v1.0" />
+        <meta name="application-name" content="VoteNet Nominee Portal" />
+        <meta name="apple-mobile-web-app-title" content="VoteNet Nominee" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>" />
+        <link rel="apple-touch-icon" href="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
+        
+        <!-- ==================== OPEN GRAPH (fallback for authenticated pages) ==================== -->
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://votenet.onrender.com/nominee" />
+        <meta property="og:title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
+        <meta property="og:description" content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results." />
+        <meta property="og:image" content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="VoteNet Nominee Dashboard - Gala Awards 2026" />
+        <meta property="og:image:type" content="image/jpeg" />
+        <meta property="og:site_name" content="VoteNet" />
+        <meta property="og:locale" content="en_US" />
+        
+        <!-- ==================== TWITTER CARDS ==================== -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:site" content="@votenet_ke" />
+        <meta name="twitter:creator" content="@emojistudios" />
+        <meta name="twitter:url" content="https://votenet.onrender.com/nominee" />
+        <meta name="twitter:title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
+        <meta name="twitter:description" content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results." />
+        <meta name="twitter:image" content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
+        <meta name="twitter:image:alt" content="VoteNet Nominee Dashboard - Gala Awards 2026" />
+        
+        <!-- ==================== JSON-LD STRUCTURED DATA ==================== -->
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "VoteNet Nominee Dashboard",
+            "applicationCategory": "VotingApplication",
+            "operatingSystem": "Web",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "KES",
+                "availability": "https://schema.org/InStock"
+            },
+            "description": "Official nominee dashboard for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Track votes, manage campaign, share voting link.",
+            "publisher": {
+                "@type": "Organization",
+                "name": "emojistudios"
+            }
+        }
+        </script>
+        
         <script src="https://cdn.tailwindcss.com"></script>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -1892,6 +1956,73 @@
                 }
             }
 
+            /* ---------- SEO UPDATE ---------- */
+            function updateNomineeSEO(n) {
+                if (!n) return;
+                const title = `${n.name} | VoteNet — Gala Awards 2026`;
+                const desc = `Vote for ${n.name} in ${n.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(n.votes || 0).toLocaleString()} votes so far!`;
+                const image = n.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
+                const url = `${location.origin}/?c=${encodeURIComponent(n.code)}`;
+                
+                document.title = title;
+                
+                // Update meta tags
+                const metas = {
+                    'meta[name="title"]': title,
+                    'meta[name="description"]': desc,
+                    'meta[property="og:title"]': title,
+                    'meta[property="og:description"]': desc,
+                    'meta[property="og:image"]': image,
+                    'meta[property="og:url"]': url,
+                    'meta[name="twitter:title"]': title,
+                    'meta[name="twitter:description"]': desc,
+                    'meta[name="twitter:image"]': image,
+                    'meta[name="twitter:url"]': url,
+                    'link[rel="canonical"]': url,
+                };
+                
+                Object.entries(metas).forEach(([selector, content]) => {
+                    const el = document.querySelector(selector);
+                    if (el) {
+                        if (el.tagName === 'LINK') el.href = content;
+                        else el.content = content;
+                    }
+                });
+                
+                // Update JSON-LD
+                const jsonLd = {
+                    "@context": "https://schema.org",
+                    "@type": "Person",
+                    "name": n.name,
+                    "description": n.desc || `Nominee in ${n.category} for Gala Awards 2026 at MKUPLC.`,
+                    "image": image,
+                    "url": url,
+                    "worksFor": {
+                        "@type": "Organization",
+                        "name": "Mount Kenya University Parklands Law Campus"
+                    },
+                    "event": {
+                        "@type": "Event",
+                        "name": "Gala Awards 2026",
+                        "location": {
+                            "@type": "Place",
+                            "name": "Mount Kenya University Parklands Law Campus"
+                        },
+                        "startDate": "2026-01-01",
+                        "endDate": "2026-11-30"
+                    }
+                };
+                
+                let script = document.querySelector('script[type="application/ld+json"][data-nominee]');
+                if (!script) {
+                    script = document.createElement('script');
+                    script.type = 'application/ld+json';
+                    script.setAttribute('data-nominee', 'true');
+                    document.head.appendChild(script);
+                }
+                script.textContent = JSON.stringify(jsonLd);
+            }
+
             /* ---------- DASHBOARD ---------- */
             async function loadDashboard(opts = {}) {
                 const fromLogin = !!opts.fromLogin;
@@ -1919,6 +2050,9 @@
                     ).toLocaleString();
                     $("d-link").value =
                         `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
+
+                    // Update SEO meta tags for nominee sharing
+                    updateNomineeSEO(nominee);
 
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
@@ -2324,5 +2458,14 @@
                 await loadDashboard();
             })();
         </script>
+
+        <!-- Subtle footer credit -->
+        <footer class="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
+            <div class="flex justify-center pb-3 pointer-events-auto">
+                <p class="text-[10px] text-gray-400 hover:text-gray-500 transition-colors select-none">
+                    Built with <span class="text-red-500">♥</span> by <span class="font-medium">emojistudios</span>
+                </p>
+            </div>
+        </footer>
     </body>
 </html>
