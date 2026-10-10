@@ -95,8 +95,6 @@ async function optimizeAndUpload(buffer) {
       .jpeg({ quality: 80, mozjpeg: true, progressive: true })
       .toBuffer();
   } catch (sharpErr) {
-    // Fallback: send the original buffer straight to ImgBB.
-    // ImgBB handles most formats server-side and will convert on their end.
     console.warn(
       "[Upload] Sharp could not process image, sending original:",
       sharpErr.message,
@@ -516,7 +514,7 @@ async function initiatePayment({
 }
 
 /* ================================================================
-   PAYHERO STATUS LOOKUP (best-effort, used only as a fallback)
+   PAYHERO STATUS LOOKUP (best-effort)
    ================================================================ */
 async function checkPayHeroStatus(reference) {
   if (!PAYHERO_API_KEY || !PAYHERO_API_SECRET) return null;
@@ -552,13 +550,6 @@ function interpretPayHeroStatus(payload) {
   if (!payload) return null;
   const data = payload.response || payload.data || payload;
 
-  const wooStatus = String(
-    data.woocommerce_payment_status || data.payment_status || "",
-  ).toLowerCase();
-  const statusRaw = String(
-    data.status ?? data.Status ?? data.PaymentStatus ?? "",
-  ).toLowerCase();
-  const resultCode = data.ResultCode ?? data.resultCode ?? null;
   const receipt =
     data.MPESA_Reference ||
     data.mpesa_receipt ||
@@ -567,35 +558,26 @@ function interpretPayHeroStatus(payload) {
     data.receipt ||
     null;
 
-  if (wooStatus === "complete" || wooStatus === "completed") {
-    return { status: "success", receipt };
-  }
+  // Success requires an actual M-Pesa receipt.
   if (receipt && String(receipt).trim().length > 0) {
-    return { status: "success", receipt };
-  }
-  if (resultCode === 0 || resultCode === "0") {
-    return { status: "success", receipt };
-  }
-  if (
-    statusRaw.includes("success") ||
-    statusRaw === "paid" ||
-    statusRaw.includes("complete")
-  ) {
-    return { status: "success", receipt };
+    return { status: "success", receipt: String(receipt).trim() };
   }
 
+  const resultCode = data.ResultCode ?? data.resultCode ?? null;
+  if (resultCode !== null && resultCode !== 0 && resultCode !== "0") {
+    return { status: "failed" };
+  }
+
+  const statusRaw = String(
+    data.status ?? data.Status ?? data.PaymentStatus ?? "",
+  ).toLowerCase();
+
   if (
-    wooStatus === "failed" ||
-    wooStatus === "cancelled" ||
-    wooStatus === "canceled" ||
     statusRaw.includes("fail") ||
     statusRaw.includes("cancel") ||
     statusRaw.includes("declin") ||
     statusRaw.includes("reject")
   ) {
-    return { status: "failed" };
-  }
-  if (resultCode !== null && resultCode !== 0 && resultCode !== "0") {
     return { status: "failed" };
   }
 
@@ -1220,10 +1202,7 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
     const payload = await checkPayHeroStatus(reference);
     const result = interpretPayHeroStatus(payload);
     if (result && result.status === "success") {
-      await completeTransaction(
-        reference,
-        result.receipt || `PAYHERO-${Date.now()}`,
-      );
+      await completeTransaction(reference, result.receipt);
     } else if (result && result.status === "failed") {
       await failTransaction(reference, "payhero_status_failed");
     }
@@ -1253,6 +1232,14 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
 
 /* ================================================================
    PAYHERO CALLBACK
+   ---------------------------------------------------------------
+   IMPORTANT: PayHero fires this callback the moment the STK push
+   is delivered — BEFORE the user enters their PIN. The payload
+   at that point has `woocommerce_payment_status: "complete"` but
+   `MPESA_Reference: ""`. Only when a second callback arrives with
+   a real M-Pesa receipt should the transaction be marked success.
+
+   Rule: NO MPESA RECEIPT = NO SUCCESS.
    ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
@@ -1267,6 +1254,7 @@ app.post("/api/payhero/callback", (req, res) => {
 
       const data = body.response || body.data || body;
 
+      // --- 1. Find our reference -----------------------------------
       let ref =
         data.User_Reference ||
         data.user_reference ||
@@ -1299,9 +1287,6 @@ app.post("/api/payhero/callback", (req, res) => {
         for (const tx of pending) {
           if (raw.includes(tx.reference.toUpperCase())) {
             ref = tx.reference;
-            console.log(
-              `[PayHero CB] Matched pending reference via string scan: ${ref}`,
-            );
             break;
           }
         }
@@ -1315,6 +1300,7 @@ app.post("/api/payhero/callback", (req, res) => {
         return;
       }
 
+      // --- 2. Pull the fields -------------------------------------
       const wooStatus = String(
         data.woocommerce_payment_status ||
           body.woocommerce_payment_status ||
@@ -1346,30 +1332,23 @@ app.post("/api/payhero/callback", (req, res) => {
           ? String(receipt).trim()
           : null;
 
-      const success =
-        wooStatus === "complete" ||
-        wooStatus === "completed" ||
-        wooStatus === "processing" ||
-        receiptClean !== null ||
-        resultCode === 0 ||
-        resultCode === "0" ||
-        statusRaw.includes("success") ||
-        statusRaw === "paid" ||
-        statusRaw.includes("complete");
-
+      // --- 3. Explicit failure markers ----------------------------
       const failure =
         wooStatus === "failed" ||
         wooStatus === "cancelled" ||
         wooStatus === "canceled" ||
-        (resultCode !== null && resultCode !== 0 && resultCode !== "0") ||
         statusRaw.includes("fail") ||
         statusRaw.includes("cancel") ||
         statusRaw.includes("declin") ||
-        statusRaw.includes("reject");
+        statusRaw.includes("reject") ||
+        (resultCode !== null && resultCode !== 0 && resultCode !== "0");
+
+      // --- 4. Success requires the M-Pesa receipt -----------------
+      const success = !failure && receiptClean !== null;
 
       console.log(
         `[PayHero CB] ref=${ref} wooStatus="${wooStatus}" status="${statusRaw}" receipt="${receiptClean}" → ${
-          success ? "SUCCESS" : failure ? "FAILURE" : "UNKNOWN"
+          success ? "SUCCESS" : failure ? "FAILURE" : "AWAITING_RECEIPT"
         }`,
       );
 
@@ -1377,15 +1356,24 @@ app.post("/api/payhero/callback", (req, res) => {
         wooStatus,
         statusRaw,
         receipt: receiptClean,
+        decision: success
+          ? "success"
+          : failure
+            ? "failure"
+            : "awaiting_receipt",
       });
 
+      // --- 5. Apply -----------------------------------------------
       if (success) {
-        await completeTransaction(ref, receiptClean || `PAYHERO-${Date.now()}`);
+        await completeTransaction(ref, receiptClean);
       } else if (failure) {
         await failTransaction(ref, "callback_failure");
       } else {
-        console.warn(
-          `[PayHero CB] Ambiguous status for ${ref}. Leaving pending.`,
+        // PayHero confirmed STK delivery but no receipt yet.
+        // Do nothing — wait for the real confirmation callback
+        // or the reconciliation / cleanup jobs.
+        console.log(
+          `[PayHero CB] ${ref} — STK delivered, waiting for M-Pesa receipt`,
         );
       }
     } catch (e) {
@@ -2057,10 +2045,7 @@ setInterval(async () => {
         const payload = await checkPayHeroStatus(tx.reference);
         const result = interpretPayHeroStatus(payload);
         if (result && result.status === "success") {
-          await completeTransaction(
-            tx.reference,
-            result.receipt || `PAYHERO-${Date.now()}`,
-          );
+          await completeTransaction(tx.reference, result.receipt);
           console.log(`[Reconcile] ${tx.reference} → success`);
         } else if (result && result.status === "failed") {
           await failTransaction(tx.reference, "reconciliation_failed");
