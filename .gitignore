@@ -2,3 +2,7 @@
 node_modules
 uploads
 5eef89208fc7.cap/
+voting-local.db-shm
+db.js
+voting-local.db
+voting-local.db-wal
