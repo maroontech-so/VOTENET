@@ -1854,8 +1854,8 @@ Disallow: /nominee
 Disallow: /admin
 Disallow: /api/
 
-Sitemap: https://votenet.onrender.com/sitemap.xml
-Host: https://votenet.onrender.com
+Sitemap: https://gala.voteus.xyz/sitemap.xml
+Host: https://gala.voteus.xyz
 `);
 });
 
@@ -1869,7 +1869,7 @@ app.get("/sitemap.xml", async (req, res) => {
       )
       .all();
 
-    const baseUrl = "https://votenet.onrender.com";
+    const baseUrl = "https://gala.voteus.xyz";
     const now = new Date().toISOString().split("T")[0];
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1920,7 +1920,7 @@ app.get("/sitemap.xml", async (req, res) => {
     res.status(500).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://votenet.onrender.com/</loc>
+    <loc>https://gala.voteus.xyz/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -1944,7 +1944,7 @@ app.get("/nominee/:code", async (req, res) => {
       return res.redirect("/");
     }
 
-    const baseUrl = "https://votenet.onrender.com";
+    const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/?c=${encodeURIComponent(nominee.code)}`;
     const image = nominee.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
     const title = `${nominee.name} | VoteNet — Gala Awards 2026`;
