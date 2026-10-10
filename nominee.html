@@ -1893,7 +1893,7 @@
                         nominee.votes || 0
                     ).toLocaleString();
                     $("d-link").value =
-                        `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
+                        `${location.origin}/nominee/${encodeURIComponent(nominee.code)}`;
 
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
