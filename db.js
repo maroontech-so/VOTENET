@@ -38,12 +38,27 @@ function isWrite(sql) {
   return /^(INSERT|UPDATE|DELETE|REPLACE)/.test(s);
 }
 
+/**
+ * Rewrites a plain INSERT into an INSERT OR REPLACE so re-applying the
+ * same statement to Turso is idempotent. Prevents "UNIQUE constraint failed"
+ * when local and cloud have drifted.
+ */
+function makeIdempotent(sql) {
+  const trimmed = sql.trim();
+  if (/^INSERT\s+OR\s+REPLACE/i.test(trimmed)) return trimmed;
+  if (/^INSERT\s+INTO/i.test(trimmed)) {
+    return trimmed.replace(/^INSERT\s+INTO/i, "INSERT OR REPLACE INTO");
+  }
+  return trimmed;
+}
+
 function enqueue(sql, args) {
   if (!isWrite(sql)) return;
   try {
+    const normalized = makeIdempotent(sql);
     local
       .prepare("INSERT INTO _sync_queue (sql, args) VALUES (?, ?)")
-      .run(sql, JSON.stringify(args || []));
+      .run(normalized, JSON.stringify(args || []));
   } catch (e) {
     console.error("[Queue]", e.message);
   }
@@ -108,7 +123,17 @@ async function tx(fn) {
    CLOUD SYNC
    ================================================================ */
 
-/** Push pending writes from the queue to Turso. */
+/**
+ * Push pending writes from the queue to Turso.
+ *
+ * Rules:
+ *  - Successful write → delete row from queue.
+ *  - UNIQUE constraint violation → drop row (the data is already in
+ *    Turso; the local state is authoritative and will be re-pulled
+ *    on the next cycle anyway).
+ *  - Any other error → increment attempt count; drop after 5 tries so
+ *    one bad row can't permanently block the queue.
+ */
 async function push() {
   let pushed = 0;
   const MAX_PER_RUN = 500;
@@ -127,23 +152,47 @@ async function push() {
       local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
       pushed++;
     } catch (e) {
-      // Bump attempt count; drop after 5 failures so a bad row can't block the queue
+      const msg = String(e.message || "");
+
+      // Duplicate row already in Turso — nothing to do, drop it.
+      if (
+        msg.includes("UNIQUE constraint failed") ||
+        msg.includes("SQLITE_CONSTRAINT")
+      ) {
+        console.warn(`[Push] Dropping row ${row.id} — already exists in cloud`);
+        local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
+        continue;
+      }
+
+      // Malformed SQL — log it, drop the row so the queue keeps flowing.
+      if (
+        msg.includes("syntax error") ||
+        msg.includes("no such table") ||
+        msg.includes("no such column")
+      ) {
+        console.error(
+          `[Push] Dropping row ${row.id} — unrecoverable SQL: ${msg}`,
+        );
+        console.error(`       SQL: ${row.sql}`);
+        local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
+        continue;
+      }
+
+      // Transient error — retry with backoff; drop after 5 tries.
       const attempts = (row.attempts || 0) + 1;
       if (attempts >= 5) {
         console.error(
-          `[Push] dropping row ${row.id} after ${attempts} failures: ${e.message}`,
+          `[Push] Dropping row ${row.id} after ${attempts} attempts: ${msg}`,
         );
-        console.error(`         SQL: ${row.sql}`);
+        console.error(`       SQL: ${row.sql}`);
         local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
         continue;
       }
       local
         .prepare("UPDATE _sync_queue SET attempts = ? WHERE id = ?")
         .run(attempts, row.id);
-      console.warn(
-        `[Push] transient failure (attempt ${attempts}): ${e.message}`,
-      );
-      break; // retry next cycle
+      console.warn(`[Push] Transient failure (attempt ${attempts}): ${msg}`);
+      break; // pause this cycle, retry next time
     }
   }
 
@@ -177,7 +226,6 @@ async function pull() {
 
       const insertMany = local.transaction((rows) => {
         for (const row of rows) {
-          // @libsql/client returns rows as objects on most builds, arrays on others
           const values = Array.isArray(row) ? row : columns.map((c) => row[c]);
           stmt.run(...values);
         }
@@ -211,8 +259,7 @@ async function verifyConnection() {
 
 /**
  * Called AFTER initSchema() so the local tables exist.
- * If the local DB has no rows in `categories`, we assume it's a fresh
- * install and pull everything down from Turso.
+ * If the local DB has no rows in `categories`, assume fresh install and pull.
  */
 async function bootstrapIfEmpty() {
   let isEmpty;

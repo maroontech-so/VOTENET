@@ -86,15 +86,27 @@ async function optimizeAndUpload(buffer) {
   if (!IMGBB_API_KEY)
     throw new Error("Image hosting not configured (IMGBB_API_KEY missing)");
 
-  const optimized = await sharp(buffer, { failOn: "none" })
-    .rotate()
-    .resize(700, 700, { fit: "cover", position: "attention" })
-    .jpeg({ quality: 80, mozjpeg: true, progressive: true })
-    .toBuffer();
+  let processed = buffer;
+
+  try {
+    processed = await sharp(buffer, { failOn: "none" })
+      .rotate()
+      .resize(700, 700, { fit: "cover", position: "attention" })
+      .jpeg({ quality: 80, mozjpeg: true, progressive: true })
+      .toBuffer();
+  } catch (sharpErr) {
+    // Fallback: send the original buffer straight to ImgBB.
+    // ImgBB handles most formats server-side and will convert on their end.
+    console.warn(
+      "[Upload] Sharp could not process image, sending original:",
+      sharpErr.message,
+    );
+    processed = buffer;
+  }
 
   const params = new URLSearchParams();
   params.append("key", IMGBB_API_KEY);
-  params.append("image", optimized.toString("base64"));
+  params.append("image", processed.toString("base64"));
 
   const res = await axios.post(
     "https://api.imgbb.com/1/upload",
@@ -238,7 +250,6 @@ async function logEvent(reference, event, details) {
   }
 }
 
-/** Recursively search an object for the first value matching a predicate. */
 function deepFind(obj, predicate, seen = new Set()) {
   if (!obj || typeof obj !== "object") return undefined;
   if (seen.has(obj)) return undefined;
@@ -600,14 +611,32 @@ app.post(
   rateLimit({ key: "upload", max: 20 }),
   (req, res) => {
     upload.single("image")(req, res, async (err) => {
-      if (err) return res.status(400).json({ error: err.message });
+      if (err) {
+        console.error("[Upload multer error]", err.message);
+        return res.status(400).json({ error: err.message });
+      }
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+      console.log(
+        `[Upload] Received ${req.file.originalname} (${req.file.mimetype}, ${Math.round(req.file.size / 1024)} KB)`,
+      );
+
       try {
         const url = await optimizeAndUpload(req.file.buffer);
+        console.log(`[Upload] ✓ ${url}`);
         res.json({ url });
       } catch (e) {
-        console.error("[Upload]", e.message);
-        res.status(500).json({ error: e.message || "Image upload failed" });
+        console.error("[Upload] ✗", e.message);
+        if (e.response && e.response.data) {
+          console.error("[Upload] ImgBB said:", e.response.data);
+        }
+        res.status(500).json({
+          error: e.message || "Image upload failed",
+          detail:
+            e.response && e.response.data
+              ? JSON.stringify(e.response.data).slice(0, 200)
+              : undefined,
+        });
       }
     });
   },
@@ -1224,24 +1253,6 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
 
 /* ================================================================
    PAYHERO CALLBACK
-   ---------------------------------------------------------------
-   Real PayHero payload shape (observed):
-   {
-     "status": false,
-     "response": {
-       "Transaction_Type": "C2B",
-       "Source": "2547…",
-       "Amount": 5,
-       "MPESA_Reference": "",
-       "Transaction_Reference": "",
-       "Payment_Method": "MPESA",
-       "Account": "11180",
-       "User_Reference": "VN-…",              ← our reference
-       "Transaction_Date": "…",
-       "woocommerce_payment_status": "complete", ← success flag
-       "channel_id": 11662
-     }
-   }
    ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
@@ -1256,7 +1267,6 @@ app.post("/api/payhero/callback", (req, res) => {
 
       const data = body.response || body.data || body;
 
-      // --- 1. Extract reference -----------------------------------
       let ref =
         data.User_Reference ||
         data.user_reference ||
@@ -1305,7 +1315,6 @@ app.post("/api/payhero/callback", (req, res) => {
         return;
       }
 
-      // --- 2. Extract status & receipt ---------------------------
       const wooStatus = String(
         data.woocommerce_payment_status ||
           body.woocommerce_payment_status ||
@@ -1337,7 +1346,6 @@ app.post("/api/payhero/callback", (req, res) => {
           ? String(receipt).trim()
           : null;
 
-      // --- 3. Decide success / failure ---------------------------
       const success =
         wooStatus === "complete" ||
         wooStatus === "completed" ||
@@ -1371,7 +1379,6 @@ app.post("/api/payhero/callback", (req, res) => {
         receipt: receiptClean,
       });
 
-      // --- 4. Apply -----------------------------------------------
       if (success) {
         await completeTransaction(ref, receiptClean || `PAYHERO-${Date.now()}`);
       } else if (failure) {
@@ -1838,8 +1845,8 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
 });
 
 /* ================================================================
-    SEO ROUTES
-    ================================================================ */
+   SEO ROUTES
+   ================================================================ */
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(__dirname, "manifest.json"));
@@ -1863,9 +1870,9 @@ app.get("/sitemap.xml", async (req, res) => {
   try {
     const nominees = await db
       .prepare(
-        `SELECT n.code, n.name, n.img, n.updated_at, c.name as category 
-         FROM nominees n JOIN categories c ON n.category_id = c.id 
-         ORDER BY n.votes DESC`
+        `SELECT n.code, n.name, n.img, n.updated_at, c.name as category
+         FROM nominees n JOIN categories c ON n.category_id = c.id
+         ORDER BY n.votes DESC`,
       )
       .all();
 
@@ -1879,7 +1886,6 @@ app.get("/sitemap.xml", async (req, res) => {
         xmlns:xhtml="http://www.w3.org/1999/xhtml"
         xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">`;
 
-    // Home page
     xml += `
   <url>
     <loc>${baseUrl}/</loc>
@@ -1893,7 +1899,6 @@ app.get("/sitemap.xml", async (req, res) => {
     </image:image>
   </url>`;
 
-    // Nominee pages (public voting links)
     for (const n of nominees) {
       const nomineeUrl = `${baseUrl}/?c=${encodeURIComponent(n.code)}`;
       xml += `
@@ -1917,7 +1922,8 @@ app.get("/sitemap.xml", async (req, res) => {
     res.send(xml);
   } catch (e) {
     console.error("[Sitemap]", e.message);
-    res.status(500).type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
+    res.status(500).type("application/xml")
+      .send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://gala.voteus.xyz/</loc>
@@ -1928,15 +1934,12 @@ app.get("/sitemap.xml", async (req, res) => {
   }
 });
 
-/* Dynamic nominee meta page for social crawlers (Open Graph, Twitter Cards)
-   This serves a lightweight HTML page with full meta tags for each nominee
-   when their link is shared on social media. */
 app.get("/nominee/:code", async (req, res) => {
   try {
     const nominee = await db
       .prepare(
         `SELECT n.*, c.name as category FROM nominees n
-         JOIN categories c ON n.category_id = c.id WHERE n.code = ?`
+         JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
       )
       .get(req.params.code);
 
@@ -1946,7 +1949,9 @@ app.get("/nominee/:code", async (req, res) => {
 
     const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/?c=${encodeURIComponent(nominee.code)}`;
-    const image = nominee.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
+    const image =
+      nominee.img ||
+      "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
     const title = `${nominee.name} | VoteNet — Gala Awards 2026`;
     const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
 
@@ -1956,18 +1961,11 @@ app.get("/nominee/:code", async (req, res) => {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0071e3" />
-  <meta name="color-scheme" content="light" />
-  
-  <!-- SEO META -->
   <title>${title}</title>
   <meta name="title" content="${title}" />
   <meta name="description" content="${description}" />
-  <meta name="keywords" content="VoteNet, ${nominee.name}, ${nominee.category}, Gala Awards 2026, MKUPLC, Mount Kenya University Parklands Law Campus, vote for nominee, Kenya university awards" />
-  <meta name="author" content="emojistudios" />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <link rel="canonical" href="${shareUrl}" />
-  
-  <!-- OPEN GRAPH -->
   <meta property="og:type" content="profile" />
   <meta property="og:url" content="${shareUrl}" />
   <meta property="og:title" content="${title}" />
@@ -1975,53 +1973,12 @@ app.get("/nominee/:code", async (req, res) => {
   <meta property="og:image" content="${image}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="${nominee.name} - Gala Awards 2026" />
-  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:site_name" content="VoteNet" />
-  <meta property="og:locale" content="en_US" />
-  <meta property="profile:first_name" content="${nominee.name.split(" ")[0]}" />
-  <meta property="profile:last_name" content="${nominee.name.split(" ").slice(1).join(" ")}" />
-  <meta property="profile:username" content="${nominee.code}" />
-  
-  <!-- TWITTER CARDS -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@votenet_ke" />
-  <meta name="twitter:creator" content="@emojistudios" />
-  <meta name="twitter:url" content="${shareUrl}" />
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${description}" />
   <meta name="twitter:image" content="${image}" />
-  <meta name="twitter:image:alt" content="${nominee.name} - Gala Awards 2026" />
-  
-  <!-- JSON-LD -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    "name": "${nominee.name}",
-    "description": "${(nominee.desc || `Nominee in ${nominee.category} for Gala Awards 2026 at MKUPLC.`).replace(/"/g, '\\"')}",
-    "image": "${image}",
-    "url": "${shareUrl}",
-    "worksFor": {
-      "@type": "Organization",
-      "name": "Mount Kenya University Parklands Law Campus"
-    },
-    "event": {
-      "@type": "Event",
-      "name": "Gala Awards 2026",
-      "location": {
-        "@type": "Place",
-        "name": "Mount Kenya University Parklands Law Campus"
-      },
-      "startDate": "2026-01-01",
-      "endDate": "2026-11-30"
-    }
-  }
-  </script>
-  
-  <!-- REDIRECT FOR HUMANS -->
   <meta http-equiv="refresh" content="0; url=${shareUrl}" />
-  <link rel="preload" as="image" href="${image}" fetchpriority="high" />
 </head>
 <body>
   <p>Redirecting to <a href="${shareUrl}">VoteNet</a>...</p>
@@ -2037,8 +1994,8 @@ app.get("/nominee/:code", async (req, res) => {
 });
 
 /* ================================================================
-    PAGES
-    ================================================================ */
+   PAGES
+   ================================================================ */
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/nominee", (req, res) =>
   res.sendFile(path.join(__dirname, "nominee.html")),
@@ -2050,8 +2007,6 @@ app.get("/admin", (req, res) =>
 /* ================================================================
    BACKGROUND JOBS
    ================================================================ */
-
-/* prune stale pending >15min */
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2070,7 +2025,6 @@ setInterval(async () => {
   }
 }, 5 * 60_000);
 
-/* prune old logs >30d */
 setInterval(
   async () => {
     try {
@@ -2085,7 +2039,6 @@ setInterval(
   24 * 60 * 60_000,
 );
 
-/* reconcile — resolves pending transactions using PayHero status API (best effort) */
 setInterval(async () => {
   try {
     const cutoff = new Date(Date.now() - RECONCILE_MIN_AGE_MS).toISOString();

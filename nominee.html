@@ -1,73 +1,9 @@
 <!doctype html>
-<html lang="en" itemscope itemtype="https://schema.org/WebPage">
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#2563eb" />
-        <meta name="color-scheme" content="light" />
-        
-        <!-- ==================== SEO META TAGS ==================== -->
-        <title>Nominee Dashboard — VoteNet | Gala Awards 2026</title>
-        <meta name="title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
-        <meta name="description" content="Manage your nomination for Gala Awards 2026 at MKUPLC. Track votes, share your campaign link, and unlock leaderboard insights. Built by emojistudios." />
-        <meta name="keywords" content="VoteNet nominee dashboard, Gala Awards 2026, MKUPLC, Mount Kenya University Parklands Law Campus, nominee portal, track votes, campaign link, voting platform" />
-        <meta name="author" content="emojistudios" />
-        <meta name="robots" content="noindex, nofollow" />
-        <link rel="canonical" href="https://gala.voteus.xyz/nominee" />
-        <meta name="generator" content="VoteNet v1.0" />
-        <meta name="application-name" content="VoteNet Nominee Portal" />
-        <meta name="apple-mobile-web-app-title" content="VoteNet Nominee" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>" />
-        <link rel="apple-touch-icon" href="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
-        
-        <!-- ==================== OPEN GRAPH (fallback for authenticated pages) ==================== -->
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://gala.voteus.xyz/nominee" />
-        <meta property="og:title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
-        <meta property="og:description" content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results." />
-        <meta property="og:image" content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="VoteNet Nominee Dashboard - Gala Awards 2026" />
-        <meta property="og:image:type" content="image/jpeg" />
-        <meta property="og:site_name" content="VoteNet" />
-        <meta property="og:locale" content="en_US" />
-        
-        <!-- ==================== TWITTER CARDS ==================== -->
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:site" content="@votenet_ke" />
-        <meta name="twitter:creator" content="@emojistudios" />
-        <meta name="twitter:url" content="https://gala.voteus.xyz/nominee" />
-        <meta name="twitter:title" content="Nominee Dashboard — VoteNet | Gala Awards 2026" />
-        <meta name="twitter:description" content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results." />
-        <meta name="twitter:image" content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg" />
-        <meta name="twitter:image:alt" content="VoteNet Nominee Dashboard - Gala Awards 2026" />
-        
-        <!-- ==================== JSON-LD STRUCTURED DATA ==================== -->
-        <script type="application/ld+json">
-        {
-            "@context": "https://schema.org",
-            "@type": "WebApplication",
-            "name": "VoteNet Nominee Dashboard",
-            "applicationCategory": "VotingApplication",
-            "operatingSystem": "Web",
-            "offers": {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "KES",
-                "availability": "https://schema.org/InStock"
-            },
-            "description": "Official nominee dashboard for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Track votes, manage campaign, share voting link.",
-            "publisher": {
-                "@type": "Organization",
-                "name": "emojistudios"
-            }
-        }
-        </script>
-        
+        <title>Nominee Dashboard — VoteNet.io</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -84,9 +20,6 @@
                 -webkit-font-smoothing: antialiased;
             }
 
-            /* =========================================================
-   VIEW SYSTEM — bulletproof against Tailwind's utility classes
-   ========================================================= */
             .view {
                 display: none !important;
             }
@@ -106,14 +39,6 @@
                 border: 1px solid #eef0f3;
                 border-radius: 18px;
                 box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
-            }
-            .card-hover:hover {
-                box-shadow: 0 12px 28px -12px rgba(16, 24, 40, 0.12);
-                transform: translateY(-2px);
-            }
-            .card,
-            .card-hover {
-                transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
             }
             .btn {
                 background: #2563eb;
@@ -221,6 +146,7 @@
                 font-weight: 500;
                 box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.35);
                 backdrop-filter: blur(10px);
+                max-width: 92vw;
             }
             #toast.show {
                 bottom: 32px;
@@ -429,8 +355,6 @@
                 align-items: center;
                 gap: 10px;
             }
-
-            /* password field */
             .input-wrap {
                 position: relative;
             }
@@ -552,8 +476,9 @@
                     <a
                         href="/"
                         class="text-sm text-gray-500 hover:text-gray-900 inline-flex items-center gap-1 mb-6"
-                        ><i class="ph ph-arrow-left"></i> Back to voting</a
                     >
+                        <i class="ph ph-arrow-left"></i> Back to voting
+                    </a>
                     <div class="flex border-b border-gray-200 mb-6">
                         <button
                             id="tab-register"
@@ -573,7 +498,6 @@
                         </button>
                     </div>
 
-                    <!-- REGISTER -->
                     <div id="form-register" class="space-y-4">
                         <div>
                             <label
@@ -668,7 +592,6 @@
                         </button>
                     </div>
 
-                    <!-- LOGIN -->
                     <div id="form-login" class="space-y-4 hidden">
                         <div>
                             <label
@@ -873,12 +796,8 @@
                     </button>
                 </div>
 
-                <!-- =========================================================
-         PROFILE HERO — full image + big vote counter
-         ========================================================= -->
                 <div class="card overflow-hidden">
                     <div class="flex flex-col md:flex-row">
-                        <!-- Full profile image (no rounding, no crop) -->
                         <div
                             class="relative md:w-2/5 lg:w-1/3 aspect-square md:aspect-auto md:min-h-[440px] bg-gray-100 shrink-0"
                         >
@@ -890,12 +809,9 @@
                             <div
                                 class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none"
                             ></div>
-                            
                         </div>
 
-                        <!-- Info column -->
                         <div class="flex-1 p-6 sm:p-8 flex flex-col">
-                            <!-- Big votes immediately alongside the photo -->
                             <div class="mb-6">
                                 <p
                                     class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2"
@@ -968,10 +884,8 @@
                     </div>
                 </div>
 
-                <!-- Main grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-2 space-y-6">
-                        <!-- Campaign link -->
                         <div class="card p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3
@@ -1065,7 +979,6 @@
                             </div>
                         </div>
 
-                        <!-- Activity -->
                         <div class="card p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3
@@ -1511,7 +1424,6 @@
         <script>
             const $ = (id) => document.getElementById(id);
 
-            /* ---------- TOKEN HELPERS ---------- */
             function getToken() {
                 const t = localStorage.getItem("vn_token");
                 if (!t || t === "undefined" || t === "null" || t === "")
@@ -1540,7 +1452,6 @@
             let currentUnlockType = "once";
             let pollTimers = { change: null, unlock: null };
 
-            /* ---------- UTILS ---------- */
             function toast(msg, ok = true) {
                 const t = $("toast");
                 t.querySelector("i").className = ok
@@ -1551,7 +1462,7 @@
                 clearTimeout(window.__toastTimer);
                 window.__toastTimer = setTimeout(
                     () => t.classList.remove("show"),
-                    3000,
+                    4000,
                 );
             }
 
@@ -1624,7 +1535,6 @@
                 }, 50);
             }
 
-            /* ---------- PASSWORD UI ---------- */
             function togglePassword(inputId, btn) {
                 const input = $(inputId);
                 if (!input) return;
@@ -1690,7 +1600,6 @@
                 }
             }
 
-            /* ---------- AUTH ---------- */
             function isValidEmail(e) {
                 return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
             }
@@ -1780,7 +1689,6 @@
                             "Server did not return a valid session token",
                         );
 
-                    // Source of truth is /api/nominee/me — not a possibly-stale flag
                     try {
                         await loadDashboard({ fromLogin: true });
                         toast("Welcome back!");
@@ -1819,7 +1727,6 @@
                 location.reload();
             }
 
-            /* ---------- CATEGORIES ---------- */
             async function loadCategories() {
                 try {
                     categories = await api("/api/categories");
@@ -1849,7 +1756,6 @@
                     : '<option value="">No other categories available</option>';
             }
 
-            /* ---------- IMAGE UPLOAD ---------- */
             function handleImage(event) {
                 const f = event.target.files[0];
                 if (!f) return;
@@ -1886,9 +1792,10 @@
                     $("upload-bar").classList.add("show");
                     $("upload-progress").style.width = "0%";
                     xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable)
+                        if (e.lengthComputable) {
                             $("upload-progress").style.width =
                                 Math.round((e.loaded / e.total) * 100) + "%";
+                        }
                     };
                     xhr.onload = () => {
                         $("upload-bar").classList.remove("show");
@@ -1898,24 +1805,29 @@
                                 uploadedUrl = d.url;
                                 resolve(d.url);
                             } catch {
-                                reject(new Error("Invalid response"));
-                            }
-                        } else {
-                            try {
                                 reject(
-                                    new Error(
-                                        JSON.parse(xhr.responseText).error ||
-                                            "Upload failed",
-                                    ),
+                                    new Error("Invalid response from server"),
                                 );
-                            } catch {
-                                reject(new Error("Upload failed"));
                             }
+                            return;
                         }
+                        let msg = `Upload failed (${xhr.status})`;
+                        try {
+                            const parsed = JSON.parse(xhr.responseText);
+                            if (parsed && parsed.error) msg = parsed.error;
+                            if (parsed && parsed.detail)
+                                msg += " — " + parsed.detail;
+                        } catch {}
+                        console.error(
+                            "[Upload] Server response:",
+                            xhr.status,
+                            xhr.responseText,
+                        );
+                        reject(new Error(msg));
                     };
                     xhr.onerror = () => {
                         $("upload-bar").classList.remove("show");
-                        reject(new Error("Network error"));
+                        reject(new Error("Network error while uploading"));
                     };
                     xhr.send(fd);
                 });
@@ -1948,7 +1860,8 @@
                     toast("Nomination published!");
                     await loadDashboard();
                 } catch (e) {
-                    toast(e.message, false);
+                    console.error("[Publish]", e);
+                    toast(e.message || "Publish failed", false);
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML =
@@ -1956,74 +1869,6 @@
                 }
             }
 
-            /* ---------- SEO UPDATE ---------- */
-            function updateNomineeSEO(n) {
-                if (!n) return;
-                const title = `${n.name} | VoteNet — Gala Awards 2026`;
-                const desc = `Vote for ${n.name} in ${n.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(n.votes || 0).toLocaleString()} votes so far!`;
-                const image = n.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
-                const url = `${location.origin}/?c=${encodeURIComponent(n.code)}`;
-                
-                document.title = title;
-                
-                // Update meta tags
-                const metas = {
-                    'meta[name="title"]': title,
-                    'meta[name="description"]': desc,
-                    'meta[property="og:title"]': title,
-                    'meta[property="og:description"]': desc,
-                    'meta[property="og:image"]': image,
-                    'meta[property="og:url"]': url,
-                    'meta[name="twitter:title"]': title,
-                    'meta[name="twitter:description"]': desc,
-                    'meta[name="twitter:image"]': image,
-                    'meta[name="twitter:url"]': url,
-                    'link[rel="canonical"]': url,
-                };
-                
-                Object.entries(metas).forEach(([selector, content]) => {
-                    const el = document.querySelector(selector);
-                    if (el) {
-                        if (el.tagName === 'LINK') el.href = content;
-                        else el.content = content;
-                    }
-                });
-                
-                // Update JSON-LD
-                const jsonLd = {
-                    "@context": "https://schema.org",
-                    "@type": "Person",
-                    "name": n.name,
-                    "description": n.desc || `Nominee in ${n.category} for Gala Awards 2026 at MKUPLC.`,
-                    "image": image,
-                    "url": url,
-                    "worksFor": {
-                        "@type": "Organization",
-                        "name": "Mount Kenya University Parklands Law Campus"
-                    },
-                    "event": {
-                        "@type": "Event",
-                        "name": "Gala Awards 2026",
-                        "location": {
-                            "@type": "Place",
-                            "name": "Mount Kenya University Parklands Law Campus"
-                        },
-                        "startDate": "2026-01-01",
-                        "endDate": "2026-11-30"
-                    }
-                };
-                
-                let script = document.querySelector('script[type="application/ld+json"][data-nominee]');
-                if (!script) {
-                    script = document.createElement('script');
-                    script.type = 'application/ld+json';
-                    script.setAttribute('data-nominee', 'true');
-                    document.head.appendChild(script);
-                }
-                script.textContent = JSON.stringify(jsonLd);
-            }
-
-            /* ---------- DASHBOARD ---------- */
             async function loadDashboard(opts = {}) {
                 const fromLogin = !!opts.fromLogin;
                 if (!getToken()) {
@@ -2031,7 +1876,6 @@
                     return;
                 }
 
-                // Hide auth and any other view immediately
                 showView("view-dash");
 
                 try {
@@ -2050,9 +1894,6 @@
                     ).toLocaleString();
                     $("d-link").value =
                         `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
-
-                    // Update SEO meta tags for nominee sharing
-                    updateNomineeSEO(nominee);
 
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
@@ -2082,13 +1923,13 @@
 
             function renderLeaderboard(board, access) {
                 const row = (icon, label, votes, me) => `
-    <div class="lb-row ${me ? "me" : "other"}">
-      <div class="flex items-center gap-3 relative z-10">
-        <div class="lb-rank"><i class="${icon}"></i></div>
-        <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs text-gray-500 font-medium"}">${label}</span>
-      </div>
-      <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs font-mono text-gray-500"}">${(votes || 0).toLocaleString()}</span>
-    </div>`;
+                    <div class="lb-row ${me ? "me" : "other"}">
+                        <div class="flex items-center gap-3 relative z-10">
+                            <div class="lb-rank"><i class="${icon}"></i></div>
+                            <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs text-gray-500 font-medium"}">${label}</span>
+                        </div>
+                        <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs font-mono text-gray-500"}">${(votes || 0).toLocaleString()}</span>
+                    </div>`;
                 let relHTML = "";
                 if (board && board.above)
                     relHTML += row(
@@ -2152,17 +1993,17 @@
                     $("full-board").innerHTML = d.leaderboard
                         .map(
                             (r) => `
-      <div class="lb-row ${r.isMe ? "me" : "other"}">
-        <div class="flex items-center gap-3 relative z-10 min-w-0">
-          <div class="lb-rank">${r.rank}</div>
-          <div class="min-w-0">
-            <div class="text-sm font-semibold truncate">${r.name}${r.isMe ? ' <span class="text-blue-600 text-xs">(You)</span>' : ""}</div>
-            <div class="text-[10px] font-mono text-gray-500">${r.code}</div>
-          </div>
-        </div>
-        <div class="text-sm font-mono font-bold ${r.isMe ? "text-blue-700" : "text-gray-700"} relative z-10">${(r.votes || 0).toLocaleString()}</div>
-      </div>
-    `,
+                        <div class="lb-row ${r.isMe ? "me" : "other"}">
+                            <div class="flex items-center gap-3 relative z-10 min-w-0">
+                                <div class="lb-rank">${r.rank}</div>
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold truncate">${r.name}${r.isMe ? ' <span class="text-blue-600 text-xs">(You)</span>' : ""}</div>
+                                    <div class="text-[10px] font-mono text-gray-500">${r.code}</div>
+                                </div>
+                            </div>
+                            <div class="text-sm font-mono font-bold ${r.isMe ? "text-blue-700" : "text-gray-700"} relative z-10">${(r.votes || 0).toLocaleString()}</div>
+                        </div>
+                    `,
                         )
                         .join("");
                     if (d.access && d.access.type === "credits")
@@ -2181,19 +2022,18 @@
                         '<div class="text-center py-6 text-gray-400 text-xs"><i class="ph ph-hourglass text-2xl block mb-2 opacity-50"></i>No activity yet. Share your link or QR code to get started.</div>';
                 } else {
                     list.innerHTML = `
-      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="ph-fill ph-check-circle"></i></div>
-          <div>
-            <div class="font-semibold text-sm">${nominee.votes.toLocaleString()} votes received</div>
-            <div class="text-xs text-gray-500">Keep sharing to climb the leaderboard</div>
-          </div>
-        </div>
-      </div>`;
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="ph-fill ph-check-circle"></i></div>
+                                <div>
+                                    <div class="font-semibold text-sm">${nominee.votes.toLocaleString()} votes received</div>
+                                    <div class="text-xs text-gray-500">Keep sharing to climb the leaderboard</div>
+                                </div>
+                            </div>
+                        </div>`;
                 }
             }
 
-            /* ---------- SHARE ---------- */
             function copyLink() {
                 const i = $("d-link");
                 i.select();
@@ -2236,7 +2076,6 @@
                     );
             }
 
-            /* ---------- QR CODE ---------- */
             function openQR() {
                 const shareUrl = $("d-link").value;
                 if (!shareUrl) return;
@@ -2266,7 +2105,6 @@
                 }
             }
 
-            /* ---------- CHANGE CATEGORY ---------- */
             function openChangeCategory() {
                 if (!nominee) return;
                 const others = categories.filter(
@@ -2318,7 +2156,6 @@
                 }
             }
 
-            /* ---------- UNLOCK ---------- */
             function openUnlock() {
                 $("unlock-phone").value = "";
                 selectUnlock("once");
@@ -2366,7 +2203,6 @@
                 }
             }
 
-            /* ---------- POLLING ---------- */
             function pollPayment(reference, kind) {
                 if (pollTimers[kind]) clearInterval(pollTimers[kind]);
                 const startedAt = Date.now();
@@ -2438,7 +2274,6 @@
                 }, 2000);
             }
 
-            /* ---------- ENTER KEY SUBMIT ---------- */
             document.addEventListener("keydown", (e) => {
                 if (e.key !== "Enter") return;
                 const authVisible = $("view-auth").classList.contains("active");
@@ -2449,7 +2284,6 @@
                 else handleLogin();
             });
 
-            /* ---------- BOOT ---------- */
             (async () => {
                 if (!getToken()) {
                     showView("view-auth");
@@ -2458,14 +2292,5 @@
                 await loadDashboard();
             })();
         </script>
-
-        <!-- Subtle footer credit -->
-        <footer class="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
-            <div class="flex justify-center pb-3 pointer-events-auto">
-                <p class="text-[10px] text-gray-400 hover:text-gray-500 transition-colors select-none">
-                    Built with <span class="text-red-500">♥</span> by <span class="font-medium">emojistudios</span>
-                </p>
-            </div>
-        </footer>
     </body>
 </html>
