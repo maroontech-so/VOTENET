@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
@@ -514,7 +515,7 @@ async function initiatePayment({
 }
 
 /* ================================================================
-   PAYHERO STATUS LOOKUP (best-effort)
+   PAYHERO STATUS LOOKUP (best-effort, used only as a fallback)
    ================================================================ */
 async function checkPayHeroStatus(reference) {
   if (!PAYHERO_API_KEY || !PAYHERO_API_SECRET) return null;
@@ -558,7 +559,6 @@ function interpretPayHeroStatus(payload) {
     data.receipt ||
     null;
 
-  // Success requires an actual M-Pesa receipt.
   if (receipt && String(receipt).trim().length > 0) {
     return { status: "success", receipt: String(receipt).trim() };
   }
@@ -1233,13 +1233,11 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
 /* ================================================================
    PAYHERO CALLBACK
    ---------------------------------------------------------------
-   IMPORTANT: PayHero fires this callback the moment the STK push
-   is delivered — BEFORE the user enters their PIN. The payload
-   at that point has `woocommerce_payment_status: "complete"` but
-   `MPESA_Reference: ""`. Only when a second callback arrives with
-   a real M-Pesa receipt should the transaction be marked success.
+   PayHero fires this the moment the STK push is delivered — BEFORE
+   the user enters their PIN. The payload at that point has
+   `woocommerce_payment_status: "complete"` but `MPESA_Reference: ""`.
 
-   Rule: NO MPESA RECEIPT = NO SUCCESS.
+   Rule: NO MPESA RECEIPT = NO SUCCESS. Wait for the receipt.
    ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
@@ -1254,7 +1252,7 @@ app.post("/api/payhero/callback", (req, res) => {
 
       const data = body.response || body.data || body;
 
-      // --- 1. Find our reference -----------------------------------
+      // Find our reference
       let ref =
         data.User_Reference ||
         data.user_reference ||
@@ -1300,7 +1298,6 @@ app.post("/api/payhero/callback", (req, res) => {
         return;
       }
 
-      // --- 2. Pull the fields -------------------------------------
       const wooStatus = String(
         data.woocommerce_payment_status ||
           body.woocommerce_payment_status ||
@@ -1332,7 +1329,6 @@ app.post("/api/payhero/callback", (req, res) => {
           ? String(receipt).trim()
           : null;
 
-      // --- 3. Explicit failure markers ----------------------------
       const failure =
         wooStatus === "failed" ||
         wooStatus === "cancelled" ||
@@ -1343,7 +1339,7 @@ app.post("/api/payhero/callback", (req, res) => {
         statusRaw.includes("reject") ||
         (resultCode !== null && resultCode !== 0 && resultCode !== "0");
 
-      // --- 4. Success requires the M-Pesa receipt -----------------
+      // Success REQUIRES a real M-Pesa receipt. No receipt = no vote.
       const success = !failure && receiptClean !== null;
 
       console.log(
@@ -1363,15 +1359,11 @@ app.post("/api/payhero/callback", (req, res) => {
             : "awaiting_receipt",
       });
 
-      // --- 5. Apply -----------------------------------------------
       if (success) {
         await completeTransaction(ref, receiptClean);
       } else if (failure) {
         await failTransaction(ref, "callback_failure");
       } else {
-        // PayHero confirmed STK delivery but no receipt yet.
-        // Do nothing — wait for the real confirmation callback
-        // or the reconciliation / cleanup jobs.
         console.log(
           `[PayHero CB] ${ref} — STK delivered, waiting for M-Pesa receipt`,
         );
@@ -1881,14 +1873,14 @@ app.get("/sitemap.xml", async (req, res) => {
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg</image:loc>
+      <image:loc>${baseUrl}/hero-mobile.jpeg</image:loc>
       <image:title>Gala Awards 2026 - VoteNet</image:title>
       <image:caption>Vote for your favourite nominees at MKUPLC Gala Awards 2026</image:caption>
     </image:image>
   </url>`;
 
     for (const n of nominees) {
-      const nomineeUrl = `${baseUrl}/?c=${encodeURIComponent(n.code)}`;
+      const nomineeUrl = `${baseUrl}/nominee/${encodeURIComponent(n.code)}`;
       xml += `
   <url>
     <loc>${nomineeUrl}</loc>
@@ -1896,7 +1888,7 @@ app.get("/sitemap.xml", async (req, res) => {
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
     <image:image>
-      <image:loc>${n.img || "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"}</image:loc>
+      <image:loc>${n.img || `${baseUrl}/hero-mobile.jpeg`}</image:loc>
       <image:title>${n.name} - ${n.category}</image:title>
       <image:caption>Vote for ${n.name} in ${n.category} at Gala Awards 2026</image:caption>
     </image:image>
@@ -1936,10 +1928,8 @@ app.get("/nominee/:code", async (req, res) => {
     }
 
     const baseUrl = "https://gala.voteus.xyz";
-    const shareUrl = `${baseUrl}/?c=${encodeURIComponent(nominee.code)}`;
-    const image =
-      nominee.img ||
-      "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg";
+    const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
+    const image = nominee.img || `${baseUrl}/hero-mobile.jpeg`;
     const title = `${nominee.name} | VoteNet — Gala Awards 2026`;
     const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
 
@@ -1959,6 +1949,7 @@ app.get("/nominee/:code", async (req, res) => {
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${description}" />
   <meta property="og:image" content="${image}" />
+  <meta property="og:image:secure_url" content="${image}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:site_name" content="VoteNet" />
@@ -1980,6 +1971,34 @@ app.get("/nominee/:code", async (req, res) => {
     res.redirect("/");
   }
 });
+
+/* ================================================================
+   STATIC HERO IMAGES — served from project root with caching
+   ================================================================ */
+const HERO_WIDE = path.join(__dirname, "hero.jpeg");
+const HERO_MOBILE = path.join(__dirname, "hero-mobile.jpeg");
+
+function serveHeroImage(res, filePath, label) {
+  if (!fs.existsSync(filePath)) {
+    console.error(
+      `[Image] ${label} not found at ${filePath}\n` +
+        `        Place the file next to server.js and restart.`,
+    );
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(404).type("text/plain").send(`${label} missing`);
+  }
+  // Immutable caching → zero latency on repeat visits
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Content-Type", "image/jpeg");
+  res.sendFile(filePath);
+}
+
+app.get("/hero.jpeg", (req, res) =>
+  serveHeroImage(res, HERO_WIDE, "hero.jpeg"),
+);
+app.get("/hero-mobile.jpeg", (req, res) =>
+  serveHeroImage(res, HERO_MOBILE, "hero-mobile.jpeg"),
+);
 
 /* ================================================================
    PAGES
@@ -2161,5 +2180,11 @@ const server = app.listen(PORT, async () => {
   );
   console.log(`  Images:      ${IMGBB_API_KEY ? "ImgBB" : "NOT CONFIGURED"}`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
-  console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}\n`);
+  console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
+  console.log(
+    `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
+  );
+  console.log(
+    `  Hero mobile: ${fs.existsSync(HERO_MOBILE) ? "✓" : "✗ MISSING"} ${HERO_MOBILE}\n`,
+  );
 });

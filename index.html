@@ -54,13 +54,25 @@
             type="image/svg+xml"
             href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>"
         />
-        <link
-            rel="apple-touch-icon"
-            href="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"
-        />
+        <link rel="apple-touch-icon" href="/hero-mobile.jpeg" />
         <link rel="manifest" href="/manifest.json" />
 
-        <!-- ==================== OPEN GRAPH (WhatsApp, Facebook, etc.) ==================== -->
+        <!-- Preload both hero images so the browser starts fetching before CSS parses -->
+        <link
+            rel="preload"
+            as="image"
+            href="/hero-mobile.jpeg"
+            media="(max-width: 639px)"
+            fetchpriority="high"
+        />
+        <link
+            rel="preload"
+            as="image"
+            href="/hero.jpeg"
+            media="(min-width: 640px)"
+            fetchpriority="high"
+        />
+        <!-- ==================== OPEN GRAPH ==================== -->
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://gala.voteus.xyz/" />
         <meta
@@ -73,11 +85,11 @@
         />
         <meta
             property="og:image"
-            content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"
+            content="https://gala.voteus.xyz/hero-mobile.jpeg"
         />
         <meta
             property="og:image:secure_url"
-            content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"
+            content="https://gala.voteus.xyz/hero-mobile.jpeg"
         />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="1200" />
@@ -106,14 +118,13 @@
         />
         <meta
             name="twitter:image"
-            content="https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg"
+            content="https://gala.voteus.xyz/hero-mobile.jpeg"
         />
         <meta
             name="twitter:image:alt"
             content="Gala Awards 2026 - Mount Kenya University Parklands Law Campus"
         />
 
-        <!-- ==================== JSON-LD STRUCTURED DATA ==================== -->
         <script type="application/ld+json">
             {
                 "@context": "https://schema.org",
@@ -122,11 +133,6 @@
                 "alternateName": "VoteNet.io",
                 "url": "https://gala.voteus.xyz/",
                 "description": "Official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Cast your vote for your favourite nominees.",
-                "potentialAction": {
-                    "@type": "SearchAction",
-                    "target": "https://gala.voteus.xyz/?q={search_term_string}",
-                    "query-input": "required name=search_term_string"
-                },
                 "publisher": {
                     "@type": "Organization",
                     "name": "emojistudios",
@@ -135,7 +141,6 @@
                 "about": {
                     "@type": "Event",
                     "name": "Gala Awards 2026",
-                    "description": "Annual celebration of Africa's brightest innovators, creators, and changemakers at Mount Kenya University Parklands Law Campus.",
                     "startDate": "2026-01-01",
                     "endDate": "2026-11-30",
                     "eventStatus": "https://schema.org/EventScheduled",
@@ -148,33 +153,7 @@
                             "addressRegion": "Nairobi County",
                             "addressCountry": "KE"
                         }
-                    },
-                    "organizer": {
-                        "@type": "Organization",
-                        "name": "Mount Kenya University Parklands Law Campus"
                     }
-                }
-            }
-        </script>
-
-        <script type="application/ld+json">
-            {
-                "@context": "https://schema.org",
-                "@type": "Organization",
-                "name": "VoteNet",
-                "alternateName": "VoteNet.io",
-                "url": "https://gala.voteus.xyz/",
-                "logo": "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg",
-                "sameAs": [
-                    "https://twitter.com/votenet_ke",
-                    "https://facebook.com/votenet.ke",
-                    "https://instagram.com/votenet_ke"
-                ],
-                "contactPoint": {
-                    "@type": "ContactPoint",
-                    "telephone": "+254-700-000-000",
-                    "contactType": "customer service",
-                    "availableLanguage": ["English", "Swahili"]
                 }
             }
         </script>
@@ -206,9 +185,6 @@
                 box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
             }
 
-            /* =========================================================
-   TOP WRAP — hero ALWAYS first (mobile + desktop)
-   ========================================================= */
             .top-wrap {
                 display: flex;
                 flex-direction: column;
@@ -299,15 +275,15 @@
 
             /* =========================================================
    HERO
-   Mobile: 4:5 portrait — feels proportional, gives content room
-   Desktop (>= 640px): 16:9 landscape — matches source image
+   Mobile (<= 640px): portrait 4:5 with hero-mobile.jpeg
+   Desktop (>= 640px): 16:9 with hero.jpeg
    ========================================================= */
             .hero {
                 position: relative;
                 width: 100%;
                 aspect-ratio: 4 / 5;
                 max-height: 85vh;
-                background-image: url("https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg");
+                background-image: url("/hero-mobile.jpeg");
                 background-size: cover;
                 background-position: center;
                 background-repeat: no-repeat;
@@ -319,11 +295,15 @@
                 text-align: center;
                 box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4);
                 margin-bottom: 0;
+
+                background-position: 25% center;
             }
             @media (min-width: 640px) {
                 .hero {
                     aspect-ratio: 16 / 9;
                     max-height: 90vh;
+                    background-image: url("/hero.jpeg");
+                    background-position: center;
                 }
             }
             .hero-content {
@@ -430,7 +410,7 @@
             }
 
             /* =========================================================
-   GRID: 3 → 4 → 6, square cards
+   GRID: 3 → 4 → 6
    ========================================================= */
             .grid-tiles {
                 display: grid;
@@ -587,9 +567,6 @@
                 }
             }
 
-            /* =========================================================
-   CATEGORY HEADER
-   ========================================================= */
             .cat-header {
                 padding: 22px 0 10px;
                 display: flex;
@@ -628,9 +605,6 @@
                 min-width: 40px;
             }
 
-            /* =========================================================
-   BUTTONS / INPUTS / MODAL
-   ========================================================= */
             .btn {
                 background: #0071e3;
                 color: white;
@@ -724,9 +698,6 @@
                 bottom: 30px;
             }
 
-            /* =========================================================
-   SUCCESS CARD — minimal green
-   ========================================================= */
             .success-card {
                 text-align: center;
                 padding: 4px 8px;
@@ -793,9 +764,7 @@
         </style>
     </head>
     <body>
-        <!-- ============ TOP WRAP: hero always first ============ -->
         <div class="top-wrap">
-            <!-- HERO -->
             <section class="hero">
                 <div class="hero-content">
                     <div class="countdown-container">
@@ -841,7 +810,6 @@
                 </div>
             </section>
 
-            <!-- EVENT BAR -->
             <section class="event-bar">
                 <div class="event-bar-inner">
                     <div class="event-bar-text">
@@ -1056,7 +1024,6 @@
                     ></p>
                 </div>
 
-                <!-- SUCCESS — minimal green card -->
                 <div id="pay-success" class="hidden">
                     <div class="success-card">
                         <div class="success-badge">
@@ -1204,7 +1171,6 @@
             ><span id="toast-msg"></span>
         </div>
 
-        <!-- Subtle footer credit -->
         <footer class="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
             <div class="flex justify-center pb-3 pointer-events-auto">
                 <p
@@ -1230,14 +1196,10 @@
             const POLL_INTERVAL_MS = 2000;
             const POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
-            /* ---------- CONFETTI ---------- */
             function fireConfetti() {
                 if (typeof confetti !== "function") return;
-
                 const duration = 1800;
                 const end = Date.now() + duration;
-
-                // Initial burst from center
                 confetti({
                     particleCount: 90,
                     spread: 75,
@@ -1252,8 +1214,6 @@
                     ],
                     scalar: 1.1,
                 });
-
-                // Side streams for ~1.8 seconds
                 (function frame() {
                     confetti({
                         particleCount: 3,
@@ -1273,7 +1233,6 @@
                 })();
             }
 
-            /* ---------- UTILS ---------- */
             function toast(msg, ok = true) {
                 const t = $("toast");
                 t.querySelector("i").className = ok
@@ -1301,7 +1260,6 @@
                 return data;
             }
 
-            /* ---------- INITIAL LOAD ---------- */
             async function init() {
                 try {
                     const [cfg, cats, noms] = await Promise.all([
@@ -1389,7 +1347,6 @@
                 return `https://placehold.co/600x600/1e293b/ffffff?text=${i}`;
             }
 
-            /* ---------- RENDER ---------- */
             function render() {
                 const c = $("nominees-container");
                 if (!nominees.length) {
@@ -1452,7 +1409,6 @@
                 });
             }
 
-            /* ---------- PROFILE MODAL ---------- */
             function openProfile(n) {
                 currentNom = n;
                 $("pm-img").src = n.img || placeholderImg(n.name);
@@ -1467,7 +1423,6 @@
                 $(id).classList.remove("show");
             }
 
-            /* ---------- VOTE MODAL STATE MACHINE ---------- */
             function showVoteState(state) {
                 const states = [
                     "vote-area",
@@ -1517,7 +1472,6 @@
                 $("vote-modal").classList.add("show");
             }
 
-            /* ---------- PRICE CALC ---------- */
             function calcPrice(v) {
                 if (v === 10) return 50;
                 if (v === 20) return 100;
@@ -1562,7 +1516,6 @@
                     currentAmount.toLocaleString() + " KES";
             }
 
-            /* ---------- PAYMENT FLOW ---------- */
             async function submitPayment() {
                 const phone = $("phone").value.trim();
                 if (!phone) {
