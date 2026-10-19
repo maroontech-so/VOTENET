@@ -1,7 +1,7 @@
 {
-  "name": "VoteNet - Gala Awards 2026",
-  "short_name": "VoteNet",
-  "description": "Official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Cast your vote for your favourite nominees.",
+  "name": "Voteus — Gala Awards 2026 | Mount Kenya University Parklands Law Campus",
+  "short_name": "Voteus",
+  "description": "Official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Vote FREE for your favourite nominees across categories including Best Student Leader, Best Content Creator, Best Innovator, Best Performer, and more. Organized by the sitting MKUSA Council.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f5f7",
@@ -10,36 +10,60 @@
   "scope": "/",
   "icons": [
     {
-      "src": "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg",
+      "src": "https://gala.voteus.xyz/hero-mobile.jpeg",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "any maskable"
     },
     {
-      "src": "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg",
+      "src": "https://gala.voteus.xyz/hero-mobile.jpeg",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["entertainment", "social", "lifestyle"],
+  "categories": ["entertainment", "social", "lifestyle", "education"],
   "screenshots": [],
   "shortcuts": [
     {
       "name": "Vote Now",
       "short_name": "Vote",
-      "description": "Cast your vote for Gala Awards 2026",
+      "description": "Cast your free vote for Gala Awards 2026 nominees",
       "url": "/",
-      "icons": [{ "src": "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "https://gala.voteus.xyz/hero-mobile.jpeg",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Nominee Dashboard",
       "short_name": "Dashboard",
-      "description": "Manage your nomination",
+      "description": "Manage your Gala Awards 2026 nomination",
       "url": "/nominee",
-      "icons": [{ "src": "https://i.ibb.co/dXyc286/Gemini-Generated-Image-e30ubke30ubke30u.jpg", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "https://gala.voteus.xyz/hero-mobile.jpeg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "About Gala Awards 2026",
+      "short_name": "About",
+      "description": "Learn about the Gala Awards 2026 at MKUPLC",
+      "url": "/about",
+      "icons": [
+        {
+          "src": "https://gala.voteus.xyz/hero-mobile.jpeg",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "related_applications": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "dir": "ltr",
+  "lang": "en-US"
 }

@@ -38,11 +38,6 @@ function isWrite(sql) {
   return /^(INSERT|UPDATE|DELETE|REPLACE)/.test(s);
 }
 
-/**
- * Rewrites a plain INSERT into an INSERT OR REPLACE so re-applying the
- * same statement to Turso is idempotent. Prevents "UNIQUE constraint failed"
- * when local and cloud have drifted.
- */
 function makeIdempotent(sql) {
   const trimmed = sql.trim();
   if (/^INSERT\s+OR\s+REPLACE/i.test(trimmed)) return trimmed;
@@ -64,7 +59,6 @@ function enqueue(sql, args) {
   }
 }
 
-/* ---------- adapter that mimics the async API server.js expects ---------- */
 function prepare(sql) {
   const stmt = local.prepare(sql);
   return {
@@ -90,7 +84,6 @@ async function exec(sqlBlock) {
   local.exec(sqlBlock);
 }
 
-/** Transaction wrapper — same callback shape as before. */
 async function tx(fn) {
   local.exec("BEGIN IMMEDIATE");
   const wrapper = {
@@ -123,17 +116,6 @@ async function tx(fn) {
    CLOUD SYNC
    ================================================================ */
 
-/**
- * Push pending writes from the queue to Turso.
- *
- * Rules:
- *  - Successful write → delete row from queue.
- *  - UNIQUE constraint violation → drop row (the data is already in
- *    Turso; the local state is authoritative and will be re-pulled
- *    on the next cycle anyway).
- *  - Any other error → increment attempt count; drop after 5 tries so
- *    one bad row can't permanently block the queue.
- */
 async function push() {
   let pushed = 0;
   const MAX_PER_RUN = 500;
@@ -154,7 +136,6 @@ async function push() {
     } catch (e) {
       const msg = String(e.message || "");
 
-      // Duplicate row already in Turso — nothing to do, drop it.
       if (
         msg.includes("UNIQUE constraint failed") ||
         msg.includes("SQLITE_CONSTRAINT")
@@ -164,7 +145,6 @@ async function push() {
         continue;
       }
 
-      // Malformed SQL — log it, drop the row so the queue keeps flowing.
       if (
         msg.includes("syntax error") ||
         msg.includes("no such table") ||
@@ -178,7 +158,6 @@ async function push() {
         continue;
       }
 
-      // Transient error — retry with backoff; drop after 5 tries.
       const attempts = (row.attempts || 0) + 1;
       if (attempts >= 5) {
         console.error(
@@ -192,14 +171,13 @@ async function push() {
         .prepare("UPDATE _sync_queue SET attempts = ? WHERE id = ?")
         .run(attempts, row.id);
       console.warn(`[Push] Transient failure (attempt ${attempts}): ${msg}`);
-      break; // pause this cycle, retry next time
+      break;
     }
   }
 
   return { pushed };
 }
 
-/** Pull all rows from Turso into local. Uses INSERT OR REPLACE so it's idempotent. */
 async function pull() {
   const TABLES = [
     "categories",
@@ -209,6 +187,7 @@ async function pull() {
     "leaderboard_access",
     "payment_logs",
     "admins",
+    "free_votes",
   ];
 
   let pulled = 0;
@@ -240,10 +219,6 @@ async function pull() {
   return { pulled };
 }
 
-/* ================================================================
-   BOOTSTRAP
-   ================================================================ */
-
 async function verifyConnection() {
   if (!process.env.TURSO_DATABASE_URL) {
     throw new Error("TURSO_DATABASE_URL is not set in .env");
@@ -257,10 +232,6 @@ async function verifyConnection() {
   console.log(`  Local DB:  ${LOCAL_DB_PATH}`);
 }
 
-/**
- * Called AFTER initSchema() so the local tables exist.
- * If the local DB has no rows in `categories`, assume fresh install and pull.
- */
 async function bootstrapIfEmpty() {
   let isEmpty;
   try {
@@ -280,7 +251,6 @@ async function bootstrapIfEmpty() {
   console.log(`  ✓ Pull complete — ${pulled} row(s) restored`);
 }
 
-/* ---------- misc ---------- */
 async function checkpoint() {
   try {
     local.pragma("wal_checkpoint(TRUNCATE)");

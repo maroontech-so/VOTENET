@@ -33,6 +33,7 @@ const PAYHERO_BASE_URL =
 
 const IMGBB_API_KEY = process.env.IMGBB_API_KEY || "";
 
+/* -------- nominee-portal pricing (unchanged) -------- */
 const PRICES = {
   category_change: 50,
   leaderboard_once: 10,
@@ -162,6 +163,15 @@ async function initSchema() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_logs_ref ON payment_logs(reference);
+    CREATE TABLE IF NOT EXISTS free_votes (
+      id TEXT PRIMARY KEY,
+      voter_token TEXT NOT NULL,
+      nominee_id TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(voter_token, nominee_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fv_voter ON free_votes(voter_token);
+    CREATE INDEX IF NOT EXISTS idx_fv_nominee ON free_votes(nominee_id);
     CREATE TABLE IF NOT EXISTS admins (
       id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
       display_name TEXT, role TEXT DEFAULT 'admin', created_by TEXT,
@@ -178,11 +188,10 @@ const rateBuckets = new Map();
 function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
   return (req, res, next) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const phone =
-      req.body && req.body.phone
-        ? String(req.body.phone).replace(/\D/g, "")
-        : "";
-    const bucketKey = phone ? `${key}:phone:${phone}` : `${key}:ip:${ip}`;
+    const body = req.body || {};
+    const disc = body.phone || body.voterToken || body.email || "";
+    const discClean = String(disc).replace(/\D/g, "");
+    const bucketKey = discClean ? `${key}:id:${discClean}` : `${key}:ip:${ip}`;
     const now = Date.now();
     let entry = rateBuckets.get(bucketKey);
     if (!entry || now > entry.resetAt) {
@@ -207,17 +216,6 @@ setInterval(() => {
 /* ================================================================
    HELPERS
    ================================================================ */
-function calcVotePrice(v) {
-  if (v === 10) return 50;
-  if (v === 20) return 100;
-  if (v === 30) return 130;
-  if (v === 40) return 150;
-  if (v === 50) return 200;
-  if (v < 30) return v * 5;
-  if (v < 40) return Math.round(v * (130 / 30));
-  if (v < 50) return Math.round(v * (150 / 40));
-  return v * 4;
-}
 function generateCode(name) {
   const initials = (name || "XX")
     .split(" ")
@@ -319,7 +317,7 @@ function superAuth(req, res, next) {
 }
 
 /* ================================================================
-   PAYMENT PIPELINE
+   PAYMENT PIPELINE (used only by nominee-portal features)
    ================================================================ */
 async function completeTransaction(reference, receipt) {
   try {
@@ -343,12 +341,7 @@ async function completeTransaction(reference, receipt) {
         meta = txRow.metadata ? JSON.parse(txRow.metadata) : {};
       } catch {}
 
-      if (txRow.type === "vote") {
-        await t.execute({
-          sql: "UPDATE nominees SET votes = votes + ? WHERE id = ?",
-          args: [meta.voteCount || 0, txRow.nominee_id],
-        });
-      } else if (txRow.type === "category_change") {
+      if (txRow.type === "category_change") {
         await t.execute({
           sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
           args: [meta.newCategoryId, txRow.nominee_id],
@@ -377,6 +370,12 @@ async function completeTransaction(reference, receipt) {
                 ON CONFLICT(user_id) DO UPDATE SET expires_at = ?`,
           args: [txRow.user_id, expiresAt, expiresAt],
         });
+      } else if (txRow.type === "vote") {
+        // Legacy vote transactions only — new votes are free & do not create transactions
+        await t.execute({
+          sql: "UPDATE nominees SET votes = votes + ? WHERE id = ?",
+          args: [meta.voteCount || 0, txRow.nominee_id],
+        });
       }
 
       await t.execute({
@@ -393,7 +392,7 @@ async function completeTransaction(reference, receipt) {
 
     if (result.ok) {
       console.log(`✓ ${reference} completed (${result.type})`);
-      db.push().catch((e) => console.warn("[Push after vote]", e.message));
+      db.push().catch((e) => console.warn("[Push after payment]", e.message));
     } else {
       await logEvent(reference, "complete_skipped", { reason: result.reason });
     }
@@ -429,7 +428,6 @@ async function initiatePayment({
 }) {
   const prefix =
     {
-      vote: "VN",
       category_change: "CC",
       leaderboard_once: "LB1",
       leaderboard_2h: "LB2",
@@ -515,7 +513,7 @@ async function initiatePayment({
 }
 
 /* ================================================================
-   PAYHERO STATUS LOOKUP (best-effort, used only as a fallback)
+   PAYHERO STATUS LOOKUP
    ================================================================ */
 async function checkPayHeroStatus(reference) {
   if (!PAYHERO_API_KEY || !PAYHERO_API_SECRET) return null;
@@ -540,9 +538,7 @@ async function checkPayHeroStatus(reference) {
       if (r.status >= 200 && r.status < 300 && r.data) {
         return r.data;
       }
-    } catch {
-      // try next
-    }
+    } catch {}
   }
   return null;
 }
@@ -647,8 +643,8 @@ app.get("/api/health", async (req, res) => {
 app.get("/api/config", (req, res) => {
   res.json({
     deadline: VOTE_DEADLINE,
-    votePrice: 10,
     votingOpen: votingOpen(),
+    freeVoting: true,
     payheroConfigured: !!(
       PAYHERO_API_KEY &&
       PAYHERO_API_SECRET &&
@@ -669,16 +665,31 @@ app.get("/api/categories", async (req, res) => {
 });
 
 app.get("/api/nominees", async (req, res) => {
-  res.json(
-    await db
-      .prepare(
-        `
+  const voterToken =
+    typeof req.query.voterToken === "string" ? req.query.voterToken : null;
+
+  const rows = await db
+    .prepare(
+      `
     SELECT n.*, c.name as category FROM nominees n
     JOIN categories c ON n.category_id = c.id ORDER BY n.created_at ASC
   `,
-      )
-      .all(),
-  );
+    )
+    .all();
+
+  if (voterToken) {
+    try {
+      const votedRows = await db
+        .prepare("SELECT nominee_id FROM free_votes WHERE voter_token = ?")
+        .all(voterToken);
+      const votedSet = new Set(votedRows.map((r) => r.nominee_id));
+      for (const r of rows) r.voted = votedSet.has(r.id);
+    } catch {
+      for (const r of rows) r.voted = false;
+    }
+  }
+
+  res.json(rows);
 });
 
 app.get("/api/nominees/:code", async (req, res) => {
@@ -1069,7 +1080,7 @@ app.post(
 );
 
 /* ================================================================
-   VOTING
+   FREE VOTING  — one vote per voter per nominee
    ================================================================ */
 app.post(
   "/api/votes",
@@ -1077,81 +1088,86 @@ app.post(
   async (req, res) => {
     if (!votingOpen())
       return res.status(403).json({ error: "Voting is closed" });
-    const { nomineeCode, voteCount, phone } = req.body || {};
-    if (!nomineeCode || !voteCount || !phone)
-      return res.status(400).json({ error: "Missing required fields" });
 
-    const votes = parseInt(voteCount, 10);
-    if (isNaN(votes) || votes < 1 || votes > 10000)
-      return res.status(400).json({ error: "Invalid vote count" });
+    const { nomineeCode, voterToken } = req.body || {};
+    if (!nomineeCode || !voterToken)
+      return res
+        .status(400)
+        .json({ error: "Nominee code and voter token required" });
+
+    if (
+      typeof voterToken !== "string" ||
+      voterToken.length < 10 ||
+      voterToken.length > 100
+    )
+      return res.status(400).json({ error: "Invalid voter token" });
 
     const nominee = await db
       .prepare("SELECT * FROM nominees WHERE code = ?")
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
 
-    const amount = calcVotePrice(votes);
+    const existing = await db
+      .prepare(
+        "SELECT id FROM free_votes WHERE voter_token = ? AND nominee_id = ?",
+      )
+      .get(voterToken, nominee.id);
+    if (existing)
+      return res
+        .status(409)
+        .json({ error: "You have already voted for this nominee" });
+
     try {
-      const r = await initiatePayment({
-        type: "vote",
-        nomineeId: nominee.id,
-        amount,
-        phone,
-        metadata: { voteCount: votes },
+      await db.tx(async (t) => {
+        await t.execute({
+          sql: "INSERT INTO free_votes (id, voter_token, nominee_id) VALUES (?, ?, ?)",
+          args: [uuidv4(), voterToken, nominee.id],
+        });
+        await t.execute({
+          sql: "UPDATE nominees SET votes = votes + 1 WHERE id = ?",
+          args: [nominee.id],
+        });
       });
-      res.json({ ...r, voteCount: votes });
-    } catch (err) {
-      res.status(502).json({
-        error:
-          (err.response && err.response.data && err.response.data.message) ||
-          "Payment gateway unreachable. Please retry.",
-        retryable: true,
-      });
+
+      db.push().catch((e) => console.warn("[Push after free vote]", e.message));
+
+      const updated = await db
+        .prepare("SELECT votes FROM nominees WHERE id = ?")
+        .get(nominee.id);
+      res.json({ success: true, votes: updated.votes });
+    } catch (e) {
+      // Unique constraint — concurrent request for same vote
+      res
+        .status(409)
+        .json({ error: "You have already voted for this nominee" });
     }
   },
 );
 
-app.post(
-  "/api/votes/retry",
-  rateLimit({ key: "vote-retry", max: 20 }),
-  async (req, res) => {
-    const { reference } = req.body || {};
-    if (!reference)
-      return res.status(400).json({ error: "Reference required" });
-    const tx = await db
-      .prepare("SELECT * FROM transactions WHERE reference = ?")
-      .get(reference);
-    if (!tx) return res.status(404).json({ error: "Transaction not found" });
-    if (tx.status === "success")
-      return res
-        .status(409)
-        .json({ error: "Already completed", status: "success" });
-    if (tx.status !== "pending")
-      return res
-        .status(409)
-        .json({ error: "Transaction no longer retryable", status: tx.status });
-    try {
-      const r = await initiatePayment({
-        type: tx.type,
-        userId: tx.user_id,
-        nomineeId: tx.nominee_id,
-        amount: tx.amount,
-        phone: tx.phone,
-        metadata: JSON.parse(tx.metadata || "{}"),
-        existingReference: reference,
-      });
-      res.json(r);
-    } catch (err) {
-      res.status(502).json({
-        error:
-          (err.response && err.response.data && err.response.data.message) ||
-          "Payment gateway unreachable. Please retry.",
-        retryable: true,
-      });
-    }
-  },
-);
+/* debug: list this voter's votes */
+app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
+  const token = req.params.voterToken;
+  if (!token || token.length < 10) return res.json([]);
+  try {
+    const rows = await db
+      .prepare(
+        `SELECT fv.nominee_id, fv.created_at, n.code, n.name, c.name as category
+         FROM free_votes fv
+         JOIN nominees n ON fv.nominee_id = n.id
+         JOIN categories c ON n.category_id = c.id
+         WHERE fv.voter_token = ?
+         ORDER BY fv.created_at DESC`,
+      )
+      .all(token);
+    res.json(rows);
+  } catch {
+    res.json([]);
+  }
+});
 
+/* ================================================================
+   TRANSACTION STATUS (used by nominee-portal polling only)
+   ================================================================ */
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
     .prepare(
@@ -1231,13 +1247,7 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
 });
 
 /* ================================================================
-   PAYHERO CALLBACK
-   ---------------------------------------------------------------
-   PayHero fires this the moment the STK push is delivered — BEFORE
-   the user enters their PIN. The payload at that point has
-   `woocommerce_payment_status: "complete"` but `MPESA_Reference: ""`.
-
-   Rule: NO MPESA RECEIPT = NO SUCCESS. Wait for the receipt.
+   PAYHERO CALLBACK (nominee-portal transactions only now)
    ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
@@ -1252,7 +1262,6 @@ app.post("/api/payhero/callback", (req, res) => {
 
       const data = body.response || body.data || body;
 
-      // Find our reference
       let ref =
         data.User_Reference ||
         data.user_reference ||
@@ -1270,7 +1279,7 @@ app.post("/api/payhero/callback", (req, res) => {
       if (!ref) {
         ref = deepFind(
           body,
-          (k, v) => typeof v === "string" && /^(VN|CC|LB1|LB2)-\d/.test(v),
+          (k, v) => typeof v === "string" && /^(CC|LB1|LB2)-\d/.test(v),
         );
       }
 
@@ -1339,7 +1348,6 @@ app.post("/api/payhero/callback", (req, res) => {
         statusRaw.includes("reject") ||
         (resultCode !== null && resultCode !== 0 && resultCode !== "0");
 
-      // Success REQUIRES a real M-Pesa receipt. No receipt = no vote.
       const success = !failure && receiptClean !== null;
 
       console.log(
@@ -1400,13 +1408,6 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
       )
       .get()
   ).t;
-  const voteRevenue = (
-    await db
-      .prepare(
-        `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success' AND type='vote'`,
-      )
-      .get()
-  ).t;
   const pending = (
     await db
       .prepare(`SELECT COUNT(*) as c FROM transactions WHERE status='pending'`)
@@ -1424,17 +1425,21 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
       )
       .get()
   ).c;
+  const uniqueVoters = (
+    await db
+      .prepare("SELECT COUNT(DISTINCT voter_token) as c FROM free_votes")
+      .get()
+  ).c;
   res.json({
     totalVotes,
     grossRevenue,
-    voteRevenue,
-    otherRevenue: grossRevenue - voteRevenue,
     platformRevenue: grossRevenue * 0.1,
     pendingPayments: pending,
     successfulPayments: successCount,
     abandonedTransactions: abandoned,
     nomineesCount,
     categoriesCount,
+    uniqueVoters,
   });
 });
 
@@ -1462,11 +1467,9 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const dailyRows = await db
     .prepare(
       `
-    SELECT date(completed_at) as day,
-           COALESCE(SUM(CAST(json_extract(metadata, '$.voteCount') AS INTEGER)),0) as votes
-    FROM transactions
-    WHERE type='vote' AND status='success'
-      AND completed_at >= datetime('now', '-7 days')
+    SELECT date(created_at) as day, COUNT(*) as votes
+    FROM free_votes
+    WHERE created_at >= datetime('now', '-7 days')
     GROUP BY day ORDER BY day ASC
   `,
     )
@@ -1720,7 +1723,7 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
   doc
     .fillColor(primary)
     .fontSize(24)
-    .text("VoteNet — Official Results Report", { align: "center" });
+    .text("Voteus — Official Results Report", { align: "center" });
   doc.moveDown(0.2);
   doc
     .fillColor(gray)
@@ -1815,7 +1818,7 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
     .fillColor(gray)
     .fontSize(9)
     .text(
-      "Auto-generated by VoteNet.io. Reflects all successful transactions at time of export.",
+      "Auto-generated by Voteus.io. Reflects all successful transactions at time of export.",
       44,
       doc.y,
       { align: "center", width: 507 },
@@ -1834,7 +1837,7 @@ app.get("/manifest.json", (req, res) => {
 
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
-  res.send(`# VoteNet - Gala Awards 2026
+  res.send(`# Voteus - Gala Awards 2026
 User-agent: *
 Allow: /
 Disallow: /nominee
@@ -1850,7 +1853,7 @@ app.get("/sitemap.xml", async (req, res) => {
   try {
     const nominees = await db
       .prepare(
-        `SELECT n.code, n.name, n.img, n.updated_at, c.name as category
+        `SELECT n.code, n.name, n.img, n.created_at, c.name as category
          FROM nominees n JOIN categories c ON n.category_id = c.id
          ORDER BY n.votes DESC`,
       )
@@ -1874,17 +1877,18 @@ app.get("/sitemap.xml", async (req, res) => {
     <priority>1.0</priority>
     <image:image>
       <image:loc>${baseUrl}/hero-mobile.jpeg</image:loc>
-      <image:title>Gala Awards 2026 - VoteNet</image:title>
+      <image:title>Gala Awards 2026 - Voteus</image:title>
       <image:caption>Vote for your favourite nominees at MKUPLC Gala Awards 2026</image:caption>
     </image:image>
   </url>`;
 
     for (const n of nominees) {
       const nomineeUrl = `${baseUrl}/nominee/${encodeURIComponent(n.code)}`;
+      const lastmod = n.created_at ? String(n.created_at).split("T")[0] : now;
       xml += `
   <url>
     <loc>${nomineeUrl}</loc>
-    <lastmod>${n.updated_at ? n.updated_at.split("T")[0] : now}</lastmod>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
     <image:image>
@@ -1930,7 +1934,7 @@ app.get("/nominee/:code", async (req, res) => {
     const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
     const image = nominee.img || `${baseUrl}/hero-mobile.jpeg`;
-    const title = `${nominee.name} | VoteNet — Gala Awards 2026`;
+    const title = `${nominee.name} | Voteus — Gala Awards 2026`;
     const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
 
     const html = `<!doctype html>
@@ -1952,7 +1956,7 @@ app.get("/nominee/:code", async (req, res) => {
   <meta property="og:image:secure_url" content="${image}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:site_name" content="VoteNet" />
+  <meta property="og:site_name" content="Voteus" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${description}" />
@@ -1960,7 +1964,7 @@ app.get("/nominee/:code", async (req, res) => {
   <meta http-equiv="refresh" content="0; url=${shareUrl}" />
 </head>
 <body>
-  <p>Redirecting to <a href="${shareUrl}">VoteNet</a>...</p>
+  <p>Redirecting to <a href="${shareUrl}">Voteus</a>...</p>
   <script>window.location.href = "${shareUrl}";</script>
 </body>
 </html>`;
@@ -1973,7 +1977,7 @@ app.get("/nominee/:code", async (req, res) => {
 });
 
 /* ================================================================
-   STATIC HERO IMAGES — served from project root with caching
+   STATIC HERO IMAGES
    ================================================================ */
 const HERO_WIDE = path.join(__dirname, "hero.jpeg");
 const HERO_MOBILE = path.join(__dirname, "hero-mobile.jpeg");
@@ -1987,7 +1991,6 @@ function serveHeroImage(res, filePath, label) {
     res.setHeader("Cache-Control", "no-store");
     return res.status(404).type("text/plain").send(`${label} missing`);
   }
-  // Immutable caching → zero latency on repeat visits
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.setHeader("Content-Type", "image/jpeg");
   res.sendFile(filePath);
@@ -2123,7 +2126,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
    START
    ================================================================ */
 const server = app.listen(PORT, async () => {
-  console.log(`\n✓ VoteNet on http://localhost:${PORT}`);
+  console.log(`\n✓ Voteus on http://localhost:${PORT}`);
 
   try {
     await db.verifyConnection();
@@ -2180,6 +2183,7 @@ const server = app.listen(PORT, async () => {
   );
   console.log(`  Images:      ${IMGBB_API_KEY ? "ImgBB" : "NOT CONFIGURED"}`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
+  console.log(`  Voting:      FREE (one vote per voter per nominee)`);
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,

@@ -16,6 +16,7 @@ const TABLES = [
   "leaderboard_access",
   "payment_logs",
   "admins",
+  "free_votes",
 ];
 const clean = (v) => (v === undefined ? null : v);
 
