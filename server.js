@@ -47,7 +47,6 @@ const CHECKPOINT_WAL_THRESHOLD = 5 * 1024 * 1024;
 const RECONCILE_INTERVAL_MS = 60_000;
 const RECONCILE_MIN_AGE_MS = 30_000;
 
-/* Image storage tuning */
 const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const IMG_TARGET_DIMENSION = 700;
 const IMG_JPEG_QUALITY = 82;
@@ -154,11 +153,16 @@ async function initSchema() {
       id TEXT PRIMARY KEY,
       voter_token TEXT NOT NULL,
       nominee_id TEXT NOT NULL,
+      device_hash TEXT,
+      ip TEXT,
+      category_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(voter_token, nominee_id)
     );
     CREATE INDEX IF NOT EXISTS idx_fv_voter ON free_votes(voter_token);
     CREATE INDEX IF NOT EXISTS idx_fv_nominee ON free_votes(nominee_id);
+    CREATE INDEX IF NOT EXISTS idx_fv_device ON free_votes(device_hash);
+    CREATE INDEX IF NOT EXISTS idx_fv_ip ON free_votes(ip);
     CREATE TABLE IF NOT EXISTS images (
       id TEXT PRIMARY KEY,
       data BLOB NOT NULL,
@@ -173,6 +177,35 @@ async function initSchema() {
       revoked_at TEXT, revoked_by TEXT
     );
   `);
+
+  /* ---------- Migration for existing installs ---------- */
+  for (const col of ["device_hash TEXT", "ip TEXT", "category_id TEXT"]) {
+    try {
+      await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
+    } catch {}
+  }
+
+  try {
+    await db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
+      ON free_votes(device_hash, category_id)
+      WHERE device_hash IS NOT NULL
+    `);
+  } catch (e) {
+    console.warn("[Schema] idx_fv_device_cat:", e.message);
+  }
+
+  try {
+    await db.exec(`
+      UPDATE free_votes
+      SET category_id = (
+        SELECT category_id FROM nominees WHERE id = free_votes.nominee_id
+      )
+      WHERE category_id IS NULL
+    `);
+  } catch (e) {
+    console.warn("[Schema] category_id backfill:", e.message);
+  }
 }
 
 /* ================================================================
@@ -574,7 +607,7 @@ function interpretPayHeroStatus(payload) {
 }
 
 /* ================================================================
-   IMAGES — upload (store BLOB) + serve (zero-latency cache)
+   IMAGES
    ================================================================ */
 app.post(
   "/api/upload",
@@ -704,21 +737,11 @@ app.get("/api/categories", async (req, res) => {
   );
 });
 
-/**
- * GET /api/nominees[?voterToken=<token>]
- *
- * When voterToken is present, each nominee row is enriched with:
- *  - voted            : true if THIS voter voted for THIS nominee
- *  - categoryVoted    : true if this voter voted for ANY nominee currently
- *                       in the same category as this nominee
- *  - categoryVoteFor  : { nomineeId, name, code } describing that vote,
- *                       or null when categoryVoted is false
- *
- * This drives the UI: "Voted" (green), "Category Voted" (grey), or "Cast Vote".
- */
 app.get("/api/nominees", async (req, res) => {
   const voterToken =
     typeof req.query.voterToken === "string" ? req.query.voterToken : null;
+  const deviceHash =
+    typeof req.query.deviceHash === "string" ? req.query.deviceHash : null;
 
   const rows = await db
     .prepare(
@@ -729,28 +752,41 @@ app.get("/api/nominees", async (req, res) => {
     )
     .all();
 
-  if (voterToken) {
+  if (voterToken || deviceHash) {
     try {
+      const conditions = [];
+      const params = [];
+      if (voterToken) {
+        conditions.push("fv.voter_token = ?");
+        params.push(voterToken);
+      }
+      if (deviceHash) {
+        conditions.push("fv.device_hash = ?");
+        params.push(deviceHash);
+      }
+
       const voterVotes = await db
         .prepare(
           `
         SELECT fv.nominee_id, n2.category_id, n2.name, n2.code
         FROM free_votes fv
         JOIN nominees n2 ON fv.nominee_id = n2.id
-        WHERE fv.voter_token = ?
+        WHERE ${conditions.join(" OR ")}
       `,
         )
-        .all(voterToken);
+        .all(...params);
 
       const votedByNominee = new Set();
       const votedByCategory = {};
       for (const v of voterVotes) {
         votedByNominee.add(v.nominee_id);
-        votedByCategory[v.category_id] = {
-          nomineeId: v.nominee_id,
-          name: v.name,
-          code: v.code,
-        };
+        if (!votedByCategory[v.category_id]) {
+          votedByCategory[v.category_id] = {
+            nomineeId: v.nominee_id,
+            name: v.name,
+            code: v.code,
+          };
+        }
       }
 
       for (const r of rows) {
@@ -982,7 +1018,7 @@ app.post(
 );
 
 /* ================================================================
-   ADMIN USER MANAGEMENT (super only)
+   ADMIN USER MANAGEMENT
    ================================================================ */
 app.get("/api/admin/users", superAuth, async (req, res) => {
   const rows = await db
@@ -1047,9 +1083,6 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-/* ================================================================
-   DIAGNOSTIC (super only)
-   ================================================================ */
 app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   try {
     const total = (await db.prepare("SELECT COUNT(*) as c FROM users").get()).c;
@@ -1262,18 +1295,14 @@ app.post(
 );
 
 /* ================================================================
-   FREE VOTING — one vote per voter per CATEGORY
+   FREE VOTING
    ================================================================
-   A voter (identified by anonymous voterToken in localStorage) may
-   cast at most ONE vote within any given category. They may still
-   vote in every other category.
-
-   Enforcement:
-     - Application-level check inside BEGIN IMMEDIATE (serialised
-       writers in SQLite) — no schema migration required.
-     - The existing UNIQUE(voter_token, nominee_id) constraint still
-       prevents duplicate votes for the same nominee as a second
-       safety net.
+   Enforcement rules:
+     1. One vote per voterToken per category (matches previous rule).
+     2. One vote per deviceHash per category — catches incognito and
+        cleared-localStorage circumvention in the same browser.
+     3. The two rules run inside BEGIN IMMEDIATE so they cannot be
+        raced. The idx_fv_device_cat unique index is a second safety net.
    ================================================================ */
 app.post(
   "/api/votes",
@@ -1282,11 +1311,18 @@ app.post(
     if (!votingOpen())
       return res.status(403).json({ error: "Voting is closed" });
 
-    const { nomineeCode, voterToken } = req.body || {};
-    if (!nomineeCode || !voterToken)
-      return res
-        .status(400)
-        .json({ error: "Nominee code and voter token required" });
+    const { nomineeCode, voterToken, deviceHash } = req.body || {};
+    if (!nomineeCode || !voterToken || !deviceHash)
+      return res.status(400).json({
+        error: "Nominee code, voter token, and device fingerprint are required",
+      });
+
+    if (
+      typeof deviceHash !== "string" ||
+      deviceHash.length < 8 ||
+      deviceHash.length > 128
+    )
+      return res.status(400).json({ error: "Invalid device fingerprint" });
 
     if (
       typeof voterToken !== "string" ||
@@ -1300,18 +1336,22 @@ app.post(
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
 
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+
     let result;
     try {
       result = await db.tx(async (t) => {
-        // Look for ANY vote by this voter for ANY nominee that is
-        // currently in the target nominee's category.
         const existing = await t.get(
-          `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code
-           FROM free_votes fv
-           JOIN nominees n2 ON fv.nominee_id = n2.id
-           WHERE fv.voter_token = ? AND n2.category_id = ?
-           LIMIT 1`,
-          [voterToken, nominee.category_id],
+          `
+          SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code,
+                 fv.voter_token, fv.device_hash
+          FROM free_votes fv
+          JOIN nominees n2 ON fv.nominee_id = n2.id
+          WHERE n2.category_id = ?
+            AND (fv.voter_token = ? OR fv.device_hash = ?)
+          LIMIT 1
+        `,
+          [nominee.category_id, voterToken, deviceHash],
         );
 
         if (existing) {
@@ -1320,12 +1360,22 @@ app.post(
             sameNominee: existing.nominee_id === nominee.id,
             votedName: existing.voted_name,
             votedCode: existing.voted_code,
+            reason: existing.device_hash === deviceHash ? "device" : "voter",
           };
         }
 
         await t.execute({
-          sql: "INSERT INTO free_votes (id, voter_token, nominee_id) VALUES (?, ?, ?)",
-          args: [uuidv4(), voterToken, nominee.id],
+          sql: `INSERT INTO free_votes
+                (id, voter_token, nominee_id, device_hash, ip, category_id)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [
+            uuidv4(),
+            voterToken,
+            nominee.id,
+            deviceHash,
+            ip,
+            nominee.category_id,
+          ],
         });
         await t.execute({
           sql: "UPDATE nominees SET votes = votes + 1 WHERE id = ?",
@@ -1336,20 +1386,33 @@ app.post(
       });
     } catch (e) {
       console.error("[Vote]", e.message);
+      if (
+        String(e.message || "")
+          .toLowerCase()
+          .includes("unique")
+      ) {
+        return res.status(409).json({
+          error: "This device has already voted in this category.",
+          code: "DEVICE_ALREADY_VOTED",
+        });
+      }
       return res.status(500).json({ error: "Vote failed. Please try again." });
     }
 
     if (!result.ok) {
-      const message = result.sameNominee
-        ? "You have already voted for this nominee."
-        : `You've already voted in this category (for ${result.votedName}). Only one vote per category is allowed.`;
+      let message;
+      if (result.reason === "device") {
+        message = `This device has already voted in this category (for ${result.votedName}). Only one vote per device per category is allowed.`;
+      } else if (result.sameNominee) {
+        message = "You have already voted for this nominee.";
+      } else {
+        message = `You've already voted in this category (for ${result.votedName}). Only one vote per category is allowed.`;
+      }
+
       return res.status(409).json({
         error: message,
-        code: "CATEGORY_ALREADY_VOTED",
-        votedNominee: {
-          name: result.votedName,
-          code: result.votedCode,
-        },
+        code: "ALREADY_VOTED",
+        votedNominee: { name: result.votedName, code: result.votedCode },
       });
     }
 
@@ -1648,6 +1711,13 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
       .prepare("SELECT COUNT(DISTINCT voter_token) as c FROM free_votes")
       .get()
   ).c;
+  const uniqueDevices = (
+    await db
+      .prepare(
+        "SELECT COUNT(DISTINCT device_hash) as c FROM free_votes WHERE device_hash IS NOT NULL",
+      )
+      .get()
+  ).c;
   res.json({
     totalVotes,
     grossRevenue,
@@ -1658,6 +1728,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
     nomineesCount,
     categoriesCount,
     uniqueVoters,
+    uniqueDevices,
   });
 });
 
@@ -1708,7 +1779,6 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   res.json({ topNominees, categoryDistribution, dailyVotes: days });
 });
 
-/* ---------- Categories ---------- */
 app.post("/api/admin/categories", adminAuth, async (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim())
@@ -1758,7 +1828,6 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-/* ---------- Nominees ---------- */
 app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   const { name, categoryId, img, desc, email, password } = req.body || {};
 
@@ -1827,7 +1896,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
 });
 
 app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
-  // Clean up the nominee's votes so a deleted nominee doesn't ghost-lock a category
   await db
     .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
     .run(req.params.id);
@@ -1835,7 +1903,6 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-/* ---------- Transactions / Logs (super only) ---------- */
 app.get("/api/admin/transactions", superAuth, async (req, res) => {
   res.json(
     await db
@@ -1861,7 +1928,7 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
 });
 
 /* ================================================================
-   EXPORTS (super only)
+   EXPORTS
    ================================================================ */
 async function buildLeaderboardRows() {
   return await db
@@ -2054,7 +2121,7 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
 });
 
 /* ================================================================
-   SEO ROUTES
+   SEO / PAGES / STATIC
    ================================================================ */
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
@@ -2096,12 +2163,7 @@ app.get("/sitemap.xml", async (req, res) => {
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
-        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml"
-        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">`;
-
-    xml += `
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>${baseUrl}/</loc>
     <lastmod>${now}</lastmod>
@@ -2110,7 +2172,6 @@ app.get("/sitemap.xml", async (req, res) => {
     <image:image>
       <image:loc>${baseUrl}/hero-mobile.jpeg</image:loc>
       <image:title>Gala Awards 2026 - Voteus</image:title>
-      <image:caption>Vote for your favourite nominees at MKUPLC Gala Awards 2026</image:caption>
     </image:image>
   </url>`;
 
@@ -2126,27 +2187,21 @@ app.get("/sitemap.xml", async (req, res) => {
     <image:image>
       <image:loc>${absImg(n.img)}</image:loc>
       <image:title>${n.name} - ${n.category}</image:title>
-      <image:caption>Vote for ${n.name} in ${n.category} at Gala Awards 2026</image:caption>
     </image:image>
   </url>`;
     }
 
-    xml += `
-</urlset>`;
-
+    xml += `\n</urlset>`;
     res.type("application/xml");
     res.send(xml);
   } catch (e) {
     console.error("[Sitemap]", e.message);
-    res.status(500).type("application/xml")
-      .send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://gala.voteus.xyz/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`);
+    res
+      .status(500)
+      .type("application/xml")
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://gala.voteus.xyz/</loc></url></urlset>`,
+      );
   }
 });
 
@@ -2159,9 +2214,7 @@ app.get("/nominee/:code", async (req, res) => {
       )
       .get(req.params.code);
 
-    if (!nominee) {
-      return res.redirect("/");
-    }
+    if (!nominee) return res.redirect("/");
 
     const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
@@ -2172,7 +2225,7 @@ app.get("/nominee/:code", async (req, res) => {
         : baseUrl + (imgPath.startsWith("/") ? imgPath : "/" + imgPath)
       : `${baseUrl}/hero-mobile.jpeg`;
     const title = `${nominee.name} | Voteus — Gala Awards 2026`;
-    const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
+    const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
 
     const html = `<!doctype html>
 <html lang="en" itemscope itemtype="https://schema.org/Person">
@@ -2181,7 +2234,6 @@ app.get("/nominee/:code", async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0071e3" />
   <title>${title}</title>
-  <meta name="title" content="${title}" />
   <meta name="description" content="${description}" />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <link rel="canonical" href="${shareUrl}" />
@@ -2190,21 +2242,14 @@ app.get("/nominee/:code", async (req, res) => {
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${description}" />
   <meta property="og:image" content="${image}" />
-  <meta property="og:image:secure_url" content="${image}" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:site_name" content="Voteus" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${description}" />
   <meta name="twitter:image" content="${image}" />
   <meta http-equiv="refresh" content="0; url=${shareUrl}" />
 </head>
-<body>
-  <p>Redirecting to <a href="${shareUrl}">Voteus</a>...</p>
-  <script>window.location.href = "${shareUrl}";</script>
-</body>
-</html>`;
+<body><p>Redirecting to <a href="${shareUrl}">Voteus</a>...</p>
+<script>window.location.href="${shareUrl}";</script></body></html>`;
 
     res.send(html);
   } catch (e) {
@@ -2213,18 +2258,12 @@ app.get("/nominee/:code", async (req, res) => {
   }
 });
 
-/* ================================================================
-   STATIC HERO IMAGES
-   ================================================================ */
 const HERO_WIDE = path.join(__dirname, "hero.jpeg");
 const HERO_MOBILE = path.join(__dirname, "hero-mobile.jpeg");
 
 function serveHeroImage(res, filePath, label) {
   if (!fs.existsSync(filePath)) {
-    console.error(
-      `[Image] ${label} not found at ${filePath}\n` +
-        `        Place the file next to server.js and restart.`,
-    );
+    console.error(`[Image] ${label} not found at ${filePath}`);
     res.setHeader("Cache-Control", "no-store");
     return res.status(404).type("text/plain").send(`${label} missing`);
   }
@@ -2240,9 +2279,6 @@ app.get("/hero-mobile.jpeg", (req, res) =>
   serveHeroImage(res, HERO_MOBILE, "hero-mobile.jpeg"),
 );
 
-/* ================================================================
-   PAGES
-   ================================================================ */
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/nominee", (req, res) =>
   res.sendFile(path.join(__dirname, "nominee.html")),
@@ -2254,7 +2290,6 @@ app.get("/admin", (req, res) =>
 /* ================================================================
    BACKGROUND JOBS
    ================================================================ */
-
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2441,7 +2476,9 @@ const server = app.listen(PORT, async () => {
   );
   console.log(`  Images:      SQLite BLOB · served at /api/images/:id`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
-  console.log(`  Voting:      FREE · one vote per voter per category`);
+  console.log(
+    `  Voting:      FREE · one per device per category (fingerprint-enforced)`,
+  );
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
