@@ -15,9 +15,6 @@ const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
-/* ================================================================
-   CONFIG
-   ================================================================ */
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "change-me";
 const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME || "superadmin";
@@ -52,9 +49,6 @@ const IMG_TARGET_DIMENSION = 700;
 const IMG_JPEG_QUALITY = 82;
 const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000;
 
-/* ================================================================
-   BODY PARSING
-   ================================================================ */
 app.use(
   express.json({
     limit: "1mb",
@@ -73,9 +67,6 @@ app.use((req, res, next) => {
   next();
 });
 
-/* ================================================================
-   UPLOADS (multer → memory)
-   ================================================================ */
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: IMG_MAX_UPLOAD_BYTES, files: 1 },
@@ -113,9 +104,6 @@ async function processImage(buffer) {
   }
 }
 
-/* ================================================================
-   DATABASE SCHEMA
-   ================================================================ */
 async function initSchema() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -162,7 +150,6 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_fv_voter ON free_votes(voter_token);
     CREATE INDEX IF NOT EXISTS idx_fv_nominee ON free_votes(nominee_id);
     CREATE INDEX IF NOT EXISTS idx_fv_device ON free_votes(device_hash);
-    CREATE INDEX IF NOT EXISTS idx_fv_ip ON free_votes(ip);
     CREATE TABLE IF NOT EXISTS images (
       id TEXT PRIMARY KEY,
       data BLOB NOT NULL,
@@ -178,7 +165,6 @@ async function initSchema() {
     );
   `);
 
-  /* ---------- Migration for existing installs ---------- */
   for (const col of ["device_hash TEXT", "ip TEXT", "category_id TEXT"]) {
     try {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
@@ -208,9 +194,6 @@ async function initSchema() {
   }
 }
 
-/* ================================================================
-   RATE LIMIT
-   ================================================================ */
 const rateBuckets = new Map();
 function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
   return (req, res, next) => {
@@ -240,9 +223,6 @@ setInterval(() => {
   for (const [k, v] of rateBuckets) if (now > v.resetAt) rateBuckets.delete(k);
 }, 60_000);
 
-/* ================================================================
-   HELPERS
-   ================================================================ */
 function generateCode(name) {
   const initials = (name || "XX")
     .split(" ")
@@ -289,9 +269,6 @@ function deepFind(obj, predicate, seen = new Set()) {
   return undefined;
 }
 
-/* ================================================================
-   AUTH MIDDLEWARE
-   ================================================================ */
 function auth(req, res, next) {
   const h = req.headers.authorization || "";
   if (!h.startsWith("Bearer "))
@@ -343,9 +320,6 @@ function superAuth(req, res, next) {
   }
 }
 
-/* ================================================================
-   PAYMENT PIPELINE (nominee-portal only)
-   ================================================================ */
 async function completeTransaction(reference, receipt) {
   try {
     const result = await db.tx(async (t) => {
@@ -538,9 +512,6 @@ async function initiatePayment({
   throw lastErr;
 }
 
-/* ================================================================
-   PAYHERO STATUS LOOKUP
-   ================================================================ */
 async function checkPayHeroStatus(reference) {
   if (!PAYHERO_API_KEY || !PAYHERO_API_SECRET) return null;
   const authHeader = Buffer.from(
@@ -606,9 +577,6 @@ function interpretPayHeroStatus(payload) {
   return null;
 }
 
-/* ================================================================
-   IMAGES
-   ================================================================ */
 app.post(
   "/api/upload",
   anyAuth,
@@ -637,6 +605,9 @@ app.post(
           )
           .run(id, processed.data, processed.mime, processed.data.length);
 
+        // Push immediately so image survives a fast redeploy
+        db.push().catch((e) => console.warn("[Push after upload]", e.message));
+
         const url = `/api/images/${id}`;
         console.log(
           `[Upload] ✓ ${url} (${Math.round(processed.data.length / 1024)} KB)`,
@@ -651,27 +622,41 @@ app.post(
 );
 
 app.get("/api/images/:id", async (req, res) => {
-  try {
-    const id = String(req.params.id || "").trim();
-    if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
-      res.setHeader("Cache-Control", "no-store");
-      return res.status(400).end();
-    }
+  const id = String(req.params.id || "").trim();
+  console.log(`[Images] GET ${id}`);
 
+  if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
+    console.warn(`[Images] ✗ invalid id format: ${id}`);
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(400).end();
+  }
+
+  try {
     let row = await db
       .prepare("SELECT data, mime FROM images WHERE id = ?")
       .get(id);
 
-    if (!row) {
+    if (row) {
+      console.log(
+        `[Images] ✓ local hit: ${id} (${row.data?.length ?? 0} bytes)`,
+      );
+    } else {
+      console.log(`[Images] ✗ local miss, trying Turso: ${id}`);
       const remoteRow = await db.pullImage(id);
       if (remoteRow) {
         row = { data: remoteRow.data, mime: remoteRow.mime };
+        console.log(`[Images] ✓ Turso hit: ${id}`);
+      } else {
+        console.warn(`[Images] ✗ not found in local or Turso: ${id}`);
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(404).end();
       }
     }
 
-    if (!row) {
+    if (!row.data || row.data.length === 0) {
+      console.error(`[Images] ✗ empty blob for ${id}`);
       res.setHeader("Cache-Control", "no-store");
-      return res.status(404).end();
+      return res.status(500).end();
     }
 
     const buf = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
@@ -681,15 +666,15 @@ app.get("/api/images/:id", async (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("ETag", `"${id}"`);
     res.send(buf);
+
+    console.log(`[Images] ✓ served ${id} (${buf.length} bytes)`);
   } catch (e) {
-    console.error("[Images]", e.message);
+    console.error(`[Images] ✗ error for ${id}:`, e.message);
+    res.setHeader("Cache-Control", "no-store");
     res.status(500).end();
   }
 });
 
-/* ================================================================
-   PUBLIC
-   ================================================================ */
 app.get("/api/health", async (req, res) => {
   let dbOk = true;
   try {
@@ -823,9 +808,6 @@ app.get("/api/nominees/:code", async (req, res) => {
   res.json(n);
 });
 
-/* ================================================================
-   NOMINEE AUTH
-   ================================================================ */
 app.post(
   "/api/auth/register",
   rateLimit({ key: "register", max: 10 }),
@@ -963,9 +945,6 @@ app.post(
   },
 );
 
-/* ================================================================
-   ADMIN LOGIN
-   ================================================================ */
 app.post(
   "/api/admin/login",
   rateLimit({ key: "admin-login", max: 10 }),
@@ -1017,9 +996,6 @@ app.post(
   },
 );
 
-/* ================================================================
-   ADMIN USER MANAGEMENT
-   ================================================================ */
 app.get("/api/admin/users", superAuth, async (req, res) => {
   const rows = await db
     .prepare(
@@ -1097,9 +1073,6 @@ app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   }
 });
 
-/* ================================================================
-   NOMINEE PORTAL
-   ================================================================ */
 async function getLeaderboardAccess(userId) {
   const acc = await db
     .prepare("SELECT * FROM leaderboard_access WHERE user_id = ?")
@@ -1294,16 +1267,6 @@ app.post(
   },
 );
 
-/* ================================================================
-   FREE VOTING
-   ================================================================
-   Enforcement rules:
-     1. One vote per voterToken per category (matches previous rule).
-     2. One vote per deviceHash per category — catches incognito and
-        cleared-localStorage circumvention in the same browser.
-     3. The two rules run inside BEGIN IMMEDIATE so they cannot be
-        raced. The idx_fv_device_cat unique index is a second safety net.
-   ================================================================ */
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -1446,9 +1409,6 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   }
 });
 
-/* ================================================================
-   TRANSACTION STATUS
-   ================================================================ */
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
     .prepare(
@@ -1527,9 +1487,6 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
   });
 });
 
-/* ================================================================
-   PAYHERO CALLBACK
-   ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
 
@@ -1663,9 +1620,6 @@ app.post("/api/payhero/callback", (req, res) => {
   })();
 });
 
-/* ================================================================
-   ADMIN DATA
-   ================================================================ */
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   const isSuper = req.admin.role === "super";
   const totalVotes = (
@@ -1927,9 +1881,6 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-/* ================================================================
-   EXPORTS
-   ================================================================ */
 async function buildLeaderboardRows() {
   return await db
     .prepare(
@@ -2120,9 +2071,6 @@ app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
   doc.end();
 });
 
-/* ================================================================
-   SEO / PAGES / STATIC
-   ================================================================ */
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(__dirname, "manifest.json"));
@@ -2287,9 +2235,6 @@ app.get("/admin", (req, res) =>
   res.sendFile(path.join(__dirname, "admin.html")),
 );
 
-/* ================================================================
-   BACKGROUND JOBS
-   ================================================================ */
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2376,9 +2321,6 @@ setInterval(async () => {
   }
 }, RECONCILE_INTERVAL_MS);
 
-/* ================================================================
-   ERROR HANDLING
-   ================================================================ */
 app.use((err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.url}:`, err.message);
   if (res.headersSent) return next(err);
@@ -2415,14 +2357,12 @@ function shutdown(signal) {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-/* ================================================================
-   START
-   ================================================================ */
 const server = app.listen(PORT, async () => {
   console.log(`\n✓ Voteus on http://localhost:${PORT}`);
 
   try {
     await db.verifyConnection();
+    await db.ensureRemoteSchema();
     await initSchema();
     console.log("  ✓ Local schema ready");
     await db.bootstrapIfEmpty();

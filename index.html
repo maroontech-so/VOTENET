@@ -301,7 +301,6 @@
                 padding-left: clamp(6px, 1vw, 14px);
             }
 
-            /* 2 → 3 → 4 → 6 columns */
             .grid-tiles {
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -760,6 +759,11 @@
                         id="pm-img"
                         class="w-full h-full object-cover"
                         alt=""
+                        onerror="
+                            this.onerror = null;
+                            this.src =
+                                'https://placehold.co/600x600/1e293b/ffffff?text=?';
+                        "
                     />
                 </div>
                 <div class="md:w-1/2 p-8 flex flex-col">
@@ -819,6 +823,11 @@
                         id="vm-img"
                         class="w-20 h-20 rounded-2xl object-cover bg-gray-100"
                         alt=""
+                        onerror="
+                            this.onerror = null;
+                            this.src =
+                                'https://placehold.co/200x200/1e293b/ffffff?text=?';
+                        "
                     />
                     <div class="flex-1">
                         <div
@@ -985,12 +994,6 @@
                 return t;
             }
 
-            /**
-             * Computes a stable SHA-256 device fingerprint from ~12 browser signals.
-             * Includes canvas + WebGL rendering, which are identical inside incognito
-             * (so incognito cannot be used to cast a second vote in the same browser).
-             * Cached in memory for the page lifetime.
-             */
             async function getDeviceFingerprint() {
                 if (window.__voteus_fp) return window.__voteus_fp;
 
@@ -1316,6 +1319,7 @@
                         const eager = cardIndex < EAGER_COUNT;
                         cardIndex++;
                         const src = n.img || placeholderImg(n.name);
+                        const fallbackSrc = escapeHtml(placeholderImg(n.name));
                         const isVoted = !!n.voted;
                         const isCategoryVoted = !isVoted && !!n.categoryVoted;
 
@@ -1337,7 +1341,8 @@
                         el.innerHTML = `
         <img src="${escapeHtml(src)}" alt="${escapeHtml(n.name)}" width="700" height="700"
              loading="${eager ? "eager" : "lazy"}" decoding="async"
-             ${eager ? 'fetchpriority="high"' : ""}>
+             ${eager ? 'fetchpriority="high"' : ""}
+             onerror="this.onerror=null;this.src='${fallbackSrc}';">
         <div class="overlay">
           <span class="code">${escapeHtml(n.code)}</span>
           <h3 class="name">${escapeHtml(n.name)}</h3>
@@ -1354,13 +1359,6 @@
                                 () => img.classList.add("loaded"),
                                 { once: true },
                             );
-                        img.addEventListener(
-                            "error",
-                            () => {
-                                img.style.opacity = 1;
-                            },
-                            { once: true },
-                        );
                         el.onclick = () => openProfile(n);
                         grid.appendChild(el);
                     });

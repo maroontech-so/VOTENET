@@ -1545,8 +1545,8 @@
                 list.innerHTML = filtered
                     .map(
                         (n) => `
-    <div class="flex items-center gap-4 p-4">
-      <img src="${n.img || `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent(n.name[0] || "?")}`}" class="w-12 h-12 rounded-lg object-cover">
+                        <div class="flex items-center gap-4 p-4">
+                          <img src="${n.img || `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent(n.name[0] || "?")}`}" class="w-12 h-12 rounded-lg object-cover" onerror="this.onerror=null;this.src='https://placehold.co/80x80/3F51B5/ffffff?text=?';">
       <div class="flex-1 min-w-0">
         <div class="font-semibold truncate">${n.name}</div>
         <div class="text-xs text-gray-500">${n.category} · <span class="font-mono">${n.code}</span></div>

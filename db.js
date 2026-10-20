@@ -46,11 +46,6 @@ function makeIdempotent(sql) {
   return trimmed;
 }
 
-/**
- * Buffers can't be JSON.stringify'd cleanly (they become
- * {"type":"Buffer","data":[...]} which isn't restorable), so we
- * serialize them as a tagged base64 envelope. push() reverses it.
- */
 function serializeArg(a) {
   if (Buffer.isBuffer(a)) {
     return { __buf: a.toString("base64") };
@@ -210,12 +205,6 @@ async function push() {
   return { pushed };
 }
 
-/**
- * Pull is deliberately EXCLUDES the `images` table — pulling every image
- * on every sync cycle would transfer megabytes every 60s. Instead:
- *  - Uploads sync to Turso normally via the queue.
- *  - Images are lazily pulled on-demand via pullImage(id) if missing locally.
- */
 async function pull() {
   const TABLES = [
     "categories",
@@ -226,6 +215,8 @@ async function pull() {
     "payment_logs",
     "admins",
     "free_votes",
+    // NOTE: `images` is deliberately excluded to save bandwidth.
+    // Missing images are lazily pulled via pullImage(id).
   ];
 
   let pulled = 0;
@@ -257,12 +248,6 @@ async function pull() {
   return { pulled };
 }
 
-/**
- * Fetch a single image from Turso if it doesn't exist locally.
- * Used by GET /api/images/:id when a nominee's image hasn't been
- * synced down yet (e.g. local DB was recreated and bootstrap ran,
- * but pull() skipped images).
- */
 async function pullImage(id) {
   try {
     const res = await remote.execute({
@@ -273,17 +258,25 @@ async function pullImage(id) {
     const row = res.rows[0];
     const vals = res.columns.map((c) => row[c]);
     const obj = Object.fromEntries(res.columns.map((c, i) => [c, vals[i]]));
+
+    const data = Buffer.isBuffer(obj.data) ? obj.data : Buffer.from(obj.data);
+
     local
       .prepare(
         "INSERT OR REPLACE INTO images (id, data, mime, size, created_at) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(obj.id, obj.data, obj.mime, obj.size, obj.created_at);
-    return obj;
+      .run(obj.id, data, obj.mime, obj.size, obj.created_at);
+
+    return { ...obj, data };
   } catch (e) {
     console.warn("[pullImage]", e.message);
     return null;
   }
 }
+
+/* ================================================================
+   BOOTSTRAP
+   ================================================================ */
 
 async function verifyConnection() {
   if (!process.env.TURSO_DATABASE_URL) {
@@ -296,6 +289,40 @@ async function verifyConnection() {
   await remote.execute("SELECT 1 AS ok");
   console.log("  ✓ Turso cloud reachable");
   console.log(`  Local DB:  ${LOCAL_DB_PATH}`);
+}
+
+/**
+ * Ensures every table exists in Turso, not just locally.
+ * Without this, new tables (like `images`) would never reach Turso,
+ * and their writes would be silently dropped by push().
+ */
+async function ensureRemoteSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS nominees (id TEXT PRIMARY KEY, user_id TEXT, name TEXT NOT NULL, category_id TEXT NOT NULL, code TEXT UNIQUE NOT NULL, img TEXT, desc TEXT, votes INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, reference TEXT UNIQUE NOT NULL, type TEXT NOT NULL, user_id TEXT, nominee_id TEXT, amount REAL NOT NULL, phone TEXT NOT NULL, status TEXT DEFAULT 'pending', metadata TEXT, mpesa_receipt TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, completed_at TEXT)`,
+    `CREATE TABLE IF NOT EXISTS leaderboard_access (user_id TEXT PRIMARY KEY, permanent INTEGER DEFAULT 0, expires_at TEXT, credits INTEGER DEFAULT 0)`,
+    `CREATE TABLE IF NOT EXISTS payment_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, reference TEXT NOT NULL, event TEXT NOT NULL, details TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS free_votes (id TEXT PRIMARY KEY, voter_token TEXT NOT NULL, nominee_id TEXT NOT NULL, device_hash TEXT, ip TEXT, category_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(voter_token, nominee_id))`,
+    `CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, data BLOB NOT NULL, mime TEXT NOT NULL, size INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'admin', created_by TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, revoked INTEGER DEFAULT 0, revoked_at TEXT, revoked_by TEXT)`,
+  ];
+
+  let created = 0;
+  for (const sql of statements) {
+    try {
+      await remote.execute(sql);
+      created++;
+    } catch (e) {
+      if (!e.message.includes("already exists")) {
+        console.warn(`[Remote Schema] ${e.message}`);
+      }
+    }
+  }
+  console.log(
+    `  ✓ Remote schema verified (${created}/${statements.length} statements OK)`,
+  );
 }
 
 async function bootstrapIfEmpty() {
@@ -349,6 +376,7 @@ module.exports = {
   checkpoint,
   walSize,
   verifyConnection,
+  ensureRemoteSchema,
   bootstrapIfEmpty,
   getQueueSize,
   LOCAL_DB_PATH,
