@@ -20,7 +20,7 @@
         />
         <meta
             name="description"
-            content="Voteus is the official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Vote FREE for your favourite nominees across categories including Best Student Leader, Best Content Creator, Best Innovator, Best Performer, and more. Organized by the sitting MKUSA Council — this year's annual gala is bigger and better than ever. Every vote counts. Built by emojistudios."
+            content="Voteus is the official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Vote FREE for your favourite nominees across categories. One vote per category. Organized by the sitting MKUSA Council. Built by emojistudios."
         />
         <meta
             name="keywords"
@@ -83,7 +83,7 @@
         />
         <meta
             property="og:description"
-            content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Support your favourite nominees — every vote counts. Organized by MKUSA Council."
+            content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. One vote per category. Organized by MKUSA Council."
         />
         <meta
             property="og:image"
@@ -116,7 +116,7 @@
         />
         <meta
             name="twitter:description"
-            content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Support your favourite nominees — every vote counts. Organized by MKUSA Council."
+            content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. One vote per category."
         />
         <meta
             name="twitter:image"
@@ -135,7 +135,7 @@
                 "name": "Voteus",
                 "alternateName": "Voteus.io",
                 "url": "https://gala.voteus.xyz/",
-                "description": "Official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Free voting for your favourite nominees.",
+                "description": "Official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Free voting — one vote per category.",
                 "publisher": {
                     "@type": "Organization",
                     "name": "emojistudios",
@@ -145,7 +145,6 @@
                     "@type": "Event",
                     "name": "Gala Awards 2026",
                     "alternateName": "Galla Awards 2026",
-                    "description": "The annual Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC), organized by the sitting MKUSA Council.",
                     "startDate": "2026-01-01",
                     "endDate": "2026-11-30",
                     "eventStatus": "https://schema.org/EventScheduled",
@@ -190,7 +189,7 @@
                             "http://schema.org/MobileWebPlatform"
                         ]
                     },
-                    "description": "Vote for your favourite Gala Awards 2026 nominees — free"
+                    "description": "Vote for your favourite Gala Awards 2026 nominees — free, one vote per category"
                 }
             }
         </script>
@@ -217,10 +216,7 @@
                 },
                 "foundingDate": "2026",
                 "founders": [
-                    {
-                        "@type": "Organization",
-                        "name": "emojistudios"
-                    }
+                    { "@type": "Organization", "name": "emojistudios" }
                 ],
                 "department": {
                     "@type": "Organization",
@@ -236,34 +232,18 @@
                 "mainEntity": [
                     {
                         "@type": "Question",
-                        "name": "What is the Gala Awards 2026?",
-                        "acceptedAnswer": {
-                            "@type": "Answer",
-                            "text": "The Gala Awards 2026 is an annual celebration of student excellence at Mount Kenya University Parklands Law Campus (MKUPLC), organized by the sitting MKUSA Council."
-                        }
-                    },
-                    {
-                        "@type": "Question",
                         "name": "How do I vote for nominees in the Gala Awards 2026?",
                         "acceptedAnswer": {
                             "@type": "Answer",
-                            "text": "Visit https://gala.voteus.xyz/, browse the nominees by category, click on a nominee to view their profile, and tap the Vote button. Voting is completely free and each voter can vote once per nominee."
+                            "text": "Visit https://gala.voteus.xyz/, browse nominees by category, click a nominee, and tap Vote Now. Voting is free. You may cast one vote per category, but you can vote in as many categories as you like."
                         }
                     },
                     {
                         "@type": "Question",
-                        "name": "Who organizes the Gala Awards at Mount Kenya University?",
+                        "name": "Can I vote for more than one nominee in the same category?",
                         "acceptedAnswer": {
                             "@type": "Answer",
-                            "text": "The Gala Awards are organized by the sitting MKUSA Council (Mount Kenya University Students Association), the official student governing body representing all students across Mount Kenya University campuses."
-                        }
-                    },
-                    {
-                        "@type": "Question",
-                        "name": "Where is Mount Kenya University Parklands Law Campus located?",
-                        "acceptedAnswer": {
-                            "@type": "Answer",
-                            "text": "Mount Kenya University Parklands Law Campus (MKUPLC) is located in Parklands, Nairobi, Kenya. It is a premier institution for legal education and student leadership development."
+                            "text": "No. Each voter may cast exactly one vote per category. You can still vote in every other category."
                         }
                     },
                     {
@@ -279,15 +259,7 @@
                         "name": "When does voting close for Gala Awards 2026?",
                         "acceptedAnswer": {
                             "@type": "Answer",
-                            "text": "Voting closes on November 30, 2026 at 23:59:59 EAT. All votes must be cast before this deadline to be counted."
-                        }
-                    },
-                    {
-                        "@type": "Question",
-                        "name": "Is Voteus the official voting platform for Gala Awards 2026?",
-                        "acceptedAnswer": {
-                            "@type": "Answer",
-                            "text": "Yes, Voteus is the official and only authorized digital voting platform for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus."
+                            "text": "Voting closes on November 30, 2026 at 23:59:59 EAT."
                         }
                     }
                 ]
@@ -562,16 +534,29 @@
                 padding-left: clamp(6px, 1vw, 14px);
             }
 
+            /* =========================================================
+               GRID: 2 → 3 → 4 → 6
+               Mobile: 2 columns (bigger cards)
+               Small tablet: 3
+               Tablet: 4
+               Desktop: 6
+               ========================================================= */
             .grid-tiles {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 8px;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
                 width: 100%;
+            }
+            @media (min-width: 480px) {
+                .grid-tiles {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                    gap: 10px;
+                }
             }
             @media (min-width: 640px) {
                 .grid-tiles {
                     grid-template-columns: repeat(4, minmax(0, 1fr));
-                    gap: 10px;
+                    gap: 12px;
                 }
             }
             @media (min-width: 1024px) {
@@ -645,19 +630,19 @@
                 z-index: 2;
             }
             .card .code {
-                font-size: 8px;
+                font-size: 10px; /* was 8px */
                 font-weight: 700;
-                letter-spacing: 1px;
+                letter-spacing: 1.2px;
                 text-transform: uppercase;
                 color: #93c5fd;
-                margin-bottom: 2px;
+                margin-bottom: 3px;
                 text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
             }
             .card .name {
-                font-size: 12px;
+                font-size: 15px; /* was 12px */
                 font-weight: 700;
-                line-height: 1.15;
-                margin-bottom: 5px;
+                line-height: 1.2;
+                margin-bottom: 6px;
                 text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
                 display: -webkit-box;
                 -webkit-line-clamp: 2;
@@ -666,18 +651,18 @@
             }
             .card .cta {
                 width: 100%;
-                padding: 6px 6px;
+                padding: 9px 8px; /* was 6px 6px */
                 background: rgba(255, 255, 255, 0.18);
                 border: 1px solid rgba(255, 255, 255, 0.25);
                 backdrop-filter: blur(10px);
                 color: white;
-                border-radius: 7px;
-                font-size: 10px;
+                border-radius: 8px;
+                font-size: 12px; /* was 10px */
                 font-weight: 600;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                gap: 3px;
+                gap: 4px;
                 transition: all 0.2s;
             }
             .card:hover .cta {
@@ -691,6 +676,14 @@
             .card:hover .cta.voted {
                 background: rgba(34, 197, 94, 0.55);
                 border-color: rgba(34, 197, 94, 0.7);
+            }
+            .card .cta.category-voted {
+                background: rgba(107, 114, 128, 0.35);
+                border-color: rgba(107, 114, 128, 0.5);
+            }
+            .card:hover .cta.category-voted {
+                background: rgba(107, 114, 128, 0.55);
+                border-color: rgba(107, 114, 128, 0.7);
             }
             @media (min-width: 640px) {
                 .card .overlay {
@@ -756,6 +749,11 @@
                 align-items: center;
                 gap: 4px;
             }
+            .cat-badge.voted {
+                color: #166534;
+                background: rgba(220, 252, 231, 0.8);
+                border-color: rgba(134, 239, 172, 0.6);
+            }
             .cat-header .rule {
                 flex: 1;
                 height: 1px;
@@ -781,7 +779,7 @@
                 background: #0077ed;
             }
             .btn:disabled {
-                opacity: 0.5;
+                opacity: 0.55;
                 cursor: not-allowed;
             }
             .btn.voted {
@@ -789,6 +787,10 @@
             }
             .btn.voted:hover {
                 background: #15803d;
+            }
+            .btn.voted:disabled {
+                background: #6b7280;
+                opacity: 0.6;
             }
             .modal {
                 position: fixed;
@@ -925,7 +927,7 @@
                     <h1>Cast Your Vote</h1>
                     <p class="sub">
                         Support your favourite nominees. Every vote is free —
-                        one vote per nominee.
+                        one vote per category.
                     </p>
                     <div class="hero-stats">
                         <div>
@@ -955,7 +957,8 @@
                         <p class="event-sub">
                             The annual celebration of Africa's brightest
                             innovators, creators, and changemakers. Cast your
-                            free vote and help crown this year's winners.
+                            free vote — one per category — and help crown this
+                            year's winners.
                         </p>
                     </div>
                     <div class="event-bar-cta">
@@ -1017,9 +1020,7 @@
 
                 <p class="text-sm text-gray-500 mb-6 leading-relaxed">
                     The Gala Awards 2026 is filling up. Register your profile
-                    and get a shot at one of this year's categories — Best
-                    Student Leader, Best Innovator, Best Content Creator, and
-                    more.
+                    and get a shot at one of this year's categories.
                 </p>
 
                 <a
@@ -1082,7 +1083,7 @@
                         ></i>
                         <span
                             class="text-[10px] font-bold uppercase tracking-wider text-green-700"
-                            >Free Vote · One per nominee</span
+                            >Free Vote · One per category</span
                         >
                     </div>
                     <button
@@ -1143,13 +1144,15 @@
                                 <div
                                     class="font-semibold text-blue-900 text-sm"
                                 >
-                                    Free Vote
+                                    Free Vote · One per category
                                 </div>
                                 <div
                                     class="text-xs text-blue-700 mt-1 leading-relaxed"
                                 >
-                                    Voting is free. You can cast
-                                    <strong>one vote</strong> per nominee.
+                                    Voting is free. You may cast
+                                    <strong>one vote per category</strong>.
+                                    You'll still be able to vote in other
+                                    categories.
                                 </div>
                             </div>
                         </div>
@@ -1179,7 +1182,10 @@
                         <p class="success-sub">
                             Your vote for
                             <strong id="success-nominee"></strong> has been
-                            counted.
+                            counted.<br />
+                            <span class="text-xs"
+                                >You can still vote in other categories.</span
+                            >
                         </p>
                         <button
                             onclick="closeVoteModal()"
@@ -1205,7 +1211,11 @@
                         Something went wrong. Please try again.
                     </p>
                     <div class="flex gap-2 px-4">
-                        <button onclick="castVote()" class="btn w-full py-3">
+                        <button
+                            id="vote-error-retry"
+                            onclick="castVote()"
+                            class="btn w-full py-3"
+                        >
                             <i class="ph ph-arrow-clockwise"></i> Retry
                         </button>
                         <button
@@ -1213,7 +1223,7 @@
                             class="btn w-full py-3"
                             style="background: #e5e7eb; color: #1d1d1f"
                         >
-                            Cancel
+                            Close
                         </button>
                     </div>
                 </div>
@@ -1245,10 +1255,6 @@
             const MIN_NOMINEES_FOR_NO_PROMPT = 6;
             const VOTER_TOKEN_KEY = "vn_voter_token";
 
-            /**
-             * Persistent anonymous voter token. Used to enforce "one vote per
-             * nominee per device". Generated once, stored in localStorage.
-             */
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
                 if (
@@ -1335,6 +1341,8 @@
                         data.error || `Request failed (${res.status})`,
                     );
                     err.status = res.status;
+                    err.code = data.code;
+                    err.votedNominee = data.votedNominee;
                     throw err;
                 }
                 return data;
@@ -1365,6 +1373,11 @@
                 } catch (e) {
                     toast(e.message, false);
                 }
+            }
+
+            async function refreshNominees() {
+                const token = encodeURIComponent(getVoterToken());
+                nominees = await api("/api/nominees?voterToken=" + token);
             }
 
             function maybeShowRegisterPrompt(count) {
@@ -1457,12 +1470,31 @@
                     );
                     if (!list.length) return;
                     const total = list.reduce((s, n) => s + (n.votes || 0), 0);
+                    const categoryVoted = list.some((n) => n.categoryVoted);
+                    const votedNominee = list.find((n) => n.voted);
+
+                    let badge;
+                    if (votedNominee) {
+                        badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(
+                            votedNominee.name,
+                        )}</div>`;
+                    } else if (categoryVoted) {
+                        const votedFor =
+                            list.find((n) => n.categoryVoted)?.categoryVoteFor
+                                ?.name || "another nominee";
+                        badge = `<div class="cat-badge voted"><i class="ph-fill ph-lock"></i> Voted (${escapeHtml(
+                            votedFor,
+                        )})</div>`;
+                    } else {
+                        badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes</div>`;
+                    }
+
                     const sec = document.createElement("div");
                     sec.className = "w-full";
                     sec.innerHTML = `
       <div class="cat-header">
-        <h2>${cat.name}</h2>
-        <div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes</div>
+        <h2>${escapeHtml(cat.name)}</h2>
+        ${badge}
         <div class="rule"></div>
       </div>
       <div class="grid-tiles"></div>`;
@@ -1472,18 +1504,33 @@
                         cardIndex++;
                         const src = n.img || placeholderImg(n.name);
                         const isVoted = !!n.voted;
+                        const isCategoryVoted = !isVoted && !!n.categoryVoted;
+
+                        let ctaClass = "";
+                        let ctaIcon = "ph-check-circle";
+                        let ctaText = "Cast Vote";
+                        if (isVoted) {
+                            ctaClass = "voted";
+                            ctaIcon = "ph-check";
+                            ctaText = "Voted";
+                        } else if (isCategoryVoted) {
+                            ctaClass = "category-voted";
+                            ctaIcon = "ph-lock";
+                            ctaText = "Category Voted";
+                        }
+
                         const el = document.createElement("div");
                         el.className = "card";
                         el.innerHTML = `
-        <img src="${src}" alt="${n.name}" width="700" height="700"
+        <img src="${escapeHtml(src)}" alt="${escapeHtml(n.name)}" width="700" height="700"
              loading="${eager ? "eager" : "lazy"}" decoding="async"
              ${eager ? 'fetchpriority="high"' : ""}>
         <div class="overlay">
-          <span class="code">${n.code}</span>
-          <h3 class="name">${n.name}</h3>
-          <button class="cta ${isVoted ? "voted" : ""}">
-            <i class="ph-fill ${isVoted ? "ph-check" : "ph-check-circle"}"></i>
-            ${isVoted ? "Voted" : "Cast Vote"}
+          <span class="code">${escapeHtml(n.code)}</span>
+          <h3 class="name">${escapeHtml(n.name)}</h3>
+          <button class="cta ${ctaClass}">
+            <i class="ph-fill ${ctaIcon}"></i>
+            ${ctaText}
           </button>
         </div>`;
                         const img = el.querySelector("img");
@@ -1508,6 +1555,15 @@
                 });
             }
 
+            function escapeHtml(str) {
+                return String(str == null ? "" : str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
             function openProfile(n) {
                 currentNom = n;
                 $("pm-img").src = n.img || placeholderImg(n.name);
@@ -1515,18 +1571,32 @@
                 $("pm-name").innerText = n.name;
                 $("pm-code").innerText = n.code;
                 $("pm-desc").innerText = n.desc || "No description provided.";
+
                 const btn = $("profile-vote-btn");
+                btn.classList.remove("voted");
+
                 if (n.voted) {
                     btn.innerHTML =
-                        '<i class="ph-fill ph-check"></i> You\'ve Voted';
+                        '<i class="ph-fill ph-check"></i> You\'ve Voted for This Nominee';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.categoryVoted) {
+                    const votedFor =
+                        n.categoryVoteFor?.name || "another nominee";
+                    btn.innerHTML = '<i class="ph ph-lock"></i>';
+                    btn.appendChild(
+                        document.createTextNode(
+                            " Voted in this category (for " + votedFor + ")",
+                        ),
+                    );
                     btn.disabled = true;
                     btn.classList.add("voted");
                 } else {
                     btn.innerHTML =
                         'Vote Now <i class="ph-fill ph-check-circle"></i>';
                     btn.disabled = false;
-                    btn.classList.remove("voted");
                 }
+
                 $("profile-modal").classList.add("show");
             }
 
@@ -1557,11 +1627,27 @@
 
             function proceedToVote() {
                 if (!currentNom) return;
-                closeModal("profile-modal");
+
                 if (currentNom.voted) {
-                    toast("You've already voted for " + currentNom.name, false);
+                    toast(
+                        "You've already voted for " +
+                            currentNom.name +
+                            " in this category",
+                        false,
+                    );
                     return;
                 }
+                if (currentNom.categoryVoted) {
+                    const votedFor =
+                        currentNom.categoryVoteFor?.name || "another nominee";
+                    toast(
+                        `You've already voted in this category (for ${votedFor}). One vote per category.`,
+                        false,
+                    );
+                    return;
+                }
+
+                closeModal("profile-modal");
                 $("vm-img").src =
                     currentNom.img || placeholderImg(currentNom.name);
                 $("vm-cat").innerText = currentNom.category;
@@ -1574,6 +1660,17 @@
 
             async function castVote() {
                 if (!currentNom) return;
+
+                // Client-side guards (server also enforces)
+                if (currentNom.voted) {
+                    toast("You've already voted for this nominee", false);
+                    return;
+                }
+                if (currentNom.categoryVoted) {
+                    toast("You've already voted in this category", false);
+                    return;
+                }
+
                 showVoteState("vote-loading");
                 try {
                     const r = await api("/api/votes", {
@@ -1583,33 +1680,38 @@
                             voterToken: getVoterToken(),
                         }),
                     });
-                    const target = nominees.find((n) => n.id === currentNom.id);
-                    if (target) {
-                        target.voted = true;
-                        target.votes = r.votes;
-                    }
-                    currentNom.voted = true;
-                    currentNom.votes = r.votes;
+
                     $("success-nominee").innerText = currentNom.name;
                     showVoteState("vote-success");
                     fireConfetti();
-                    render();
+
+                    // Refresh state so all cards in the category reflect reality
+                    try {
+                        await refreshNominees();
+                        render();
+                    } catch {}
                 } catch (e) {
                     if (e.status === 409) {
-                        const target = nominees.find(
-                            (n) => n.id === currentNom.id,
-                        );
-                        if (target) target.voted = true;
-                        currentNom.voted = true;
+                        // Already voted in this category
                         $("vote-error-msg").innerText =
-                            "You've already voted for this nominee.";
-                        showVoteState("vote-error");
-                        render();
+                            e.message ||
+                            "You've already voted in this category.";
+                        // Hide retry — retrying won't help
+                        const retry = $("vote-error-retry");
+                        if (retry) retry.style.display = "none";
+
+                        // Refresh to reflect real state
+                        try {
+                            await refreshNominees();
+                            render();
+                        } catch {}
                     } else {
                         $("vote-error-msg").innerText =
                             e.message || "Something went wrong.";
-                        showVoteState("vote-error");
+                        const retry = $("vote-error-retry");
+                        if (retry) retry.style.display = "";
                     }
+                    showVoteState("vote-error");
                 }
             }
 

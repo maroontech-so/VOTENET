@@ -48,10 +48,10 @@ const RECONCILE_INTERVAL_MS = 60_000;
 const RECONCILE_MIN_AGE_MS = 30_000;
 
 /* Image storage tuning */
-const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-const IMG_TARGET_DIMENSION = 700; // 700×700 cover crop
+const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const IMG_TARGET_DIMENSION = 700;
 const IMG_JPEG_QUALITY = 82;
-const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000; // 1 hour
+const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000;
 
 /* ================================================================
    BODY PARSING
@@ -87,10 +87,6 @@ const upload = multer({
   },
 });
 
-/**
- * Re-encode any image to a compact progressive JPEG.
- * Falls back to raw bytes if sharp can't parse it (e.g. unusual HEIC).
- */
 async function processImage(buffer) {
   try {
     const out = await sharp(buffer, { failOn: "none" })
@@ -633,7 +629,6 @@ app.get("/api/images/:id", async (req, res) => {
       .prepare("SELECT data, mime FROM images WHERE id = ?")
       .get(id);
 
-    // Lazy fallback: if not local, try Turso once
     if (!row) {
       const remoteRow = await db.pullImage(id);
       if (remoteRow) {
@@ -648,7 +643,6 @@ app.get("/api/images/:id", async (req, res) => {
 
     const buf = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
 
-    // UUID content is immutable → cache forever, browser skips re-validation
     res.setHeader("Content-Type", row.mime || "image/jpeg");
     res.setHeader("Content-Length", buf.length);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
@@ -690,6 +684,7 @@ app.get("/api/config", (req, res) => {
     deadline: VOTE_DEADLINE,
     votingOpen: votingOpen(),
     freeVoting: true,
+    votesPerCategory: 1,
     payheroConfigured: !!(
       PAYHERO_API_KEY &&
       PAYHERO_API_SECRET &&
@@ -709,6 +704,18 @@ app.get("/api/categories", async (req, res) => {
   );
 });
 
+/**
+ * GET /api/nominees[?voterToken=<token>]
+ *
+ * When voterToken is present, each nominee row is enriched with:
+ *  - voted            : true if THIS voter voted for THIS nominee
+ *  - categoryVoted    : true if this voter voted for ANY nominee currently
+ *                       in the same category as this nominee
+ *  - categoryVoteFor  : { nomineeId, name, code } describing that vote,
+ *                       or null when categoryVoted is false
+ *
+ * This drives the UI: "Voted" (green), "Category Voted" (grey), or "Cast Vote".
+ */
 app.get("/api/nominees", async (req, res) => {
   const voterToken =
     typeof req.query.voterToken === "string" ? req.query.voterToken : null;
@@ -724,13 +731,43 @@ app.get("/api/nominees", async (req, res) => {
 
   if (voterToken) {
     try {
-      const votedRows = await db
-        .prepare("SELECT nominee_id FROM free_votes WHERE voter_token = ?")
+      const voterVotes = await db
+        .prepare(
+          `
+        SELECT fv.nominee_id, n2.category_id, n2.name, n2.code
+        FROM free_votes fv
+        JOIN nominees n2 ON fv.nominee_id = n2.id
+        WHERE fv.voter_token = ?
+      `,
+        )
         .all(voterToken);
-      const votedSet = new Set(votedRows.map((r) => r.nominee_id));
-      for (const r of rows) r.voted = votedSet.has(r.id);
-    } catch {
-      for (const r of rows) r.voted = false;
+
+      const votedByNominee = new Set();
+      const votedByCategory = {};
+      for (const v of voterVotes) {
+        votedByNominee.add(v.nominee_id);
+        votedByCategory[v.category_id] = {
+          nomineeId: v.nominee_id,
+          name: v.name,
+          code: v.code,
+        };
+      }
+
+      for (const r of rows) {
+        r.voted = votedByNominee.has(r.id);
+        r.categoryVoted = Object.prototype.hasOwnProperty.call(
+          votedByCategory,
+          r.category_id,
+        );
+        r.categoryVoteFor = votedByCategory[r.category_id] || null;
+      }
+    } catch (e) {
+      console.warn("[Nominees vote-status]", e.message);
+      for (const r of rows) {
+        r.voted = false;
+        r.categoryVoted = false;
+        r.categoryVoteFor = null;
+      }
     }
   }
 
@@ -1225,7 +1262,18 @@ app.post(
 );
 
 /* ================================================================
-   FREE VOTING
+   FREE VOTING — one vote per voter per CATEGORY
+   ================================================================
+   A voter (identified by anonymous voterToken in localStorage) may
+   cast at most ONE vote within any given category. They may still
+   vote in every other category.
+
+   Enforcement:
+     - Application-level check inside BEGIN IMMEDIATE (serialised
+       writers in SQLite) — no schema migration required.
+     - The existing UNIQUE(voter_token, nominee_id) constraint still
+       prevents duplicate votes for the same nominee as a second
+       safety net.
    ================================================================ */
 app.post(
   "/api/votes",
@@ -1252,18 +1300,29 @@ app.post(
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
 
-    const existing = await db
-      .prepare(
-        "SELECT id FROM free_votes WHERE voter_token = ? AND nominee_id = ?",
-      )
-      .get(voterToken, nominee.id);
-    if (existing)
-      return res
-        .status(409)
-        .json({ error: "You have already voted for this nominee" });
-
+    let result;
     try {
-      await db.tx(async (t) => {
+      result = await db.tx(async (t) => {
+        // Look for ANY vote by this voter for ANY nominee that is
+        // currently in the target nominee's category.
+        const existing = await t.get(
+          `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code
+           FROM free_votes fv
+           JOIN nominees n2 ON fv.nominee_id = n2.id
+           WHERE fv.voter_token = ? AND n2.category_id = ?
+           LIMIT 1`,
+          [voterToken, nominee.category_id],
+        );
+
+        if (existing) {
+          return {
+            ok: false,
+            sameNominee: existing.nominee_id === nominee.id,
+            votedName: existing.voted_name,
+            votedCode: existing.voted_code,
+          };
+        }
+
         await t.execute({
           sql: "INSERT INTO free_votes (id, voter_token, nominee_id) VALUES (?, ?, ?)",
           args: [uuidv4(), voterToken, nominee.id],
@@ -1272,19 +1331,34 @@ app.post(
           sql: "UPDATE nominees SET votes = votes + 1 WHERE id = ?",
           args: [nominee.id],
         });
+
+        return { ok: true };
       });
-
-      db.push().catch((e) => console.warn("[Push after free vote]", e.message));
-
-      const updated = await db
-        .prepare("SELECT votes FROM nominees WHERE id = ?")
-        .get(nominee.id);
-      res.json({ success: true, votes: updated.votes });
     } catch (e) {
-      res
-        .status(409)
-        .json({ error: "You have already voted for this nominee" });
+      console.error("[Vote]", e.message);
+      return res.status(500).json({ error: "Vote failed. Please try again." });
     }
+
+    if (!result.ok) {
+      const message = result.sameNominee
+        ? "You have already voted for this nominee."
+        : `You've already voted in this category (for ${result.votedName}). Only one vote per category is allowed.`;
+      return res.status(409).json({
+        error: message,
+        code: "CATEGORY_ALREADY_VOTED",
+        votedNominee: {
+          name: result.votedName,
+          code: result.votedCode,
+        },
+      });
+    }
+
+    db.push().catch((e) => console.warn("[Push after vote]", e.message));
+
+    const updated = await db
+      .prepare("SELECT votes FROM nominees WHERE id = ?")
+      .get(nominee.id);
+    res.json({ success: true, votes: updated.votes });
   },
 );
 
@@ -1294,7 +1368,8 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   try {
     const rows = await db
       .prepare(
-        `SELECT fv.nominee_id, fv.created_at, n.code, n.name, c.name as category
+        `SELECT fv.nominee_id, fv.created_at,
+                n.code, n.name, n.category_id, c.name AS category
          FROM free_votes fv
          JOIN nominees n ON fv.nominee_id = n.id
          JOIN categories c ON n.category_id = c.id
@@ -1752,6 +1827,10 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
 });
 
 app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
+  // Clean up the nominee's votes so a deleted nominee doesn't ghost-lock a category
+  await db
+    .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
+    .run(req.params.id);
   await db.prepare("DELETE FROM nominees WHERE id = ?").run(req.params.id);
   res.json({ success: true });
 });
@@ -2009,7 +2088,6 @@ app.get("/sitemap.xml", async (req, res) => {
     const baseUrl = "https://gala.voteus.xyz";
     const now = new Date().toISOString().split("T")[0];
 
-    // Absolute image URL for sitemap (relative /api/images/... won't work)
     const absImg = (p) => {
       if (!p) return `${baseUrl}/hero-mobile.jpeg`;
       if (p.startsWith("http://") || p.startsWith("https://")) return p;
@@ -2177,7 +2255,6 @@ app.get("/admin", (req, res) =>
    BACKGROUND JOBS
    ================================================================ */
 
-/* Stale pending transactions */
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2196,7 +2273,6 @@ setInterval(async () => {
   }
 }, 5 * 60_000);
 
-/* Prune old payment logs */
 setInterval(
   async () => {
     try {
@@ -2211,7 +2287,6 @@ setInterval(
   24 * 60 * 60_000,
 );
 
-/* Prune orphaned images — not referenced by any nominee, older than grace period */
 setInterval(async () => {
   try {
     const cutoff = new Date(Date.now() - IMG_ORPHAN_GRACE_MS).toISOString();
@@ -2232,7 +2307,6 @@ setInterval(async () => {
   }
 }, 60 * 60_000);
 
-/* Reconcile pending payments against PayHero */
 setInterval(async () => {
   try {
     const cutoff = new Date(Date.now() - RECONCILE_MIN_AGE_MS).toISOString();
@@ -2367,7 +2441,7 @@ const server = app.listen(PORT, async () => {
   );
   console.log(`  Images:      SQLite BLOB · served at /api/images/:id`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
-  console.log(`  Voting:      FREE (one vote per voter per nominee)`);
+  console.log(`  Voting:      FREE · one vote per voter per category`);
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
