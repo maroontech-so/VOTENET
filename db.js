@@ -84,6 +84,10 @@ async function exec(sqlBlock) {
   local.exec(sqlBlock);
 }
 
+/**
+ * Transaction wrapper — provides execute/get/all so server.js can do
+ * atomic read-modify-write inside a transaction without escaping it.
+ */
 async function tx(fn) {
   local.exec("BEGIN IMMEDIATE");
   const wrapper = {
@@ -96,6 +100,14 @@ async function tx(fn) {
         lastInsertRowid:
           r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null,
       };
+    },
+    get: async (sql, args) => {
+      const stmt = local.prepare(sql);
+      return stmt.get(...(args || [])) || null;
+    },
+    all: async (sql, args) => {
+      const stmt = local.prepare(sql);
+      return stmt.all(...(args || []));
     },
   };
   try {

@@ -6,8 +6,14 @@
         <meta name="theme-color" content="#3f51b5" />
         <meta name="color-scheme" content="light" />
         <meta name="robots" content="noindex, nofollow" />
-        <title>Admin — Voteus | Gala Awards 2026 | Mount Kenya University Parklands Law Campus</title>
-        <meta name="description" content="Voteus Admin Panel for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Manage nominees, categories, transactions, and view analytics. Built by emojistudios." />
+        <title>
+            Admin — Voteus | Gala Awards 2026 | Mount Kenya University Parklands
+            Law Campus
+        </title>
+        <meta
+            name="description"
+            content="Voteus Admin Panel for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Manage nominees, categories, transactions, and view analytics. Built by emojistudios."
+        />
         <link rel="canonical" href="https://gala.voteus.xyz/admin" />
         <meta name="generator" content="Voteus v1.0" />
         <meta name="application-name" content="Voteus Admin" />
@@ -171,6 +177,92 @@
             table tbody tr:hover {
                 background: #f9fafb;
             }
+
+            /* ---------- Photo picker ---------- */
+            .photo-picker {
+                position: relative;
+                width: 120px;
+                height: 120px;
+                border-radius: 16px;
+                overflow: hidden;
+                border: 2px dashed #d1d5db;
+                background: #f9fafb;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                margin: 0 auto;
+            }
+            .photo-picker:hover {
+                border-color: #3f51b5;
+                background: #eef2ff;
+            }
+            .photo-picker img {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .photo-picker .placeholder {
+                text-align: center;
+                color: #9ca3af;
+                padding: 8px;
+            }
+            .photo-picker .placeholder i {
+                font-size: 26px;
+                display: block;
+                margin-bottom: 4px;
+            }
+            .photo-picker .placeholder span {
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .photo-picker .overlay {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.6);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0;
+                transition: opacity 0.2s;
+                font-size: 11px;
+                font-weight: 600;
+                gap: 4px;
+            }
+            .photo-picker:hover .overlay {
+                opacity: 1;
+            }
+            .upload-bar {
+                height: 4px;
+                background: #e5e7eb;
+                border-radius: 2px;
+                overflow: hidden;
+                margin-top: 8px;
+                display: none;
+                max-width: 120px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .upload-bar.show {
+                display: block;
+            }
+            .upload-bar > div {
+                height: 100%;
+                background: #3f51b5;
+                width: 0;
+                transition: width 0.3s;
+            }
+            .help-text {
+                font-size: 11px;
+                color: #6b7280;
+                margin-top: 4px;
+            }
         </style>
     </head>
     <body>
@@ -237,9 +329,7 @@
                         <i
                             class="ph-fill ph-trophy text-indigo-600 text-2xl"
                         ></i>
-                        Voteus<span class="text-gray-400 font-normal"
-                            >.io</span
-                        >
+                        Voteus<span class="text-gray-400 font-normal">.io</span>
                     </a>
                     <span
                         class="hidden sm:inline-block text-xs font-medium text-gray-400 uppercase tracking-wider ml-2 pl-3 border-l border-gray-200"
@@ -721,29 +811,126 @@
 
         <!-- ============ MODAL: ADD NOMINEE ============ -->
         <div id="add-nominee-modal" class="modal">
-            <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
+            <div
+                class="bg-white rounded-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto"
+            >
                 <button
                     onclick="closeModal('add-nominee-modal')"
-                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center z-10"
                 >
                     <i class="ph ph-x"></i>
                 </button>
                 <h3 class="text-xl font-bold mb-4">Add Nominee</h3>
                 <div class="space-y-3">
-                    <input id="an-name" class="input" placeholder="Full Name" />
-                    <select id="an-category" class="input">
-                        <option value="">Select category</option>
-                    </select>
-                    <input
-                        id="an-desc"
-                        class="input"
-                        placeholder="Short bio (optional)"
-                    />
-                    <input
-                        id="an-img-url"
-                        class="input"
-                        placeholder="Image URL (optional)"
-                    />
+                    <!-- Photo picker -->
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
+                            >Profile Photo</label
+                        >
+                        <div
+                            class="photo-picker"
+                            onclick="
+                                document.getElementById('an-img-file').click()
+                            "
+                        >
+                            <div class="placeholder" id="an-picker-placeholder">
+                                <i class="ph ph-camera"></i
+                                ><span>Tap to choose</span>
+                            </div>
+                            <img id="an-img-preview" class="hidden" alt="" />
+                            <div class="overlay">
+                                <i class="ph ph-pencil-simple"></i> Change
+                            </div>
+                        </div>
+                        <input
+                            type="file"
+                            id="an-img-file"
+                            accept="image/*"
+                            class="hidden"
+                            onchange="handleAdminImage(event)"
+                        />
+                        <div class="upload-bar" id="an-upload-bar">
+                            <div id="an-upload-progress"></div>
+                        </div>
+                        <p class="help-text text-center">
+                            JPG, PNG, or WebP · max 10 MB
+                        </p>
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
+                            >Full Name</label
+                        >
+                        <input
+                            id="an-name"
+                            class="input"
+                            placeholder="e.g. Jane Wanjiku"
+                        />
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
+                            >Email</label
+                        >
+                        <input
+                            id="an-email"
+                            type="email"
+                            class="input"
+                            placeholder="jane@example.com"
+                            autocomplete="off"
+                        />
+                        <p class="help-text">
+                            The nominee uses this email to sign in to their
+                            dashboard.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
+                            >Password
+                            <span class="text-gray-400 font-normal normal-case"
+                                >(optional)</span
+                            ></label
+                        >
+                        <input
+                            id="an-password"
+                            type="text"
+                            class="input"
+                            placeholder="Leave blank to auto-generate"
+                            autocomplete="off"
+                        />
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
+                            >Category</label
+                        >
+                        <select id="an-category" class="input">
+                            <option value="">Select category</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
+                            >Short Bio
+                            <span class="text-gray-400 font-normal normal-case"
+                                >(optional)</span
+                            ></label
+                        >
+                        <textarea
+                            id="an-desc"
+                            class="input resize-none"
+                            rows="3"
+                            placeholder="A sentence or two about the nominee"
+                        ></textarea>
+                    </div>
+
                     <div class="flex gap-2 pt-2">
                         <button
                             onclick="closeModal('add-nominee-modal')"
@@ -751,11 +938,87 @@
                         >
                             Cancel
                         </button>
-                        <button onclick="createNominee()" class="btn flex-1">
+                        <button
+                            id="an-create-btn"
+                            onclick="createNominee()"
+                            class="btn flex-1"
+                        >
                             <i class="ph ph-check"></i> Add
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ============ MODAL: NOMINEE CREDENTIALS ============ -->
+        <div id="creds-modal" class="modal">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('creds-modal')"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div class="text-center mb-5">
+                    <div
+                        class="w-14 h-14 rounded-2xl bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-3"
+                    >
+                        <i class="ph-fill ph-check-circle text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold">Nominee Created</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Share these credentials with
+                        <span
+                            id="creds-name"
+                            class="font-semibold text-gray-900"
+                        ></span
+                        >.
+                    </p>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4 space-y-3 mb-4">
+                    <div>
+                        <div
+                            class="text-[10px] font-bold uppercase tracking-wider text-gray-500"
+                        >
+                            Code
+                        </div>
+                        <div
+                            class="font-mono font-bold text-indigo-600"
+                            id="creds-code"
+                        ></div>
+                    </div>
+                    <div>
+                        <div
+                            class="text-[10px] font-bold uppercase tracking-wider text-gray-500"
+                        >
+                            Email
+                        </div>
+                        <div
+                            class="font-mono text-sm break-all"
+                            id="creds-email"
+                        ></div>
+                    </div>
+                    <div>
+                        <div
+                            class="text-[10px] font-bold uppercase tracking-wider text-gray-500"
+                        >
+                            Password
+                        </div>
+                        <div
+                            class="font-mono text-sm break-all"
+                            id="creds-pass"
+                        ></div>
+                    </div>
+                </div>
+                <button
+                    onclick="copyCreds()"
+                    class="btn btn-outline w-full mb-2"
+                >
+                    <i class="ph ph-copy"></i> Copy credentials
+                </button>
+                <button onclick="closeModal('creds-modal')" class="btn w-full">
+                    Done
+                </button>
             </div>
         </div>
 
@@ -821,9 +1084,16 @@
             };
             const isSuper = () => getAdmin()?.role === "super";
 
-            let chartsInitialized = false;
+            /* Local registry of chart instances (Chart.js v4 has no Chart.instances) */
+            let charts = [];
+
             let CATEGORIES = [];
             let NOMINEES = [];
+
+            /* State for the Add Nominee modal */
+            let anSelectedFile = null;
+            let anUploadedUrl = null;
+            let lastCreds = null;
 
             function toast(msg, ok = true) {
                 const t = $("toast");
@@ -980,7 +1250,7 @@
             /* ---------- OVERVIEW ---------- */
             async function loadOverview() {
                 try {
-                    const [stats, charts] = await Promise.all([
+                    const [stats, chartsData] = await Promise.all([
                         api("/api/admin/stats"),
                         api("/api/admin/charts"),
                     ]);
@@ -1000,18 +1270,21 @@
                             Number(stats.platformRevenue || 0).toLocaleString();
                         $("s-pending").innerText = stats.pendingPayments || 0;
                     }
-                    renderCharts(charts);
+                    renderCharts(chartsData);
                 } catch (e) {
                     toast(e.message, false);
                 }
             }
 
             function renderCharts(data) {
-                if (chartsInitialized) {
-                    Chart.helpers.each(Chart.instances, (instance) =>
-                        instance.destroy(),
-                    );
-                }
+                // Destroy any chart instances we previously created
+                charts.forEach((c) => {
+                    try {
+                        c.destroy();
+                    } catch {}
+                });
+                charts = [];
+
                 Chart.defaults.font.family = "Inter, sans-serif";
                 Chart.defaults.color = "#6b7280";
 
@@ -1019,43 +1292,45 @@
                 if (barEl) {
                     const labels = data.topNominees.map((n) => n.name);
                     const values = data.topNominees.map((n) => n.votes || 0);
-                    new Chart(barEl.getContext("2d"), {
-                        type: "bar",
-                        data: {
-                            labels,
-                            datasets: [
-                                {
-                                    label: "Votes",
-                                    data: values,
-                                    backgroundColor: [
-                                        "#3F51B5",
-                                        "#5C6BC0",
-                                        "#7986CB",
-                                        "#9FA8DA",
-                                        "#C5CAE9",
-                                    ],
-                                    borderRadius: 6,
-                                    barPercentage: 0.6,
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    grid: { color: "#f3f4f6" },
-                                    border: { display: false },
-                                },
-                                x: {
-                                    grid: { display: false },
-                                    border: { display: false },
+                    charts.push(
+                        new Chart(barEl.getContext("2d"), {
+                            type: "bar",
+                            data: {
+                                labels,
+                                datasets: [
+                                    {
+                                        label: "Votes",
+                                        data: values,
+                                        backgroundColor: [
+                                            "#3F51B5",
+                                            "#5C6BC0",
+                                            "#7986CB",
+                                            "#9FA8DA",
+                                            "#C5CAE9",
+                                        ],
+                                        borderRadius: 6,
+                                        barPercentage: 0.6,
+                                    },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: { color: "#f3f4f6" },
+                                        border: { display: false },
+                                    },
+                                    x: {
+                                        grid: { display: false },
+                                        border: { display: false },
+                                    },
                                 },
                             },
-                        },
-                    });
+                        }),
+                    );
                 }
 
                 const doEl = $("doughnutChart");
@@ -1074,39 +1349,42 @@
                         "#EF4444",
                         "#84CC16",
                     ];
-                    new Chart(doEl.getContext("2d"), {
-                        type: "doughnut",
-                        data: {
-                            labels,
-                            datasets: [
-                                {
-                                    data: values,
-                                    backgroundColor: labels.map(
-                                        (_, i) => palette[i % palette.length],
-                                    ),
-                                    borderWidth: 2,
-                                    borderColor: "#ffffff",
-                                    hoverOffset: 4,
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            cutout: "68%",
-                            plugins: {
-                                legend: {
-                                    position: "right",
-                                    labels: {
-                                        usePointStyle: true,
-                                        boxWidth: 8,
-                                        padding: 14,
-                                        font: { size: 11 },
+                    charts.push(
+                        new Chart(doEl.getContext("2d"), {
+                            type: "doughnut",
+                            data: {
+                                labels,
+                                datasets: [
+                                    {
+                                        data: values,
+                                        backgroundColor: labels.map(
+                                            (_, i) =>
+                                                palette[i % palette.length],
+                                        ),
+                                        borderWidth: 2,
+                                        borderColor: "#ffffff",
+                                        hoverOffset: 4,
+                                    },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: "68%",
+                                plugins: {
+                                    legend: {
+                                        position: "right",
+                                        labels: {
+                                            usePointStyle: true,
+                                            boxWidth: 8,
+                                            padding: 14,
+                                            font: { size: 11 },
+                                        },
                                     },
                                 },
                             },
-                        },
-                    });
+                        }),
+                    );
                 }
 
                 const lineEl = $("lineChart");
@@ -1117,45 +1395,46 @@
                     const grad = ctx.createLinearGradient(0, 0, 0, 300);
                     grad.addColorStop(0, "rgba(63,81,181,0.35)");
                     grad.addColorStop(1, "rgba(63,81,181,0)");
-                    new Chart(ctx, {
-                        type: "line",
-                        data: {
-                            labels,
-                            datasets: [
-                                {
-                                    label: "Votes",
-                                    data: values,
-                                    borderColor: "#3F51B5",
-                                    backgroundColor: grad,
-                                    borderWidth: 2,
-                                    pointBackgroundColor: "#fff",
-                                    pointBorderColor: "#3F51B5",
-                                    pointBorderWidth: 2,
-                                    pointRadius: 4,
-                                    fill: true,
-                                    tension: 0.4,
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    grid: { color: "#f3f4f6" },
-                                    border: { display: false },
-                                },
-                                x: {
-                                    grid: { display: false },
-                                    border: { display: false },
+                    charts.push(
+                        new Chart(ctx, {
+                            type: "line",
+                            data: {
+                                labels,
+                                datasets: [
+                                    {
+                                        label: "Votes",
+                                        data: values,
+                                        borderColor: "#3F51B5",
+                                        backgroundColor: grad,
+                                        borderWidth: 2,
+                                        pointBackgroundColor: "#fff",
+                                        pointBorderColor: "#3F51B5",
+                                        pointBorderWidth: 2,
+                                        pointRadius: 4,
+                                        fill: true,
+                                        tension: 0.4,
+                                    },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        grid: { color: "#f3f4f6" },
+                                        border: { display: false },
+                                    },
+                                    x: {
+                                        grid: { display: false },
+                                        border: { display: false },
+                                    },
                                 },
                             },
-                        },
-                    });
+                        }),
+                    );
                 }
-                chartsInitialized = true;
             }
 
             /* ---------- CATEGORIES ---------- */
@@ -1285,30 +1564,193 @@
 
             function openAddNominee() {
                 $("an-name").value = "";
+                $("an-email").value = "";
+                $("an-password").value = "";
                 $("an-desc").value = "";
-                $("an-img-url").value = "";
+                $("an-img-file").value = "";
+                $("an-img-preview").classList.add("hidden");
+                $("an-img-preview").removeAttribute("src");
+                $("an-picker-placeholder").classList.remove("hidden");
+                $("an-upload-bar").classList.remove("show");
+                $("an-upload-progress").style.width = "0%";
+                anSelectedFile = null;
+                anUploadedUrl = null;
                 $("add-nominee-modal").classList.add("show");
+            }
+
+            function handleAdminImage(event) {
+                const f = event.target.files[0];
+                if (!f) return;
+                if (!f.type.startsWith("image/")) {
+                    toast("Please choose an image file", false);
+                    return;
+                }
+                if (f.size > 10 * 1024 * 1024) {
+                    toast("Image must be under 10 MB", false);
+                    return;
+                }
+                anSelectedFile = f;
+                anUploadedUrl = null;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    $("an-img-preview").src = e.target.result;
+                    $("an-img-preview").classList.remove("hidden");
+                    $("an-picker-placeholder").classList.add("hidden");
+                };
+                reader.readAsDataURL(f);
+            }
+
+            function uploadAdminImage() {
+                return new Promise((resolve, reject) => {
+                    if (!anSelectedFile) return resolve(null);
+                    const fd = new FormData();
+                    fd.append("image", anSelectedFile);
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload");
+                    xhr.setRequestHeader(
+                        "Authorization",
+                        "Bearer " + getToken(),
+                    );
+                    $("an-upload-bar").classList.add("show");
+                    $("an-upload-progress").style.width = "0%";
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            $("an-upload-progress").style.width =
+                                Math.round((e.loaded / e.total) * 100) + "%";
+                        }
+                    };
+                    xhr.onload = () => {
+                        $("an-upload-bar").classList.remove("show");
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const d = JSON.parse(xhr.responseText);
+                                anUploadedUrl = d.url;
+                                resolve(d.url);
+                            } catch {
+                                reject(
+                                    new Error(
+                                        "Invalid response from upload server",
+                                    ),
+                                );
+                            }
+                            return;
+                        }
+                        let msg = `Upload failed (${xhr.status})`;
+                        try {
+                            const parsed = JSON.parse(xhr.responseText);
+                            if (parsed && parsed.error) msg = parsed.error;
+                            if (parsed && parsed.detail)
+                                msg += " — " + parsed.detail;
+                        } catch {}
+                        console.error(
+                            "[Upload] Server response:",
+                            xhr.status,
+                            xhr.responseText,
+                        );
+                        reject(new Error(msg));
+                    };
+                    xhr.onerror = () => {
+                        $("an-upload-bar").classList.remove("show");
+                        reject(new Error("Network error while uploading"));
+                    };
+                    xhr.send(fd);
+                });
             }
 
             async function createNominee() {
                 const name = $("an-name").value.trim();
+                const email = $("an-email").value.trim().toLowerCase();
+                const password = $("an-password").value.trim();
                 const categoryId = $("an-category").value;
                 const desc = $("an-desc").value.trim();
-                const img = $("an-img-url").value.trim();
-                if (!name || !categoryId) {
-                    toast("Name and category required", false);
+
+                if (!name) {
+                    toast("Enter the nominee's full name", false);
                     return;
                 }
+                if (!categoryId) {
+                    toast("Select a category", false);
+                    return;
+                }
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    toast("Enter a valid email address", false);
+                    return;
+                }
+
+                const btn = $("an-create-btn");
+                const origHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin"></i> Adding…';
+
                 try {
-                    await api("/api/admin/nominees", {
+                    let imgUrl = anUploadedUrl;
+                    if (anSelectedFile && !imgUrl) {
+                        imgUrl = await uploadAdminImage();
+                    }
+
+                    const r = await api("/api/admin/nominees", {
                         method: "POST",
-                        body: JSON.stringify({ name, categoryId, desc, img }),
+                        body: JSON.stringify({
+                            name,
+                            categoryId,
+                            desc,
+                            img: imgUrl || "",
+                            email,
+                            password,
+                        }),
                     });
+
                     closeModal("add-nominee-modal");
                     toast("Nominee added");
+
+                    if (r.credentials) {
+                        lastCreds = {
+                            name,
+                            code: r.code,
+                            email: r.credentials.email,
+                            password: r.credentials.password,
+                        };
+                        $("creds-name").innerText = name;
+                        $("creds-code").innerText = r.code;
+                        $("creds-email").innerText = r.credentials.email;
+                        $("creds-pass").innerText = r.credentials.password;
+                        $("creds-modal").classList.add("show");
+                    }
+
                     loadNominees();
                 } catch (e) {
                     toast(e.message, false);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            }
+
+            async function copyCreds() {
+                if (!lastCreds) return;
+                const text =
+                    `Voteus Nominee Login\n` +
+                    `Name: ${lastCreds.name}\n` +
+                    `Code: ${lastCreds.code}\n` +
+                    `Email: ${lastCreds.email}\n` +
+                    `Password: ${lastCreds.password}\n` +
+                    `Login: ${location.origin}/nominee`;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    toast("Credentials copied");
+                } catch {
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand("copy");
+                        toast("Credentials copied");
+                    } catch {
+                        toast("Copy failed", false);
+                    }
+                    ta.remove();
                 }
             }
 

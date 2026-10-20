@@ -33,7 +33,6 @@ const PAYHERO_BASE_URL =
 
 const IMGBB_API_KEY = process.env.IMGBB_API_KEY || "";
 
-/* -------- nominee-portal pricing (unchanged) -------- */
 const PRICES = {
   category_change: 50,
   leaderboard_once: 10,
@@ -317,7 +316,7 @@ function superAuth(req, res, next) {
 }
 
 /* ================================================================
-   PAYMENT PIPELINE (used only by nominee-portal features)
+   PAYMENT PIPELINE (nominee-portal only)
    ================================================================ */
 async function completeTransaction(reference, receipt) {
   try {
@@ -332,9 +331,10 @@ async function completeTransaction(reference, receipt) {
         return { ok: false, reason: "already_processed_or_not_pending" };
       }
 
-      const txRow = await db
-        .prepare("SELECT * FROM transactions WHERE reference = ?")
-        .get(reference);
+      const txRow = await t.get(
+        "SELECT * FROM transactions WHERE reference = ?",
+        [reference],
+      );
 
       let meta = {};
       try {
@@ -353,11 +353,10 @@ async function completeTransaction(reference, receipt) {
           args: [txRow.user_id],
         });
       } else if (txRow.type === "leaderboard_2h") {
-        const existing = await db
-          .prepare(
-            "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
-          )
-          .get(txRow.user_id);
+        const existing = await t.get(
+          "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
+          [txRow.user_id],
+        );
         const now = Date.now();
         const existingMs =
           existing && existing.expires_at
@@ -371,7 +370,7 @@ async function completeTransaction(reference, receipt) {
           args: [txRow.user_id, expiresAt, expiresAt],
         });
       } else if (txRow.type === "vote") {
-        // Legacy vote transactions only — new votes are free & do not create transactions
+        // Legacy paid votes only — new votes are free and don't create rows here
         await t.execute({
           sql: "UPDATE nominees SET votes = votes + ? WHERE id = ?",
           args: [meta.voteCount || 0, txRow.nominee_id],
@@ -706,28 +705,109 @@ app.get("/api/nominees/:code", async (req, res) => {
 });
 
 /* ================================================================
-   NOMINEE AUTH
+   NOMINEE AUTH  — hardened register
    ================================================================ */
 app.post(
   "/api/auth/register",
   rateLimit({ key: "register", max: 10 }),
   async (req, res) => {
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password)
-      return res.status(400).json({ error: "All fields required" });
-    if (await db.prepare("SELECT id FROM users WHERE email = ?").get(email))
-      return res.status(409).json({ error: "Email already exists" });
-    const hash = await bcrypt.hash(password, 10);
-    const id = uuidv4();
-    await db
-      .prepare(
-        "INSERT INTO users (id, name, email, password_hash) VALUES (?,?,?,?)",
-      )
-      .run(id, name, email, hash);
-    const token = jwt.sign({ id, role: "nominee" }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
-    res.json({ token, user: { id, name, email, hasNominee: false } });
+    try {
+      const body = req.body || {};
+      const rawName = body.name;
+      const rawEmail = body.email;
+      const rawPassword = body.password;
+
+      if (!rawName || !rawEmail || !rawPassword) {
+        return res
+          .status(400)
+          .json({ error: "Name, email, and password are required" });
+      }
+
+      const cleanName = String(rawName).trim();
+      const cleanEmail = String(rawEmail).trim().toLowerCase();
+      const cleanPassword = String(rawPassword);
+
+      if (!cleanName) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res
+          .status(400)
+          .json({ error: "Please enter a valid email address" });
+      }
+      if (cleanPassword.length < 8) {
+        return res
+          .status(400)
+          .json({ error: "Password must be at least 8 characters" });
+      }
+      if (!/\d/.test(cleanPassword)) {
+        return res
+          .status(400)
+          .json({ error: "Password must contain at least one number" });
+      }
+
+      console.log(`[Register] Attempt: ${cleanEmail}`);
+
+      // Case-insensitive existence check — requires a real `id` on the row.
+      const existing = await db
+        .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
+        .get(cleanEmail);
+
+      if (existing && existing.id) {
+        console.log(
+          `[Register] Already exists: ${cleanEmail} (${existing.id})`,
+        );
+        return res.status(409).json({
+          error:
+            "An account with this email already exists. Try signing in instead.",
+          code: "EMAIL_EXISTS",
+        });
+      }
+
+      const hash = await bcrypt.hash(cleanPassword, 10);
+      const id = uuidv4();
+
+      try {
+        await db
+          .prepare(
+            "INSERT INTO users (id, name, email, password_hash) VALUES (?,?,?,?)",
+          )
+          .run(id, cleanName, cleanEmail, hash);
+      } catch (insErr) {
+        if (
+          String(insErr.message || "")
+            .toLowerCase()
+            .includes("unique")
+        ) {
+          console.log(`[Register] Race on insert: ${cleanEmail}`);
+          return res.status(409).json({
+            error:
+              "An account with this email already exists. Try signing in instead.",
+            code: "EMAIL_EXISTS",
+          });
+        }
+        throw insErr;
+      }
+
+      const token = jwt.sign({ id, role: "nominee" }, JWT_SECRET, {
+        expiresIn: "7d",
+      });
+
+      console.log(`[Register] Created: ${cleanEmail} (${id})`);
+
+      res.json({
+        token,
+        user: {
+          id,
+          name: cleanName,
+          email: cleanEmail,
+          hasNominee: false,
+        },
+      });
+    } catch (e) {
+      console.error("[Register] Fatal:", e.message);
+      res.status(500).json({ error: "Registration failed. Please try again." });
+    }
   },
 );
 
@@ -738,9 +818,12 @@ app.post(
     const { email, password } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ error: "Email and password required" });
+
+    const cleanEmail = String(email).trim().toLowerCase();
+
     const user = await db
-      .prepare("SELECT * FROM users WHERE email = ?")
-      .get(email);
+      .prepare("SELECT * FROM users WHERE LOWER(email) = ?")
+      .get(cleanEmail);
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
@@ -880,6 +963,23 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
     )
     .run(req.admin.username, req.params.id);
   res.json({ success: true });
+});
+
+/* ================================================================
+   DIAGNOSTIC (super only) — check what's in the users table
+   ================================================================ */
+app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
+  try {
+    const total = (await db.prepare("SELECT COUNT(*) as c FROM users").get()).c;
+    const users = await db
+      .prepare(
+        "SELECT id, name, email, created_at FROM users ORDER BY created_at DESC LIMIT 500",
+      )
+      .all();
+    res.json({ total, returned: users.length, users });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /* ================================================================
@@ -1080,7 +1180,7 @@ app.post(
 );
 
 /* ================================================================
-   FREE VOTING  — one vote per voter per nominee
+   FREE VOTING
    ================================================================ */
 app.post(
   "/api/votes",
@@ -1136,7 +1236,6 @@ app.post(
         .get(nominee.id);
       res.json({ success: true, votes: updated.votes });
     } catch (e) {
-      // Unique constraint — concurrent request for same vote
       res
         .status(409)
         .json({ error: "You have already voted for this nominee" });
@@ -1144,7 +1243,6 @@ app.post(
   },
 );
 
-/* debug: list this voter's votes */
 app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   const token = req.params.voterToken;
   if (!token || token.length < 10) return res.json([]);
@@ -1166,7 +1264,7 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
 });
 
 /* ================================================================
-   TRANSACTION STATUS (used by nominee-portal polling only)
+   TRANSACTION STATUS (nominee-portal polling)
    ================================================================ */
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
@@ -1247,7 +1345,7 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
 });
 
 /* ================================================================
-   PAYHERO CALLBACK (nominee-portal transactions only now)
+   PAYHERO CALLBACK
    ================================================================ */
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
@@ -1559,7 +1657,11 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   )
     return res.status(400).json({ error: "Invalid category" });
 
-  if (await db.prepare("SELECT id FROM users WHERE email = ?").get(cleanEmail))
+  if (
+    await db
+      .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
+      .get(cleanEmail)
+  )
     return res.status(409).json({ error: "Email already registered" });
 
   const emailPrefix = cleanEmail.split("@")[0].replace(/[^a-z0-9._-]/g, "");
