@@ -1,5 +1,5 @@
 require("dotenv").config();
-const Database = require("better-sqlite3"); // only needed in this script
+const Database = require("better-sqlite3");
 const { createClient } = require("@libsql/client");
 
 const local = new Database("voting.db", { readonly: true });
@@ -17,6 +17,7 @@ const TABLES = [
   "payment_logs",
   "admins",
   "free_votes",
+  "images",
 ];
 const clean = (v) => (v === undefined ? null : v);
 

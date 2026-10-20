@@ -15,7 +15,6 @@ local.pragma("journal_mode = WAL");
 local.pragma("synchronous = NORMAL");
 local.pragma("foreign_keys = OFF");
 
-// Write-ahead queue: every write is logged here so we can replay it to Turso
 local.exec(`
   CREATE TABLE IF NOT EXISTS _sync_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,13 +46,36 @@ function makeIdempotent(sql) {
   return trimmed;
 }
 
+/**
+ * Buffers can't be JSON.stringify'd cleanly (they become
+ * {"type":"Buffer","data":[...]} which isn't restorable), so we
+ * serialize them as a tagged base64 envelope. push() reverses it.
+ */
+function serializeArg(a) {
+  if (Buffer.isBuffer(a)) {
+    return { __buf: a.toString("base64") };
+  }
+  if (a instanceof Uint8Array) {
+    return { __buf: Buffer.from(a).toString("base64") };
+  }
+  return a;
+}
+
+function deserializeArg(a) {
+  if (a && typeof a === "object" && typeof a.__buf === "string") {
+    return Buffer.from(a.__buf, "base64");
+  }
+  return a;
+}
+
 function enqueue(sql, args) {
   if (!isWrite(sql)) return;
   try {
     const normalized = makeIdempotent(sql);
+    const serializable = (args || []).map(serializeArg);
     local
       .prepare("INSERT INTO _sync_queue (sql, args) VALUES (?, ?)")
-      .run(normalized, JSON.stringify(args || []));
+      .run(normalized, JSON.stringify(serializable));
   } catch (e) {
     console.error("[Queue]", e.message);
   }
@@ -84,10 +106,6 @@ async function exec(sqlBlock) {
   local.exec(sqlBlock);
 }
 
-/**
- * Transaction wrapper — provides execute/get/all so server.js can do
- * atomic read-modify-write inside a transaction without escaping it.
- */
 async function tx(fn) {
   local.exec("BEGIN IMMEDIATE");
   const wrapper = {
@@ -140,7 +158,9 @@ async function push() {
       .get();
     if (!row) break;
 
-    const args = row.args ? JSON.parse(row.args) : [];
+    const rawArgs = row.args ? JSON.parse(row.args) : [];
+    const args = rawArgs.map(deserializeArg);
+
     try {
       await remote.execute({ sql: row.sql, args });
       local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
@@ -190,6 +210,12 @@ async function push() {
   return { pushed };
 }
 
+/**
+ * Pull is deliberately EXCLUDES the `images` table — pulling every image
+ * on every sync cycle would transfer megabytes every 60s. Instead:
+ *  - Uploads sync to Turso normally via the queue.
+ *  - Images are lazily pulled on-demand via pullImage(id) if missing locally.
+ */
 async function pull() {
   const TABLES = [
     "categories",
@@ -229,6 +255,34 @@ async function pull() {
     }
   }
   return { pulled };
+}
+
+/**
+ * Fetch a single image from Turso if it doesn't exist locally.
+ * Used by GET /api/images/:id when a nominee's image hasn't been
+ * synced down yet (e.g. local DB was recreated and bootstrap ran,
+ * but pull() skipped images).
+ */
+async function pullImage(id) {
+  try {
+    const res = await remote.execute({
+      sql: "SELECT id, data, mime, size, created_at FROM images WHERE id = ?",
+      args: [id],
+    });
+    if (!res.rows || !res.rows.length) return null;
+    const row = res.rows[0];
+    const vals = res.columns.map((c) => row[c]);
+    const obj = Object.fromEntries(res.columns.map((c, i) => [c, vals[i]]));
+    local
+      .prepare(
+        "INSERT OR REPLACE INTO images (id, data, mime, size, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(obj.id, obj.data, obj.mime, obj.size, obj.created_at);
+    return obj;
+  } catch (e) {
+    console.warn("[pullImage]", e.message);
+    return null;
+  }
 }
 
 async function verifyConnection() {
@@ -291,6 +345,7 @@ module.exports = {
   tx,
   push,
   pull,
+  pullImage,
   checkpoint,
   walSize,
   verifyConnection,

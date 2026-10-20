@@ -31,8 +31,6 @@ const PAYHERO_CALLBACK_URL = process.env.PAYHERO_CALLBACK_URL || "";
 const PAYHERO_BASE_URL =
   process.env.PAYHERO_BASE_URL || "https://backend.payhero.co.ke/api/v2";
 
-const IMGBB_API_KEY = process.env.IMGBB_API_KEY || "";
-
 const PRICES = {
   category_change: 50,
   leaderboard_once: 10,
@@ -48,6 +46,12 @@ const CHECKPOINT_WAL_THRESHOLD = 5 * 1024 * 1024;
 
 const RECONCILE_INTERVAL_MS = 60_000;
 const RECONCILE_MIN_AGE_MS = 30_000;
+
+/* Image storage tuning */
+const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+const IMG_TARGET_DIMENSION = 700; // 700×700 cover crop
+const IMG_JPEG_QUALITY = 82;
+const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000; // 1 hour
 
 /* ================================================================
    BODY PARSING
@@ -71,11 +75,11 @@ app.use((req, res, next) => {
 });
 
 /* ================================================================
-   UPLOADS
+   UPLOADS (multer → memory)
    ================================================================ */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  limits: { fileSize: IMG_MAX_UPLOAD_BYTES, files: 1 },
   fileFilter: (req, file, cb) => {
     if (/^image\/(jpeg|png|webp|gif|jpg|heic|heif)$/i.test(file.mimetype))
       cb(null, true);
@@ -83,47 +87,35 @@ const upload = multer({
   },
 });
 
-async function optimizeAndUpload(buffer) {
-  if (!IMGBB_API_KEY)
-    throw new Error("Image hosting not configured (IMGBB_API_KEY missing)");
-
-  let processed = buffer;
-
+/**
+ * Re-encode any image to a compact progressive JPEG.
+ * Falls back to raw bytes if sharp can't parse it (e.g. unusual HEIC).
+ */
+async function processImage(buffer) {
   try {
-    processed = await sharp(buffer, { failOn: "none" })
+    const out = await sharp(buffer, { failOn: "none" })
       .rotate()
-      .resize(700, 700, { fit: "cover", position: "attention" })
-      .jpeg({ quality: 80, mozjpeg: true, progressive: true })
+      .resize(IMG_TARGET_DIMENSION, IMG_TARGET_DIMENSION, {
+        fit: "cover",
+        position: "attention",
+      })
+      .jpeg({
+        quality: IMG_JPEG_QUALITY,
+        mozjpeg: true,
+        progressive: true,
+      })
       .toBuffer();
-  } catch (sharpErr) {
+    return { data: out, mime: "image/jpeg" };
+  } catch (err) {
     console.warn(
-      "[Upload] Sharp could not process image, sending original:",
-      sharpErr.message,
+      "[Image] sharp could not process, storing original:",
+      err.message,
     );
-    processed = buffer;
+    return {
+      data: buffer,
+      mime: "application/octet-stream",
+    };
   }
-
-  const params = new URLSearchParams();
-  params.append("key", IMGBB_API_KEY);
-  params.append("image", processed.toString("base64"));
-
-  const res = await axios.post(
-    "https://api.imgbb.com/1/upload",
-    params.toString(),
-    {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      timeout: 30000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    },
-  );
-
-  if (!res.data || !res.data.success || !res.data.data) {
-    throw new Error(
-      "ImgBB upload failed: " + JSON.stringify(res.data).slice(0, 200),
-    );
-  }
-  return res.data.data.display_url || res.data.data.url;
 }
 
 /* ================================================================
@@ -171,6 +163,13 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_fv_voter ON free_votes(voter_token);
     CREATE INDEX IF NOT EXISTS idx_fv_nominee ON free_votes(nominee_id);
+    CREATE TABLE IF NOT EXISTS images (
+      id TEXT PRIMARY KEY,
+      data BLOB NOT NULL,
+      mime TEXT NOT NULL,
+      size INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS admins (
       id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
       display_name TEXT, role TEXT DEFAULT 'admin', created_by TEXT,
@@ -370,7 +369,6 @@ async function completeTransaction(reference, receipt) {
           args: [txRow.user_id, expiresAt, expiresAt],
         });
       } else if (txRow.type === "vote") {
-        // Legacy paid votes only — new votes are free and don't create rows here
         await t.execute({
           sql: "UPDATE nominees SET votes = votes + ? WHERE id = ?",
           args: [meta.voteCount || 0, txRow.nominee_id],
@@ -580,7 +578,7 @@ function interpretPayHeroStatus(payload) {
 }
 
 /* ================================================================
-   UPLOAD
+   IMAGES — upload (store BLOB) + serve (zero-latency cache)
    ================================================================ */
 app.post(
   "/api/upload",
@@ -595,29 +593,72 @@ app.post(
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
       console.log(
-        `[Upload] Received ${req.file.originalname} (${req.file.mimetype}, ${Math.round(req.file.size / 1024)} KB)`,
+        `[Upload] Received ${req.file.originalname} (${req.file.mimetype}, ${Math.round(
+          req.file.size / 1024,
+        )} KB)`,
       );
 
       try {
-        const url = await optimizeAndUpload(req.file.buffer);
-        console.log(`[Upload] ✓ ${url}`);
-        res.json({ url });
+        const processed = await processImage(req.file.buffer);
+        const id = uuidv4();
+
+        await db
+          .prepare(
+            "INSERT INTO images (id, data, mime, size) VALUES (?, ?, ?, ?)",
+          )
+          .run(id, processed.data, processed.mime, processed.data.length);
+
+        const url = `/api/images/${id}`;
+        console.log(
+          `[Upload] ✓ ${url} (${Math.round(processed.data.length / 1024)} KB)`,
+        );
+        res.json({ url, bytes: processed.data.length });
       } catch (e) {
         console.error("[Upload] ✗", e.message);
-        if (e.response && e.response.data) {
-          console.error("[Upload] ImgBB said:", e.response.data);
-        }
-        res.status(500).json({
-          error: e.message || "Image upload failed",
-          detail:
-            e.response && e.response.data
-              ? JSON.stringify(e.response.data).slice(0, 200)
-              : undefined,
-        });
+        res.status(500).json({ error: e.message || "Image upload failed" });
       }
     });
   },
 );
+
+app.get("/api/images/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(400).end();
+    }
+
+    let row = await db
+      .prepare("SELECT data, mime FROM images WHERE id = ?")
+      .get(id);
+
+    // Lazy fallback: if not local, try Turso once
+    if (!row) {
+      const remoteRow = await db.pullImage(id);
+      if (remoteRow) {
+        row = { data: remoteRow.data, mime: remoteRow.mime };
+      }
+    }
+
+    if (!row) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(404).end();
+    }
+
+    const buf = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
+
+    // UUID content is immutable → cache forever, browser skips re-validation
+    res.setHeader("Content-Type", row.mime || "image/jpeg");
+    res.setHeader("Content-Length", buf.length);
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("ETag", `"${id}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("[Images]", e.message);
+    res.status(500).end();
+  }
+});
 
 /* ================================================================
    PUBLIC
@@ -629,13 +670,18 @@ app.get("/api/health", async (req, res) => {
   } catch {
     dbOk = false;
   }
+  let imageCount = null;
+  try {
+    const row = await db.prepare("SELECT COUNT(*) as c FROM images").get();
+    imageCount = row?.c ?? 0;
+  } catch {}
   res.json({
     ok: dbOk,
     uptime: Math.floor(process.uptime()),
     memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + " MB",
     db: dbOk ? "ok" : "error",
     payhero: PAYHERO_API_KEY ? "live" : "simulation",
-    images: IMGBB_API_KEY ? "imgbb" : "unconfigured",
+    images: { storage: "sqlite-blob", count: imageCount },
   });
 });
 
@@ -705,7 +751,7 @@ app.get("/api/nominees/:code", async (req, res) => {
 });
 
 /* ================================================================
-   NOMINEE AUTH  — hardened register
+   NOMINEE AUTH
    ================================================================ */
 app.post(
   "/api/auth/register",
@@ -748,7 +794,6 @@ app.post(
 
       console.log(`[Register] Attempt: ${cleanEmail}`);
 
-      // Case-insensitive existence check — requires a real `id` on the row.
       const existing = await db
         .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
         .get(cleanEmail);
@@ -966,7 +1011,7 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
 });
 
 /* ================================================================
-   DIAGNOSTIC (super only) — check what's in the users table
+   DIAGNOSTIC (super only)
    ================================================================ */
 app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   try {
@@ -1264,7 +1309,7 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
 });
 
 /* ================================================================
-   TRANSACTION STATUS (nominee-portal polling)
+   TRANSACTION STATUS
    ================================================================ */
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
@@ -1964,6 +2009,13 @@ app.get("/sitemap.xml", async (req, res) => {
     const baseUrl = "https://gala.voteus.xyz";
     const now = new Date().toISOString().split("T")[0];
 
+    // Absolute image URL for sitemap (relative /api/images/... won't work)
+    const absImg = (p) => {
+      if (!p) return `${baseUrl}/hero-mobile.jpeg`;
+      if (p.startsWith("http://") || p.startsWith("https://")) return p;
+      return baseUrl + (p.startsWith("/") ? p : "/" + p);
+    };
+
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
@@ -1994,7 +2046,7 @@ app.get("/sitemap.xml", async (req, res) => {
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
     <image:image>
-      <image:loc>${n.img || `${baseUrl}/hero-mobile.jpeg`}</image:loc>
+      <image:loc>${absImg(n.img)}</image:loc>
       <image:title>${n.name} - ${n.category}</image:title>
       <image:caption>Vote for ${n.name} in ${n.category} at Gala Awards 2026</image:caption>
     </image:image>
@@ -2035,7 +2087,12 @@ app.get("/nominee/:code", async (req, res) => {
 
     const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
-    const image = nominee.img || `${baseUrl}/hero-mobile.jpeg`;
+    const imgPath = nominee.img || "";
+    const image = imgPath
+      ? imgPath.startsWith("http")
+        ? imgPath
+        : baseUrl + (imgPath.startsWith("/") ? imgPath : "/" + imgPath)
+      : `${baseUrl}/hero-mobile.jpeg`;
     const title = `${nominee.name} | Voteus — Gala Awards 2026`;
     const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026, Mount Kenya University Parklands Law Campus. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
 
@@ -2119,6 +2176,8 @@ app.get("/admin", (req, res) =>
 /* ================================================================
    BACKGROUND JOBS
    ================================================================ */
+
+/* Stale pending transactions */
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2137,6 +2196,7 @@ setInterval(async () => {
   }
 }, 5 * 60_000);
 
+/* Prune old payment logs */
 setInterval(
   async () => {
     try {
@@ -2151,6 +2211,28 @@ setInterval(
   24 * 60 * 60_000,
 );
 
+/* Prune orphaned images — not referenced by any nominee, older than grace period */
+setInterval(async () => {
+  try {
+    const cutoff = new Date(Date.now() - IMG_ORPHAN_GRACE_MS).toISOString();
+    const r = await db
+      .prepare(
+        `DELETE FROM images
+         WHERE created_at < ?
+           AND id NOT IN (
+             SELECT REPLACE(img, '/api/images/', '') FROM nominees
+             WHERE img LIKE '/api/images/%'
+           )`,
+      )
+      .run(cutoff);
+    if (r.changes > 0)
+      console.log(`[Images] Pruned ${r.changes} orphaned image(s)`);
+  } catch (e) {
+    console.error("[Images prune]", e.message);
+  }
+}, 60 * 60_000);
+
+/* Reconcile pending payments against PayHero */
 setInterval(async () => {
   try {
     const cutoff = new Date(Date.now() - RECONCILE_MIN_AGE_MS).toISOString();
@@ -2283,7 +2365,7 @@ const server = app.listen(PORT, async () => {
   console.log(
     `  Reconcile:   pending txns checked every ${RECONCILE_INTERVAL_MS / 1000}s`,
   );
-  console.log(`  Images:      ${IMGBB_API_KEY ? "ImgBB" : "NOT CONFIGURED"}`);
+  console.log(`  Images:      SQLite BLOB · served at /api/images/:id`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
   console.log(`  Voting:      FREE (one vote per voter per nominee)`);
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
