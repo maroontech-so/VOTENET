@@ -178,6 +178,33 @@
                 background: #f9fafb;
             }
 
+            /* Live indicator */
+            .live-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 999px;
+                background: #22c55e;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                animation: livePulse 1.8s infinite;
+                display: inline-block;
+            }
+            .live-dot.offline {
+                background: #f59e0b;
+                animation: none;
+                box-shadow: none;
+            }
+            @keyframes livePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
+            }
+
             /* ---------- Photo picker ---------- */
             .photo-picker {
                 position: relative;
@@ -434,10 +461,8 @@
                         class="p-4 border-t border-gray-100 text-xs text-gray-400"
                     >
                         <div class="flex items-center gap-2">
-                            <span
-                                class="w-2 h-2 rounded-full bg-green-500"
-                            ></span>
-                            System operational
+                            <span class="live-dot" id="live-dot"></span>
+                            <span id="live-status">Live · connected</span>
                         </div>
                     </div>
                 </aside>
@@ -470,7 +495,6 @@
                             </div>
                         </div>
 
-                        <!-- Stats grid: layout adapts to role via JS -->
                         <div
                             id="stats-grid"
                             class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8"
@@ -822,7 +846,6 @@
                 </button>
                 <h3 class="text-xl font-bold mb-4">Add Nominee</h3>
                 <div class="space-y-3">
-                    <!-- Photo picker -->
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
@@ -1084,16 +1107,20 @@
             };
             const isSuper = () => getAdmin()?.role === "super";
 
-            /* Local registry of chart instances (Chart.js v4 has no Chart.instances) */
             let charts = [];
-
             let CATEGORIES = [];
             let NOMINEES = [];
 
-            /* State for the Add Nominee modal */
             let anSelectedFile = null;
             let anUploadedUrl = null;
             let lastCreds = null;
+
+            // ✅ FIX: live-update state
+            let liveStream = null;
+            let livePollTimer = null;
+            let liveRefreshTimer = null;
+            let sseRetries = 0;
+            let refreshing = false;
 
             function toast(msg, ok = true) {
                 const t = $("toast");
@@ -1126,6 +1153,104 @@
                 $(id).classList.remove("show");
             }
 
+            /* ---------- LIVE UPDATES ---------- */
+            function setLiveStatus(connected) {
+                const dot = $("live-dot");
+                const label = $("live-status");
+                if (!dot || !label) return;
+                if (connected) {
+                    dot.classList.remove("offline");
+                    label.textContent = "Live · connected";
+                } else {
+                    dot.classList.add("offline");
+                    label.textContent = "Live · polling";
+                }
+            }
+
+            function startLiveUpdates() {
+                // 15s polling fallback
+                if (livePollTimer) clearInterval(livePollTimer);
+                livePollTimer = setInterval(() => {
+                    if (document.hidden) return;
+                    refreshCurrentTab();
+                }, 15_000);
+
+                connectLiveStream();
+            }
+
+            function connectLiveStream() {
+                if (typeof EventSource === "undefined") {
+                    setLiveStatus(false);
+                    return;
+                }
+                if (liveStream) {
+                    try {
+                        liveStream.close();
+                    } catch {}
+                }
+                try {
+                    liveStream = new EventSource(
+                        "/api/live/admin?token=" +
+                            encodeURIComponent(getToken()),
+                    );
+                    liveStream.addEventListener("update", (e) => {
+                        sseRetries = 0;
+                        setLiveStatus(true);
+                        try {
+                            const evt = JSON.parse(e.data);
+                            scheduleLiveRefresh(evt);
+                        } catch {}
+                    });
+                    liveStream.onopen = () => setLiveStatus(true);
+                    liveStream.onerror = () => {
+                        try {
+                            liveStream.close();
+                        } catch {}
+                        liveStream = null;
+                        setLiveStatus(false);
+                        sseRetries++;
+                        if (sseRetries < 4) {
+                            setTimeout(connectLiveStream, 5000);
+                        }
+                    };
+                } catch (err) {
+                    console.warn("[SSE]", err.message);
+                    setLiveStatus(false);
+                }
+            }
+
+            // Debounced so a burst of votes fires at most one refresh per 1s
+            function scheduleLiveRefresh(evt) {
+                // Don't disturb a user mid-action (modal open)
+                if (document.querySelector(".modal.show")) return;
+                if (liveRefreshTimer) return;
+                liveRefreshTimer = setTimeout(() => {
+                    liveRefreshTimer = null;
+                    refreshCurrentTab();
+                }, 1000);
+            }
+
+            async function refreshCurrentTab() {
+                if (refreshing) return;
+                refreshing = true;
+                try {
+                    const activeTab = document.querySelector(
+                        ".nav-item.active",
+                    )?.dataset.tab;
+                    if (!activeTab) return;
+                    if (activeTab === "overview") await loadOverview();
+                    else if (activeTab === "categories") await loadCategories();
+                    else if (activeTab === "nominees") await loadNominees();
+                    else if (activeTab === "transactions")
+                        await loadTransactions();
+                    else if (activeTab === "admins") await loadAdmins();
+                } catch (e) {
+                    console.warn("[LiveRefresh]", e.message);
+                } finally {
+                    refreshing = false;
+                }
+            }
+
             /* ---------- LOGIN ---------- */
             async function doLogin() {
                 const username = $("login-username").value.trim();
@@ -1148,6 +1273,21 @@
             }
 
             function doLogout() {
+                // ✅ FIX: tear down live machinery before reload
+                if (liveStream) {
+                    try {
+                        liveStream.close();
+                    } catch {}
+                    liveStream = null;
+                }
+                if (livePollTimer) {
+                    clearInterval(livePollTimer);
+                    livePollTimer = null;
+                }
+                if (liveRefreshTimer) {
+                    clearTimeout(liveRefreshTimer);
+                    liveRefreshTimer = null;
+                }
                 clearSession();
                 location.reload();
             }
@@ -1210,21 +1350,21 @@
                     .charAt(0)
                     .toUpperCase();
 
-                // Header subtitle — same label for both roles (silent about rank)
                 $("admin-role").innerText = "Administrator";
 
-                // Silent role-based visibility — super sees the extra UI
                 if (!isSuper()) {
                     document
                         .querySelectorAll("[data-super]")
                         .forEach((el) => el.classList.add("hidden"));
-                    // Compact stats grid for regular admins (2 cards + nominees = 3 cards)
                     $("stats-grid").className =
                         "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8";
                 }
 
                 await refreshBase();
                 await loadOverview();
+
+                // ✅ FIX: start live updates once the dashboard is up
+                startLiveUpdates();
             }
 
             async function refreshBase() {
@@ -1277,7 +1417,6 @@
             }
 
             function renderCharts(data) {
-                // Destroy any chart instances we previously created
                 charts.forEach((c) => {
                     try {
                         c.destroy();
