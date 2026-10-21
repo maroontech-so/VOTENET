@@ -55,6 +55,12 @@
             .btn-outline:hover {
                 background: #f9fafb;
             }
+            .btn-warning {
+                background: #d97706;
+            }
+            .btn-warning:hover {
+                background: #b45309;
+            }
             .input {
                 width: 100%;
                 padding: 12px 16px;
@@ -84,10 +90,42 @@
                 background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
                 border: 2px solid #6b7280;
             }
+            .kv-row {
+                display: flex;
+                justify-content: space-between;
+                padding: 6px 0;
+                border-bottom: 1px dashed #e5e7eb;
+                font-size: 12px;
+            }
+            .kv-row:last-child {
+                border-bottom: none;
+            }
+            .kv-row .k {
+                color: #6b7280;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                font-size: 10px;
+            }
+            .kv-row .v {
+                color: #1f2937;
+                font-family: monospace;
+                font-size: 11px;
+                text-align: right;
+            }
+            .badge {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
         </style>
     </head>
     <body class="min-h-screen py-8 px-4">
-        <div class="max-w-2xl mx-auto">
+        <div class="max-w-3xl mx-auto">
             <div class="text-center mb-6">
                 <a
                     href="/"
@@ -105,9 +143,8 @@
                 </h1>
                 <p class="text-sm text-gray-500 mt-2 max-w-md mx-auto">
                     If the system said you already voted but you never did,
-                    submit this form. We'll match your device fingerprint
-                    against our records and show you exactly what we find — no
-                    guessing.
+                    submit this form. We'll show you exactly what's on record
+                    for your device.
                 </p>
             </div>
 
@@ -134,7 +171,7 @@
                         >
                             Phone or Email
                             <span class="text-gray-400 font-normal normal-case"
-                                >(optional, for follow-up)</span
+                                >(optional)</span
                             >
                         </label>
                         <input
@@ -153,23 +190,16 @@
                             id="r-desc"
                             class="input resize-none"
                             rows="4"
-                            placeholder="e.g. I opened the link, clicked on a nominee, and the button said 'Voted' before I could do anything. I have never voted in this category before."
+                            placeholder="e.g. I opened the link, clicked on a nominee, and the button said 'Voted' before I could do anything."
                         ></textarea>
                     </div>
-                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                        <div class="flex items-start gap-3">
-                            <i
-                                class="ph-fill ph-info text-blue-600 text-xl shrink-0 mt-0.5"
-                            ></i>
-                            <div class="text-xs text-blue-900 leading-relaxed">
-                                <strong>What we capture automatically</strong> —
-                                your device fingerprint (same method used when
-                                voting), your browser token, and your IP
-                                address. We do not capture personal files,
-                                photos, or messages. Everything stays on our
-                                server for 30 days.
-                            </div>
-                        </div>
+                    <div
+                        class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-900 leading-relaxed"
+                    >
+                        <strong>What we capture:</strong> your device
+                        fingerprint (same method used when voting), your browser
+                        token, IP address, and browser/OS details. No personal
+                        files, photos, or messages.
                     </div>
                     <button
                         id="submit-btn"
@@ -179,10 +209,36 @@
                         <i class="ph ph-paper-plane-tilt"></i> Submit Report
                     </button>
                     <p class="text-[11px] text-gray-400 text-center">
-                        Takes about 5 seconds · You'll see the full forensic
-                        result immediately
+                        Takes about 5 seconds · See the full forensic result
+                        immediately
                     </p>
                 </div>
+            </div>
+
+            <div
+                id="lookup-section"
+                class="mt-6 text-center text-xs text-gray-500"
+            >
+                Already filed a report?
+                <button
+                    onclick="openLookup()"
+                    class="text-indigo-600 hover:underline font-medium"
+                >
+                    Check its status →
+                </button>
+            </div>
+
+            <div id="lookup-view" class="hidden card p-6 mt-6">
+                <h3 class="font-bold mb-3">Look up an existing report</h3>
+                <div class="flex gap-2">
+                    <input
+                        id="lookup-code"
+                        class="input flex-1"
+                        placeholder="RPT-XXXX-XXXXXX or APL-XXXX-XXXX"
+                    />
+                    <button onclick="lookupReport()" class="btn">Check</button>
+                </div>
+                <div id="lookup-result" class="mt-4"></div>
             </div>
 
             <div id="result-view" class="hidden"></div>
@@ -191,6 +247,7 @@
         <script>
             const $ = (id) => document.getElementById(id);
             const VOTER_TOKEN_KEY = "vn_voter_token";
+            let ALL_CATEGORIES = [];
 
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
@@ -198,7 +255,6 @@
                 return t;
             }
 
-            // SAME algorithm as index.html — required for valid match
             async function getDeviceFingerprint() {
                 if (window.__voteus_fp) return window.__voteus_fp;
                 const parts = [];
@@ -221,7 +277,6 @@
                     parts.push(String(navigator.cookieEnabled));
                     parts.push(String(navigator.doNotTrack));
                     parts.push(String(navigator.plugins.length));
-
                     try {
                         const canvas = document.createElement("canvas");
                         canvas.width = 240;
@@ -239,7 +294,6 @@
                             parts.push(canvas.toDataURL());
                         }
                     } catch {}
-
                     try {
                         const canvas = document.createElement("canvas");
                         const gl =
@@ -268,7 +322,6 @@
                         }
                     } catch {}
                 } catch {}
-
                 const raw = parts.join("||");
                 let hash;
                 try {
@@ -299,9 +352,14 @@
                     language: navigator.language,
                     languages: navigator.languages,
                     platform: navigator.platform,
-                    screen: `${screen.width}x${screen.height}@${screen.colorDepth}`,
-                    availScreen: `${screen.availWidth}x${screen.availHeight}`,
-                    viewport: `${window.innerWidth}x${window.innerHeight}`,
+                    screen: `${screen.width}×${screen.height}`,
+                    screenWidth: screen.width,
+                    screenHeight: screen.height,
+                    colorDepth: screen.colorDepth,
+                    availScreen: `${screen.availWidth}×${screen.availHeight}`,
+                    viewport: `${window.innerWidth}×${window.innerHeight}`,
+                    viewportWidth: window.innerWidth,
+                    viewportHeight: window.innerHeight,
                     timezoneOffset: new Date().getTimezoneOffset(),
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                     hardwareConcurrency: navigator.hardwareConcurrency,
@@ -319,7 +377,6 @@
                         type: navigator.connection.effectiveType,
                         downlink: navigator.connection.downlink,
                         rtt: navigator.connection.rtt,
-                        saveData: navigator.connection.saveData,
                     };
                 }
                 return details;
@@ -332,6 +389,32 @@
                     .replace(/>/g, "&gt;")
                     .replace(/"/g, "&quot;")
                     .replace(/'/g, "&#39;");
+            }
+
+            function fmtTime(iso) {
+                if (!iso) return "—";
+                try {
+                    return new Date(iso).toLocaleString("en-GB", {
+                        year: "numeric",
+                        month: "short",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        timeZoneName: "short",
+                    });
+                } catch {
+                    return String(iso);
+                }
+            }
+
+            async function loadCategories() {
+                try {
+                    const r = await fetch("/api/categories");
+                    ALL_CATEGORIES = await r.json();
+                } catch {
+                    ALL_CATEGORIES = [];
+                }
             }
 
             async function submitReport() {
@@ -370,18 +453,73 @@
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || "Report failed");
-
                     renderResult(data);
                 } catch (e) {
-                    alert(e.message || "Report failed. Please try again.");
+                    alert(e.message || "Report failed.");
                     btn.disabled = false;
                     btn.innerHTML =
                         '<i class="ph ph-paper-plane-tilt"></i> Submit Report';
                 }
             }
 
+            function renderDeviceCard(title, device, fingerprint, highlight) {
+                if (!device && !fingerprint) {
+                    return `<div class="bg-gray-50 rounded-xl p-4 text-xs text-gray-500">${title}: not available for this record.</div>`;
+                }
+                const rows = [];
+                if (device) {
+                    rows.push(
+                        `<div class="kv-row"><span class="k">Device</span><span class="v">${escapeHtml(device.device)}</span></div>`,
+                    );
+                    rows.push(
+                        `<div class="kv-row"><span class="k">Operating System</span><span class="v">${escapeHtml(device.os)}</span></div>`,
+                    );
+                    rows.push(
+                        `<div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(device.browser)}</span></div>`,
+                    );
+                }
+                if (fingerprint) {
+                    if (fingerprint.screen)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Screen</span><span class="v">${escapeHtml(fingerprint.screen)}</span></div>`,
+                        );
+                    if (fingerprint.viewport)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Viewport</span><span class="v">${escapeHtml(fingerprint.viewport)}</span></div>`,
+                        );
+                    if (fingerprint.language)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Language</span><span class="v">${escapeHtml(fingerprint.language)}</span></div>`,
+                        );
+                    if (fingerprint.timezone)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Timezone</span><span class="v">${escapeHtml(fingerprint.timezone)}${fingerprint.timezoneDisplay ? " (" + escapeHtml(fingerprint.timezoneDisplay) + ")" : ""}</span></div>`,
+                        );
+                    if (fingerprint.cpuCores)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">CPU Cores</span><span class="v">${escapeHtml(fingerprint.cpuCores)}</span></div>`,
+                        );
+                    if (fingerprint.memory)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Memory</span><span class="v">${escapeHtml(fingerprint.memory)} GB</span></div>`,
+                        );
+                    if (fingerprint.touchPoints != null)
+                        rows.push(
+                            `<div class="kv-row"><span class="k">Touch Points</span><span class="v">${escapeHtml(fingerprint.touchPoints)}</span></div>`,
+                        );
+                }
+                return `
+                    <div class="${highlight ? "bg-indigo-50 border-2 border-indigo-200" : "bg-gray-50 border border-gray-200"} rounded-xl p-4">
+                        <div class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">${escapeHtml(title)}</div>
+                        ${rows.join("") || '<div class="text-xs text-gray-400">No data available</div>'}
+                    </div>`;
+            }
+
             function renderResult(d) {
                 $("form-view").classList.add("hidden");
+                $("lookup-section").classList.add("hidden");
+                $("lookup-view").classList.add("hidden");
+
                 const v = d.verdict;
                 const isOk =
                     v === "NO_RECORD_FOUND" || v === "FINGERPRINT_COLLISION";
@@ -417,17 +555,13 @@
                         ? "A vote exists near your network"
                         : "No clear match";
 
-                const rows =
+                const matchRows =
                     d.matches && d.matches.length
                         ? d.matches
                               .map((m, i) => {
                                   const geo = m.ip_geo || {};
                                   const location =
-                                      [
-                                          geo.city,
-                                          geo.region,
-                                          geo.country,
-                                      ]
+                                      [geo.city, geo.region, geo.country]
                                           .filter(Boolean)
                                           .join(", ") || "Unknown location";
                                   const strengthLabel =
@@ -438,24 +572,38 @@
                                             : m.match_strength === "weak"
                                               ? "Weak"
                                               : "Low";
+                                  const strengthClass =
+                                      m.match_strength === "high"
+                                          ? "bg-red-100 text-red-700"
+                                          : m.match_strength === "medium"
+                                            ? "bg-amber-100 text-amber-700"
+                                            : "bg-gray-100 text-gray-600";
+
+                                  const deviceCard = m.details_available
+                                      ? renderDeviceCard(
+                                            "This is what was recorded for that vote",
+                                            m.device_info,
+                                            m.fingerprint,
+                                            false,
+                                        )
+                                      : `<div class="bg-gray-100 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">${escapeHtml(m.unavailable_reason || "No device details available")}</div>`;
+
+                                  const appealBadge = m.is_appeal
+                                      ? '<span class="badge bg-purple-100 text-purple-700 ml-2">Appeal vote</span>'
+                                      : "";
+
                                   return `
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-3">
-                            <div class="flex items-start justify-between gap-2 mb-2">
-                                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record #${i + 1}</div>
-                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    m.match_strength === "high"
-                                        ? "bg-red-100 text-red-700"
-                                        : m.match_strength === "medium"
-                                          ? "bg-amber-100 text-amber-700"
-                                          : "bg-gray-100 text-gray-600"
-                                }">${strengthLabel} match</span>
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+                            <div class="flex items-start justify-between gap-2 mb-3">
+                                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record #${i + 1}${appealBadge}</div>
+                                <span class="badge ${strengthClass}">${strengthLabel} match</span>
                             </div>
                             <div class="text-sm font-semibold text-gray-900 mb-1">${escapeHtml(m.nominee_name)} · ${escapeHtml(m.category)}</div>
                             <div class="text-xs text-gray-500 font-mono mb-3">${escapeHtml(m.nominee_code)}</div>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="grid grid-cols-2 gap-3 text-xs mb-3">
                                 <div>
                                     <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Voted At</div>
-                                    <div class="text-gray-800 font-medium">${new Date(m.created_at).toLocaleString()}</div>
+                                    <div class="text-gray-800 font-medium">${escapeHtml(fmtTime(m.created_at))}</div>
                                 </div>
                                 <div>
                                     <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">IP Address</div>
@@ -466,10 +614,11 @@
                                     <div class="text-gray-800">${escapeHtml(location)}${geo.isp ? " · " + escapeHtml(geo.isp) : ""}</div>
                                 </div>
                                 <div class="col-span-2">
-                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Match Reason</div>
+                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Why this matched you</div>
                                     <div class="text-gray-700">${escapeHtml(m.note)}</div>
                                 </div>
                             </div>
+                            ${deviceCard}
                         </div>`;
                               })
                               .join("")
@@ -480,14 +629,53 @@
                     [yourGeo.city, yourGeo.region, yourGeo.country]
                         .filter(Boolean)
                         .join(", ") || "—";
+                const yourDeviceCard = renderDeviceCard(
+                    "Your device right now",
+                    d.yourDevice,
+                    d.yourFingerprint,
+                    true,
+                );
+
+                const categoriesAvailable =
+                    ALL_CATEGORIES.length > 0
+                        ? ALL_CATEGORIES.map(
+                              (c) =>
+                                  `<option value="${c.id}">${escapeHtml(c.name)}</option>`,
+                          ).join("")
+                        : '<option value="">No categories</option>';
+
+                const appealSection = `
+                    <div class="card p-5 mb-4 border-amber-200 bg-amber-50">
+                        <h3 class="text-sm font-bold text-amber-900 mb-2 flex items-center gap-2">
+                            <i class="ph ph-warning-circle"></i> Not satisfied with this report?
+                        </h3>
+                        <p class="text-xs text-amber-800 mb-3 leading-relaxed">
+                            If you're confident you did not vote, you can file an appeal. An admin will review your case. If approved, you'll be able to vote once more in the selected category (marked as an appeal vote).
+                        </p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">Category you were blocked from</label>
+                                <select id="appeal-category" class="input">${categoriesAvailable}</select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">Why do you disagree?</label>
+                                <textarea id="appeal-reason" class="input resize-none" rows="3" placeholder="Explain why you believe this vote is not yours — e.g. I have never shared this device, I was not on campus at that time, etc."></textarea>
+                            </div>
+                            <button id="appeal-btn" onclick="submitAppeal('${escapeHtml(d.reportCode)}')" class="btn btn-warning w-full py-3">
+                                <i class="ph ph-paper-plane-tilt"></i> Send Appeal to Admin
+                            </button>
+                        </div>
+                    </div>
+                `;
 
                 $("result-view").innerHTML = `
                     <div class="${cls} rounded-2xl p-6 mb-6">
                         <div class="flex items-start gap-3 mb-3">
                             <i class="ph-fill ${icon} ${iconColor} text-3xl shrink-0"></i>
-                            <div>
+                            <div class="min-w-0">
                                 <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900">${title}</h2>
                                 <div class="text-xs font-mono font-bold text-gray-500 mt-1">${escapeHtml(d.reportCode)}</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">Filed ${escapeHtml(fmtTime(d.reportedAt))}</div>
                             </div>
                         </div>
                         <p class="text-sm text-gray-700 leading-relaxed">${escapeHtml(d.message)}</p>
@@ -495,7 +683,7 @@
 
                     <div class="card p-5 mb-4">
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Your Connection</h3>
-                        <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="grid grid-cols-2 gap-3 text-sm mb-4">
                             <div>
                                 <div class="text-[10px] text-gray-400 font-bold uppercase">Your IP</div>
                                 <div class="font-mono text-gray-900">${escapeHtml(d.yourIP)}</div>
@@ -506,23 +694,24 @@
                             </div>
                             ${yourGeo.isp ? `<div class="col-span-2"><div class="text-[10px] text-gray-400 font-bold uppercase">ISP</div><div class="text-gray-900">${escapeHtml(yourGeo.isp)}${yourGeo.asn ? " · AS" + escapeHtml(yourGeo.asn) : ""}</div></div>` : ""}
                         </div>
+                        ${yourDeviceCard}
                     </div>
 
                     <div class="card p-5 mb-4">
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
                             Records found (${d.matchCount})
                         </h3>
-                        ${rows}
+                        ${matchRows}
                     </div>
+
+                    ${appealSection}
 
                     <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-xs text-gray-600 leading-relaxed">
-                        <strong>Save your report code:</strong>
-                        <span class="font-mono font-bold text-gray-900">${escapeHtml(d.reportCode)}</span>
-                        — you can use it to look up this report at any time, or to
-                        cross-reference with the admin team.
+                        <strong>Save your report code:</strong> <span class="font-mono font-bold text-gray-900">${escapeHtml(d.reportCode)}</span>
+                        — you can use it to check this report later, or to cross-reference with admin.
                     </div>
 
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-wrap">
                         <button onclick="window.print()" class="btn btn-outline flex-1">
                             <i class="ph ph-printer"></i> Print / Save PDF
                         </button>
@@ -534,6 +723,114 @@
                 $("result-view").classList.remove("hidden");
                 window.scrollTo({ top: 0, behavior: "smooth" });
             }
+
+            async function submitAppeal(reportCode) {
+                const categoryId = $("appeal-category").value;
+                const reason = $("appeal-reason").value.trim();
+
+                if (!categoryId) {
+                    alert("Select a category");
+                    return;
+                }
+                if (reason.length < 20) {
+                    alert(
+                        "Please explain why you disagree (at least 20 characters)",
+                    );
+                    return;
+                }
+
+                const btn = $("appeal-btn");
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin"></i> Sending…';
+
+                try {
+                    const res = await fetch("/api/report-appeal", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            reportCode,
+                            categoryId,
+                            reason,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Appeal failed");
+
+                    const appealBox = btn.closest(".bg-amber-50");
+                    appealBox.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="ph-fill ph-check-circle text-4xl text-amber-600 mb-2"></i>
+                            <h3 class="text-lg font-bold text-amber-900 mb-1">Appeal sent</h3>
+                            <p class="text-xs text-amber-800 mb-3">Your appeal code is:</p>
+                            <div class="bg-white border-2 border-amber-300 rounded-lg px-4 py-2 inline-block font-mono font-bold text-amber-900 mb-3">${escapeHtml(data.appealCode)}</div>
+                            <p class="text-xs text-amber-800 leading-relaxed">
+                                An admin will review it shortly. Check back in 5–10 minutes. Once approved, you can vote again in that category.
+                            </p>
+                        </div>
+                    `;
+                } catch (e) {
+                    alert(e.message || "Appeal failed");
+                    btn.disabled = false;
+                    btn.innerHTML =
+                        '<i class="ph ph-paper-plane-tilt"></i> Send Appeal to Admin';
+                }
+            }
+
+            function openLookup() {
+                $("lookup-view").classList.remove("hidden");
+                $("lookup-view").scrollIntoView({ behavior: "smooth" });
+            }
+
+            async function lookupReport() {
+                const code = $("lookup-code").value.trim().toUpperCase();
+                const out = $("lookup-result");
+                if (!code) return;
+                out.innerHTML =
+                    '<div class="text-xs text-gray-400">Loading…</div>';
+                try {
+                    const isAppeal = code.startsWith("APL-");
+                    const url = isAppeal
+                        ? `/api/appeal/${encodeURIComponent(code)}`
+                        : `/api/report/${encodeURIComponent(code)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Not found");
+
+                    if (isAppeal) {
+                        out.innerHTML = `
+                            <div class="bg-gray-50 rounded-xl p-4 text-sm">
+                                <div class="font-bold mb-1">Appeal ${escapeHtml(data.appealCode)}</div>
+                                <div class="text-xs text-gray-500 mb-2">Category: ${escapeHtml(data.category)}</div>
+                                <div class="mb-2"><span class="badge ${data.status === "approved" ? "bg-emerald-100 text-emerald-700" : data.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${escapeHtml(data.status)}</span></div>
+                                ${
+                                    data.status === "approved" &&
+                                    data.allowanceStatus
+                                        ? `
+                                    <div class="text-xs text-gray-700">Allowance: ${escapeHtml(data.allowanceStatus)}${data.usedForNominee ? " · used for " + escapeHtml(data.usedForNominee) : ""}</div>
+                                `
+                                        : ""
+                                }
+                                ${data.decisionNote ? `<div class="text-xs text-gray-500 mt-2 italic">${escapeHtml(data.decisionNote)}</div>` : ""}
+                            </div>`;
+                    } else {
+                        renderResult(data);
+                    }
+                } catch (e) {
+                    out.innerHTML = `<div class="text-xs text-red-600">${escapeHtml(e.message)}</div>`;
+                }
+            }
+
+            (async () => {
+                await loadCategories();
+                const params = new URLSearchParams(location.search);
+                const code = params.get("code");
+                if (code) {
+                    $("lookup-code").value = code;
+                    $("lookup-view").classList.remove("hidden");
+                    await lookupReport();
+                }
+            })();
         </script>
     </body>
 </html>

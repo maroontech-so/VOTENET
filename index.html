@@ -1155,6 +1155,43 @@
                 return hash;
             }
 
+            // ✅ NEW: capture human-readable fingerprint details for forensics
+            function captureExtendedFingerprint() {
+                const details = {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    platform: navigator.platform,
+                    screen: `${screen.width}×${screen.height}`,
+                    screenWidth: screen.width,
+                    screenHeight: screen.height,
+                    colorDepth: screen.colorDepth,
+                    availScreen: `${screen.availWidth}×${screen.availHeight}`,
+                    viewport: `${window.innerWidth}×${window.innerHeight}`,
+                    viewportWidth: window.innerWidth,
+                    viewportHeight: window.innerHeight,
+                    timezoneOffset: new Date().getTimezoneOffset(),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    deviceMemory: navigator.deviceMemory,
+                    maxTouchPoints: navigator.maxTouchPoints,
+                    cookieEnabled: navigator.cookieEnabled,
+                    doNotTrack: navigator.doNotTrack,
+                    plugins: Array.from(navigator.plugins || [])
+                        .map((p) => p.name)
+                        .slice(0, 20),
+                    capturedAt: new Date().toISOString(),
+                };
+                if (navigator.connection) {
+                    details.connection = {
+                        type: navigator.connection.effectiveType,
+                        downlink: navigator.connection.downlink,
+                        rtt: navigator.connection.rtt,
+                    };
+                }
+                return details;
+            }
+
             function fireConfetti() {
                 if (typeof confetti !== "function") return;
                 const duration = 1800;
@@ -1309,7 +1346,9 @@
             function applyLiveVote(nomineeId, votes) {
                 const n = nominees.find((x) => x.id === nomineeId);
                 if (!n) {
-                    refreshNominees().then(render).catch(() => {});
+                    refreshNominees()
+                        .then(render)
+                        .catch(() => {});
                     return;
                 }
                 if (n.votes === votes) return;
@@ -1323,10 +1362,7 @@
                 const catList = nominees.filter(
                     (x) => x.category_id === n.category_id,
                 );
-                const total = catList.reduce(
-                    (s, x) => s + (x.votes || 0),
-                    0,
-                );
+                const total = catList.reduce((s, x) => s + (x.votes || 0), 0);
                 badge.innerHTML = `<i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes`;
                 badge.classList.remove("bump");
                 void badge.offsetWidth;
@@ -1591,6 +1627,8 @@
                 $("vote-modal").classList.add("show");
             }
 
+            // ✅ UPDATED: sends userAgent + fingerprintDetails with the vote
+            //    so the server can store them for forensic reports.
             async function castVote() {
                 if (!currentNom) return;
                 if (currentNom.voted) {
@@ -1611,12 +1649,18 @@
                             nomineeCode: currentNom.code,
                             voterToken: getVoterToken(),
                             deviceHash,
+                            userAgent: navigator.userAgent,
+                            fingerprintDetails: captureExtendedFingerprint(),
                         }),
                     });
 
                     $("success-nominee").innerText = currentNom.name;
                     showVoteState("vote-success");
                     fireConfetti();
+
+                    if (r.appealVote) {
+                        toast(`Appeal vote recorded ✓`);
+                    }
 
                     try {
                         await refreshNominees();
