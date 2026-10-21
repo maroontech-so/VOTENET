@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#3f51b5" />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Vote Reports · Voteus Admin</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <style>
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            body {
+                background: #f9fafb;
+                color: #1d1d1f;
+            }
+            .btn {
+                background: #3f51b5;
+                color: #fff;
+                border-radius: 10px;
+                padding: 8px 16px;
+                font-weight: 500;
+                font-size: 13px;
+                border: none;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.15s;
+            }
+            .btn:hover {
+                background: #303f9f;
+            }
+            .btn-outline {
+                background: #fff;
+                color: #333;
+                border: 1px solid #d1d5db;
+            }
+            .btn-outline:hover {
+                background: #f9fafb;
+            }
+            .btn-danger {
+                background: #dc2626;
+            }
+            .btn-danger:hover {
+                background: #b91c1c;
+            }
+            table tbody tr {
+                transition: background 0.15s;
+            }
+            table tbody tr:hover {
+                background: #f9fafb;
+            }
+            .stat-card {
+                background: white;
+                border-radius: 14px;
+                border: 1px solid #f3f4f6;
+                padding: 16px 20px;
+                transition: all 0.2s;
+            }
+            .stat-card:hover {
+                box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.1);
+                transform: translateY(-2px);
+            }
+            .live-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 999px;
+                background: #22c55e;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                animation: livePulse 1.8s infinite;
+                display: inline-block;
+            }
+            .live-dot.offline {
+                background: #f59e0b;
+                animation: none;
+                box-shadow: none;
+            }
+            @keyframes livePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
+            }
+            .match-card {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 14px;
+                margin-bottom: 8px;
+            }
+            .badge {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .badge-high {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            .badge-medium {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .badge-weak {
+                background: #e5e7eb;
+                color: #4b5563;
+            }
+            .badge-ok {
+                background: #d1fae5;
+                color: #065f46;
+            }
+            .badge-warn {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .badge-bad {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            .badge-neutral {
+                background: #f3f4f6;
+                color: #6b7280;
+            }
+            .fingerprint-pre {
+                background: #f3f4f6;
+                border-radius: 8px;
+                padding: 12px;
+                font-family: "Courier New", monospace;
+                font-size: 11px;
+                color: #374151;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                word-break: break-all;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+        </style>
+    </head>
+    <body class="min-h-screen">
+        <!-- Not logged in -->
+        <div
+            id="login-view"
+            class="min-h-screen flex items-center justify-center p-4"
+        >
+            <div
+                class="bg-white border border-gray-200 rounded-2xl p-8 max-w-md w-full text-center shadow-sm"
+            >
+                <div
+                    class="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4"
+                >
+                    <i class="ph-fill ph-lock-key text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">Super Admin Required</h2>
+                <p class="text-gray-500 text-sm mb-6 leading-relaxed">
+                    This page contains forensic evidence — IP addresses,
+                    device fingerprints, and location data of other users.
+                    Access is restricted to the super administrator only.
+                </p>
+                <a
+                    href="/admin"
+                    class="btn w-full py-3 justify-center"
+                >
+                    <i class="ph ph-sign-in"></i> Sign in as super admin
+                </a>
+                <a
+                    href="/"
+                    class="block text-center text-xs text-gray-500 hover:text-gray-900 mt-4"
+                    >← Back to site</a
+                >
+            </div>
+        </div>
+
+        <!-- Forbidden (logged in but not super) -->
+        <div
+            id="forbidden-view"
+            class="hidden min-h-screen flex items-center justify-center p-4"
+        >
+            <div
+                class="bg-white border border-gray-200 rounded-2xl p-8 max-w-md w-full text-center shadow-sm"
+            >
+                <div
+                    class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4"
+                >
+                    <i class="ph-fill ph-shield-warning text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">Insufficient permissions</h2>
+                <p class="text-gray-500 text-sm mb-6 leading-relaxed">
+                    You are signed in as a regular administrator, but vote
+                    reports contain sensitive personal data. Only the super
+                    administrator can view this page.
+                </p>
+                <a href="/admin" class="btn w-full py-3 justify-center">
+                    <i class="ph ph-arrow-left"></i> Back to dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Main -->
+        <div id="main-view" class="hidden min-h-screen flex flex-col">
+            <header
+                class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20 shrink-0"
+            >
+                <div class="flex items-center gap-3">
+                    <a
+                        href="/admin"
+                        class="flex items-center gap-2 font-bold text-lg"
+                    >
+                        <i
+                            class="ph-fill ph-trophy text-indigo-600 text-2xl"
+                        ></i>
+                        Voteus<span class="text-gray-400 font-normal">.io</span>
+                    </a>
+                    <span
+                        class="hidden sm:inline-block text-xs font-medium text-gray-400 uppercase tracking-wider ml-2 pl-3 border-l border-gray-200"
+                        >Vote Reports</span
+                    >
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 text-xs text-gray-500">
+                        <span class="live-dot" id="live-dot"></span>
+                        <span id="live-status">Live</span>
+                    </div>
+                    <a
+                        href="/admin"
+                        class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                        ← Dashboard
+                    </a>
+                </div>
+            </header>
+
+            <main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+                <!-- Header row -->
+                <div
+                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6"
+                >
+                    <div>
+                        <h1 class="text-2xl font-bold">Vote Reports</h1>
+                        <p class="text-sm text-gray-500 mt-1">
+                            Forensic evidence for "I didn't vote but the
+                            system says I did" claims.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <select
+                            id="filter-verdict"
+                            onchange="render()"
+                            class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                        >
+                            <option value="">All verdicts</option>
+                            <option value="NO_RECORD_FOUND">
+                                No record found
+                            </option>
+                            <option value="FINGERPRINT_COLLISION">
+                                Fingerprint collision
+                            </option>
+                            <option value="VOTED_FROM_THIS_NETWORK">
+                                Voted from network
+                            </option>
+                            <option value="VOTED_BY_THIS_BROWSER">
+                                Voted by browser
+                            </option>
+                        </select>
+                        <input
+                            id="search"
+                            oninput="render()"
+                            class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white w-48"
+                            placeholder="Search code, IP, name…"
+                        />
+                        <button onclick="loadReports()" class="btn btn-outline">
+                            <i class="ph ph-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Counts -->
+                <div
+                    id="counts"
+                    class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+                ></div>
+
+                <!-- Reports table -->
+                <div
+                    class="bg-white border border-gray-200 rounded-xl overflow-hidden"
+                >
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead
+                                class="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wider"
+                            >
+                                <tr>
+                                    <th class="px-4 py-3">Report</th>
+                                    <th class="px-4 py-3">Time</th>
+                                    <th class="px-4 py-3">Verdict</th>
+                                    <th class="px-4 py-3">IP</th>
+                                    <th class="px-4 py-3">Reporter</th>
+                                    <th class="px-4 py-3 text-right">
+                                        Matches
+                                    </th>
+                                    <th class="px-4 py-3"></th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="reports-body"
+                                class="divide-y divide-gray-100"
+                            >
+                                <tr>
+                                    <td
+                                        colspan="7"
+                                        class="p-8 text-center text-gray-400"
+                                    >
+                                        Loading reports…
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detail panel -->
+                <div id="detail-panel" class="mt-6 hidden"></div>
+            </main>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+            const getToken = () => localStorage.getItem("vn_admin_token");
+            const getAdmin = () =>
+                JSON.parse(localStorage.getItem("vn_admin_user") || "null");
+            const isSuper = () => getAdmin()?.role === "super";
+
+            let ALL = [];
+            let liveStream = null;
+            let livePollTimer = null;
+            let liveRefreshTimer = null;
+
+            function escapeHtml(s) {
+                return String(s == null ? "" : s)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            async function api(url) {
+                const h = { "Content-Type": "application/json" };
+                if (getToken()) h.Authorization = "Bearer " + getToken();
+                const res = await fetch(url, { headers: h });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const err = new Error(
+                        data.error || `Request failed (${res.status})`,
+                    );
+                    err.status = res.status;
+                    throw err;
+                }
+                return data;
+            }
+
+            function verdictBadge(v) {
+                const map = {
+                    NO_RECORD_FOUND: {
+                        cls: "badge-ok",
+                        label: "No Record",
+                        icon: "ph-check-circle",
+                    },
+                    FINGERPRINT_COLLISION: {
+                        cls: "badge-bad",
+                        label: "Collision",
+                        icon: "ph-warning-octagon",
+                    },
+                    VOTED_FROM_THIS_NETWORK: {
+                        cls: "badge-warn",
+                        label: "Same Network",
+                        icon: "ph-wifi-high",
+                    },
+                    VOTED_BY_THIS_BROWSER: {
+                        cls: "badge-bad",
+                        label: "Voted (Browser)",
+                        icon: "ph-x-circle",
+                    },
+                };
+                const m =
+                    map[v] ||
+                    {
+                        cls: "badge-neutral",
+                        label: v,
+                        icon: "ph-question",
+                    };
+                return `<span class="badge ${m.cls}"><i class="ph-fill ${m.icon}"></i> ${m.label}</span>`;
+            }
+
+            function strengthBadge(s) {
+                const map = {
+                    high: "badge-high",
+                    medium: "badge-medium",
+                    weak: "badge-weak",
+                    low: "badge-weak",
+                };
+                return `<span class="badge ${
+                    map[s] || "badge-neutral"
+                }">${s || "?"}</span>`;
+            }
+
+            function render() {
+                const filter = $("filter-verdict").value;
+                const q = ($("search").value || "").trim().toLowerCase();
+
+                const list = ALL.filter((r) => {
+                    if (filter && r.verdict !== filter) return false;
+                    if (!q) return true;
+                    return (
+                        (r.report_code || "").toLowerCase().includes(q) ||
+                        (r.ip || "").toLowerCase().includes(q) ||
+                        (r.reporter_name || "").toLowerCase().includes(q) ||
+                        (r.reporter_contact || "").toLowerCase().includes(q) ||
+                        (r.report_description || "").toLowerCase().includes(q)
+                    );
+                });
+
+                // Counts
+                const counts = ALL.reduce(
+                    (a, r) => ({ ...a, [r.verdict]: (a[r.verdict] || 0) + 1 }),
+                    {},
+                );
+                const cardColors = {
+                    NO_RECORD_FOUND: {
+                        c: "bg-emerald-50 border-emerald-200",
+                        t: "text-emerald-700",
+                        l: "No Record (system at fault)",
+                    },
+                    FINGERPRINT_COLLISION: {
+                        c: "bg-red-50 border-red-200",
+                        t: "text-red-700",
+                        l: "Collision (system at fault)",
+                    },
+                    VOTED_FROM_THIS_NETWORK: {
+                        c: "bg-amber-50 border-amber-200",
+                        t: "text-amber-700",
+                        l: "Same Network (ambiguous)",
+                    },
+                    VOTED_BY_THIS_BROWSER: {
+                        c: "bg-red-50 border-red-200",
+                        t: "text-red-700",
+                        l: "Voted (Browser)",
+                    },
+                };
+                $("counts").innerHTML = Object.entries(cardColors)
+                    .map(
+                        ([k, v]) => `
+                    <div class="border ${v.c} rounded-xl px-4 py-3">
+                        <div class="text-[10px] font-bold uppercase tracking-wider ${v.t}">${v.l}</div>
+                        <div class="text-2xl font-bold text-gray-900 mt-1">${counts[k] || 0}</div>
+                    </div>
+                `,
+                    )
+                    .join("");
+
+                // Table
+                const tbody = $("reports-body");
+                if (!list.length) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-gray-400">${
+                        ALL.length
+                            ? "No reports match your filter."
+                            : "No reports yet. When users submit reports at /report, they will appear here."
+                    }</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = list
+                    .map(
+                        (r) => `
+                    <tr class="cursor-pointer" onclick="showDetail('${r.report_code}')">
+                        <td class="px-4 py-3 font-mono text-xs whitespace-nowrap">${escapeHtml(r.report_code)}</td>
+                        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${new Date(r.reported_at).toLocaleString()}</td>
+                        <td class="px-4 py-3">${verdictBadge(r.verdict)}</td>
+                        <td class="px-4 py-3 text-xs font-mono">${escapeHtml(r.ip)}</td>
+                        <td class="px-4 py-3 text-xs max-w-[200px] truncate">
+                            ${escapeHtml(r.reporter_name || "Anonymous")}
+                            ${r.reporter_contact ? `<br><span class="text-gray-400 text-[10px]">${escapeHtml(r.reporter_contact)}</span>` : ""}
+                        </td>
+                        <td class="px-4 py-3 text-xs text-right">${r.matches.length}</td>
+                        <td class="px-4 py-3 text-right">
+                            <button class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold">View →</button>
+                        </td>
+                    </tr>
+                `,
+                    )
+                    .join("");
+            }
+
+            function showDetail(code) {
+                const r = ALL.find((x) => x.report_code === code);
+                if (!r) return;
+                const panel = $("detail-panel");
+
+                const matchRows = r.matches.length
+                    ? r.matches
+                          .map((m, i) => {
+                              const geo = m.ip_geo || {};
+                              const location =
+                                  [geo.city, geo.region, geo.country]
+                                      .filter(Boolean)
+                                      .join(", ") || "—";
+                              return `
+                        <div class="match-card">
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <div class="text-xs font-bold text-gray-500">
+                                    Match #${i + 1} · <span class="font-mono">${escapeHtml(m.match_type)}</span>
+                                </div>
+                                ${strengthBadge(m.match_strength)}
+                            </div>
+                            <div class="text-sm font-semibold mb-0.5">${escapeHtml(m.nominee_name)}</div>
+                            <div class="text-xs text-gray-500 mb-2">${escapeHtml(m.category)} · <span class="font-mono">${escapeHtml(m.nominee_code)}</span></div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Voted At</div>
+                                    <div class="text-gray-800">${new Date(m.created_at).toLocaleString()}</div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">IP (full)</div>
+                                    <div class="font-mono text-gray-800">${escapeHtml(m.ip_at_vote || "—")}</div>
+                                </div>
+                                ${
+                                    location !== "—"
+                                        ? `<div class="col-span-2">
+                                            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Location</div>
+                                            <div class="text-gray-800">${escapeHtml(location)}</div>
+                                        </div>`
+                                        : ""
+                                }
+                                ${
+                                    geo.isp
+                                        ? `<div class="col-span-2">
+                                            <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Network / ISP</div>
+                                            <div class="text-gray-800">${escapeHtml(geo.isp)}${geo.asn ? " · AS" + escapeHtml(geo.asn) : ""}${geo.org ? " · " + escapeHtml(geo.org) : ""}</div>
+                                        </div>`
+                                        : ""
+                                }
+                                <div class="col-span-2">
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Match Reason</div>
+                                    <div class="text-gray-700">${escapeHtml(m.note)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                          })
+                          .join("")
+                    : '<div class="text-sm text-gray-500 py-4">No votes matched — this user did not vote.</div>';
+
+                const geo = r.geo || {};
+                const geoLine =
+                    [geo.city, geo.region, geo.country]
+                        .filter(Boolean)
+                        .join(", ") || "—";
+
+                panel.innerHTML = `
+                    <div class="bg-white border border-gray-200 rounded-xl p-6">
+                        <div class="flex items-start justify-between gap-3 mb-4">
+                            <div class="min-w-0">
+                                <div class="text-xs font-mono text-gray-500 mb-1">${escapeHtml(r.report_code)}</div>
+                                <div class="flex flex-wrap items-center gap-2 mb-1">
+                                    ${verdictBadge(r.verdict)}
+                                    <span class="text-sm text-gray-500">${new Date(r.reported_at).toLocaleString()}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">${r.matches.length} match${r.matches.length === 1 ? "" : "es"} found</p>
+                            </div>
+                            <button onclick="hideDetail()" class="text-gray-400 hover:text-gray-700 shrink-0" title="Close">
+                                <i class="ph ph-x text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-4 mb-4 text-sm">
+                            <div>
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Reporter</div>
+                                <div class="font-medium">${escapeHtml(r.reporter_name || "Anonymous")}</div>
+                                <div class="text-xs text-gray-500">${escapeHtml(r.reporter_contact || "—")}</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Reported From</div>
+                                <div class="font-mono text-xs">${escapeHtml(r.ip)}</div>
+                                <div class="text-xs text-gray-500">${escapeHtml(geoLine)}</div>
+                                ${geo.isp ? `<div class="text-xs text-gray-500">${escapeHtml(geo.isp)}${geo.asn ? " · AS" + escapeHtml(geo.asn) : ""}</div>` : ""}
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 rounded-xl p-4 mb-4">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">User's Description</div>
+                            <div class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(r.report_description)}</div>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Voter Token (this session)</div>
+                                <div class="text-xs font-mono break-all text-gray-700 bg-white border border-gray-200 rounded p-2">${escapeHtml(r.voter_token || "—")}</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Device Hash (this device)</div>
+                                <div class="text-xs font-mono break-all text-gray-700 bg-white border border-gray-200 rounded p-2">${escapeHtml(r.device_hash || "—")}</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Matches (${r.matches.length})</div>
+                            ${matchRows}
+                        </div>
+
+                        <details class="bg-gray-50 rounded-xl p-4">
+                            <summary class="text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                                Full fingerprint captured (${Object.keys(r.fingerprint || {}).length} fields)
+                            </summary>
+                            <pre class="fingerprint-pre mt-3">${escapeHtml(JSON.stringify(r.fingerprint, null, 2))}</pre>
+                        </details>
+
+                        <details class="bg-gray-50 rounded-xl p-4 mt-3">
+                            <summary class="text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">
+                                User agent string
+                            </summary>
+                            <div class="text-xs font-mono break-all mt-3 text-gray-700">${escapeHtml(r.user_agent || "—")}</div>
+                        </details>
+                    </div>
+                `;
+                panel.classList.remove("hidden");
+                panel.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+
+            function hideDetail() {
+                $("detail-panel").classList.add("hidden");
+                $("detail-panel").innerHTML = "";
+            }
+
+            async function loadReports() {
+                try {
+                    const d = await api("/api/admin/reports");
+                    ALL = d.reports || [];
+                    render();
+                } catch (e) {
+                    if (e.status === 403) {
+                        $("main-view").classList.add("hidden");
+                        $("login-view").classList.add("hidden");
+                        $("forbidden-view").classList.remove("hidden");
+                        return;
+                    }
+                    $("reports-body").innerHTML = `<tr><td colspan="7" class="p-6 text-center text-red-500">${escapeHtml(e.message)}</td></tr>`;
+                }
+            }
+
+            // Live updates — pull fresh reports when a new one is submitted
+            function setLiveStatus(ok) {
+                const dot = $("live-dot");
+                const label = $("live-status");
+                if (!dot || !label) return;
+                if (ok) {
+                    dot.classList.remove("offline");
+                    label.textContent = "Live";
+                } else {
+                    dot.classList.add("offline");
+                    label.textContent = "Polling";
+                }
+            }
+
+            function startLiveUpdates() {
+                if (livePollTimer) clearInterval(livePollTimer);
+                livePollTimer = setInterval(() => {
+                    if (document.hidden) return;
+                    loadReports();
+                }, 15_000);
+
+                if (typeof EventSource !== "undefined" && getToken()) {
+                    try {
+                        liveStream = new EventSource(
+                            "/api/live/admin?token=" +
+                                encodeURIComponent(getToken()),
+                        );
+                        liveStream.addEventListener("update", (e) => {
+                            setLiveStatus(true);
+                            try {
+                                const evt = JSON.parse(e.data);
+                                if (evt.type === "vote_report:new") {
+                                    if (liveRefreshTimer)
+                                        clearTimeout(liveRefreshTimer);
+                                    liveRefreshTimer = setTimeout(() => {
+                                        liveRefreshTimer = null;
+                                        loadReports();
+                                    }, 800);
+                                }
+                            } catch {}
+                        });
+                        liveStream.onopen = () => setLiveStatus(true);
+                        liveStream.onerror = () => {
+                            try {
+                                liveStream.close();
+                            } catch {}
+                            liveStream = null;
+                            setLiveStatus(false);
+                        };
+                    } catch (err) {
+                        console.warn("[SSE]", err.message);
+                        setLiveStatus(false);
+                    }
+                } else {
+                    setLiveStatus(false);
+                }
+            }
+
+            function stopLiveUpdates() {
+                if (livePollTimer) {
+                    clearInterval(livePollTimer);
+                    livePollTimer = null;
+                }
+                if (liveStream) {
+                    try {
+                        liveStream.close();
+                    } catch {}
+                    liveStream = null;
+                }
+                if (liveRefreshTimer) {
+                    clearTimeout(liveRefreshTimer);
+                    liveRefreshTimer = null;
+                }
+            }
+
+            // Boot
+            (function boot() {
+                const token = getToken();
+                const user = getAdmin();
+
+                if (!token || !user) {
+                    $("login-view").classList.remove("hidden");
+                    return;
+                }
+
+                if (!isSuper()) {
+                    $("forbidden-view").classList.remove("hidden");
+                    return;
+                }
+
+                $("main-view").classList.remove("hidden");
+                loadReports();
+                startLiveUpdates();
+
+                window.addEventListener("beforeunload", stopLiveUpdates);
+            })();
+        </script>
+    </body>
+</html>

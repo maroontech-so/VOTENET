@@ -1,3 +1,188 @@
+// server.js
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+const PORT = process.env.PORT || 3000;
+const ROOT = __dirname;
+const DATA_FILE = path.join(ROOT, "data.json");
+
+function loadData() {
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  } catch {
+    return { profiles: {}, messages: {} };
+  }
+}
+function saveData(d) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
+}
+let store = loadData();
+
+function send(res, status, body, type = "application/json; charset=utf-8") {
+  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
+  res.end(typeof body === "string" ? body : JSON.stringify(body));
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (c) => {
+      data += c;
+      if (data.length > 10 * 1024 * 1024) {
+        reject(new Error("payload too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+const cleanHandle = (h) => (h || "").trim().toLowerCase().replace(/[@\s]/g, "");
+const newId = () => crypto.randomBytes(8).toString("hex");
+
+async function handleApi(req, res, parts, url) {
+  const method = req.method;
+
+  // --- PROFILES ---
+  if (parts[1] === "profile") {
+    if (parts.length === 2 && method === "POST") {
+      const body = await readBody(req);
+      const h = cleanHandle(body.handle);
+      if (!h) return send(res, 400, { error: "handle required" });
+
+      const existing = store.profiles[h] || {};
+      const profile = {
+        handle: h,
+        photoURL:
+          body.photoURL !== undefined
+            ? body.photoURL
+            : existing.photoURL || null,
+        prompt:
+          body.prompt !== undefined
+            ? body.prompt
+            : existing.prompt || "send me anonymous messages!",
+        theme: body.theme !== undefined ? body.theme : existing.theme || "dark",
+        paused:
+          body.paused !== undefined ? body.paused : existing.paused || false,
+        createdAt: existing.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      store.profiles[h] = profile;
+      saveData(store);
+      return send(res, 200, profile);
+    }
+    if (parts.length === 3 && method === "GET") {
+      const p = store.profiles[cleanHandle(parts[2])];
+      return p ? send(res, 200, p) : send(res, 404, { error: "not found" });
+    }
+    if (parts.length === 3 && method === "DELETE") {
+      const h = cleanHandle(parts[2]);
+      delete store.profiles[h];
+      delete store.messages[h];
+      saveData(store);
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  // --- MESSAGES ---
+  if (parts[1] === "messages") {
+    const h = cleanHandle(parts[2]);
+
+    if (parts.length === 3 && method === "POST") {
+      const body = await readBody(req);
+      const msg = {
+        id: newId(),
+        text: (body.text || "").slice(0, 500),
+        files: Array.isArray(body.files) ? body.files.slice(0, 5) : [],
+        reply: null,
+        createdAt: Date.now(),
+      };
+      if (!store.messages[h]) store.messages[h] = [];
+      store.messages[h].unshift(msg);
+      saveData(store);
+      return send(res, 200, { id: msg.id });
+    }
+
+    if (parts.length === 3 && method === "GET") {
+      return send(res, 200, store.messages[h] || []);
+    }
+
+    if (parts.length === 4 && method === "DELETE") {
+      const id = parts[3];
+      store.messages[h] = (store.messages[h] || []).filter((x) => x.id !== id);
+      saveData(store);
+      return send(res, 200, { ok: true });
+    }
+
+    if (parts.length === 5 && method === "POST" && parts[4] === "reply") {
+      const id = parts[3];
+      const body = await readBody(req);
+      const m = (store.messages[h] || []).find((x) => x.id === id);
+      if (!m) return send(res, 404, { error: "not found" });
+      m.reply = (body.reply || "").slice(0, 240);
+      m.repliedAt = new Date().toISOString();
+      saveData(store);
+      return send(res, 200, { ok: true, message: m });
+    }
+  }
+
+  return send(res, 404, { error: "unknown endpoint" });
+}
+
+const MIME = {
+  ".html": "text/html",
+  ".js": "application/javascript",
+  ".css": "text/css",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".json": "application/json",
+};
+
+function serveStatic(req, res, pathname) {
+  let file = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+  if (file === "app") file = "app.html";
+  if (file === "send") file = "send.html";
+
+  if (file === "data.json" || file === "server.js")
+    return send(res, 403, "forbidden");
+
+  const fullPath = path.join(ROOT, file);
+  fs.readFile(fullPath, (err, data) => {
+    if (err) return send(res, 404, "not found");
+    res.writeHead(200, {
+      "Content-Type":
+        MIME[path.extname(fullPath)] || "application/octet-stream",
+    });
+    res.end(data);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
+    if (url.pathname.startsWith("/api/")) {
+      const parts = url.pathname.split("/").filter(Boolean); // FIXED ROUTING HERE
+      return await handleApi(req, res, parts, url);
+    }
+    serveStatic(req, res, url.pathname);
+  } catch (e) {
+    console.error(e);
+    send(res, 500, { error: "server error" });
+  }
+});
+
+server.listen(PORT, () =>
+  console.log(`\n  ✨ NGL running at http://localhost:${PORT}\n`),
+);
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
@@ -201,7 +386,9 @@ async function initSchema() {
   }
 
   try {
-    const r = await db.exec("UPDATE nominees SET votes = 0 WHERE votes IS NULL");
+    const r = await db.exec(
+      "UPDATE nominees SET votes = 0 WHERE votes IS NULL",
+    );
     if (r && r.changes)
       console.log(`[Schema] Normalized ${r.changes} NULL votes row(s)`);
   } catch (e) {
@@ -225,6 +412,61 @@ async function initSchema() {
     console.warn("[Schema] nominee_boosts:", e.message);
   }
 
+  // ============================================================
+  // ✅ NEW: Forensics — vote reports + IP geo cache
+  // ============================================================
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS vote_reports (
+        id TEXT PRIMARY KEY,
+        report_code TEXT UNIQUE NOT NULL,
+        reported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        ip TEXT,
+        user_agent TEXT,
+        voter_token TEXT,
+        device_hash TEXT,
+        fingerprint_details TEXT,
+        report_description TEXT,
+        reporter_name TEXT,
+        reporter_contact TEXT,
+        verdict TEXT NOT NULL,
+        matched_votes TEXT,
+        geo_info TEXT
+      )
+    `);
+    await db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_reports_code ON vote_reports(report_code)`,
+    );
+    await db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_reports_verdict ON vote_reports(verdict)`,
+    );
+    await db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_reports_reported_at ON vote_reports(reported_at)`,
+    );
+  } catch (e) {
+    console.warn("[Schema] vote_reports:", e.message);
+  }
+
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS ip_lookup_cache (
+        ip TEXT PRIMARY KEY,
+        country TEXT,
+        region TEXT,
+        city TEXT,
+        isp TEXT,
+        org TEXT,
+        asn TEXT,
+        fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (e) {
+    console.warn("[Schema] ip_lookup_cache:", e.message);
+  }
+
+  // ============================================================
+  // Existing migration: credits → timed access
+  // ============================================================
   try {
     const withCredits = await db
       .prepare(
@@ -323,6 +565,99 @@ function deepFind(obj, predicate, seen = new Set()) {
     }
   }
   return undefined;
+}
+
+// ✅ NEW: IP helpers for forensic report
+function cleanIP(ip) {
+  if (!ip) return "unknown";
+  if (ip.startsWith("::ffff:")) return ip.slice(7);
+  if (ip === "::1") return "127.0.0.1";
+  return ip;
+}
+
+function isPrivateIP(ip) {
+  return (
+    ip === "unknown" ||
+    ip === "127.0.0.1" ||
+    ip.startsWith("10.") ||
+    ip.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+  );
+}
+
+async function lookupIP(rawIp) {
+  const ip = cleanIP(rawIp);
+  if (isPrivateIP(ip)) {
+    return {
+      ip,
+      country: "Local/Private",
+      region: "",
+      city: "",
+      isp: "Local",
+      org: "",
+      asn: "",
+    };
+  }
+
+  try {
+    const cached = await db
+      .prepare("SELECT * FROM ip_lookup_cache WHERE ip = ?")
+      .get(ip);
+    if (cached) {
+      const ageMs = Date.now() - new Date(cached.fetched_at).getTime();
+      if (ageMs < 30 * 24 * 3600 * 1000) return cached;
+    }
+  } catch {}
+
+  try {
+    const r = await axios.get(`https://ipwho.is/${encodeURIComponent(ip)}`, {
+      timeout: 6000,
+      validateStatus: () => true,
+    });
+    if (r.status === 200 && r.data && r.data.success !== false) {
+      const d = r.data;
+      const row = {
+        ip,
+        country: d.country || "",
+        region: d.region || "",
+        city: d.city || "",
+        isp: (d.connection && d.connection.isp) || "",
+        org: (d.connection && d.connection.org) || "",
+        asn:
+          (d.connection && d.connection.asn && String(d.connection.asn)) || "",
+      };
+      try {
+        await db
+          .prepare(
+            `INSERT OR REPLACE INTO ip_lookup_cache
+             (ip, country, region, city, isp, org, asn, fetched_at)
+             VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
+          )
+          .run(
+            row.ip,
+            row.country,
+            row.region,
+            row.city,
+            row.isp,
+            row.org,
+            row.asn,
+          );
+      } catch {}
+      return row;
+    }
+  } catch (e) {
+    console.warn("[GeoIP]", ip, e.message);
+  }
+
+  return {
+    ip,
+    country: "Lookup failed",
+    region: "",
+    city: "",
+    isp: "",
+    org: "",
+    asn: "",
+  };
 }
 
 function auth(req, res, next) {
@@ -542,18 +877,19 @@ function shareBar(percent, width = 20) {
 }
 
 function escapeAttr(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
-    ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    })[c],
+  return String(s == null ? "" : s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
   );
 }
 
-// ✅ Report data — NO financial fields. Only voting data + signature.
 async function loadReportData(req) {
   const isSuper = req.admin.role === "super";
   const reportId = buildReportId();
@@ -677,10 +1013,9 @@ async function completeTransaction(reference, receipt) {
       if (txRow.type === "category_change") {
         const newCat = meta.newCategoryId;
         if (!newCat) throw new Error("Missing newCategoryId");
-        const target = await t.get(
-          "SELECT id FROM categories WHERE id = ?",
-          [newCat],
-        );
+        const target = await t.get("SELECT id FROM categories WHERE id = ?", [
+          newCat,
+        ]);
         if (!target) throw new Error("Target category no longer exists");
         await t.execute({
           sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
@@ -1060,9 +1395,7 @@ app.get("/verify", (req, res) => {
     valid = String(s).toUpperCase() === expected;
   }
 
-  const bg = valid
-    ? "from-emerald-50 to-green-100"
-    : "from-red-50 to-rose-100";
+  const bg = valid ? "from-emerald-50 to-green-100" : "from-red-50 to-rose-100";
   const bubble = valid
     ? "bg-emerald-100 text-emerald-600"
     : "bg-red-100 text-red-600";
@@ -1252,7 +1585,11 @@ app.post(
           )
           .run(id, cleanName, cleanEmail, hash);
       } catch (insErr) {
-        if (String(insErr.message || "").toLowerCase().includes("unique"))
+        if (
+          String(insErr.message || "")
+            .toLowerCase()
+            .includes("unique")
+        )
           return res.status(409).json({
             error:
               "An account with this email already exists. Try signing in instead.",
@@ -1692,8 +2029,7 @@ app.post(
     const { nomineeCode, voterToken, deviceHash } = req.body || {};
     if (!nomineeCode || !voterToken || !deviceHash)
       return res.status(400).json({
-        error:
-          "Nominee code, voter token, and device fingerprint are required",
+        error: "Nominee code, voter token, and device fingerprint are required",
       });
     if (
       typeof deviceHash !== "string" ||
@@ -1712,7 +2048,7 @@ app.post(
       .prepare("SELECT * FROM nominees WHERE code = ?")
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
 
     let result;
     try {
@@ -1757,7 +2093,11 @@ app.post(
       });
     } catch (e) {
       console.error("[Vote]", e.message);
-      if (String(e.message || "").toLowerCase().includes("unique"))
+      if (
+        String(e.message || "")
+          .toLowerCase()
+          .includes("unique")
+      )
         return res.status(409).json({
           error: "This device has already voted in this category.",
           code: "DEVICE_ALREADY_VOTED",
@@ -2017,7 +2357,339 @@ app.post("/api/payhero/callback", (req, res) => {
 });
 
 // ============================================================
-// ADMIN: STATS (dashboard — still shows revenue to super)
+// ✅ NEW: FORENSIC REPORT — "I didn't vote but system says I did"
+// ============================================================
+const VERDICT_MESSAGES = {
+  NO_RECORD_FOUND:
+    "No votes exist on record for your browser, your device fingerprint, or your network. If you saw an 'already voted' message, it was NOT because of a recorded vote — it was a frontend/UI bug or a transient loading state.",
+  FINGERPRINT_COLLISION:
+    "A vote WAS recorded, but from a DIFFERENT browser, at a DIFFERENT IP address, with a device fingerprint that matches yours. This proves the system wrongly blocked you because fingerprint collisions are happening. You did not vote — someone else's device generated the same signature as yours.",
+  VOTED_FROM_THIS_NETWORK:
+    "A vote was recorded from your network (same IP address), but from a different browser/fingerprint. If you are on a shared network (e.g., campus wifi, home router, mobile carrier), someone near you voted. This is weak evidence — it does not prove you voted, but it explains why your network is flagged.",
+  VOTED_BY_THIS_BROWSER:
+    "Your exact browser session has a vote on record. This means either you (or someone using your device) pressed the vote button. If you are certain you didn't, check the device — someone with physical access may have voted on your behalf.",
+};
+
+app.post(
+  "/api/report-auto-vote",
+  rateLimit({ key: "report-auto", max: 5 }),
+  async (req, res) => {
+    try {
+      const {
+        name,
+        contact,
+        description,
+        voterToken,
+        deviceHash,
+        fingerprintDetails,
+      } = req.body || {};
+
+      if (!description || String(description).trim().length < 10) {
+        return res.status(400).json({
+          error: "Please describe what happened (at least 10 characters)",
+        });
+      }
+
+      const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+      const ua = String(req.headers["user-agent"] || "").slice(0, 500);
+
+      const matches = [];
+      const seen = new Set();
+      const pushMatch = (v, matchType, strength, note) => {
+        const key = `${v.created_at}|${v.nominee_code}|${v.ip}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        matches.push({
+          created_at: v.created_at,
+          nominee_code: v.nominee_code,
+          nominee_name: v.nominee_name,
+          category: v.category,
+          ip_at_vote: cleanIP(v.ip || ""),
+          match_type: matchType,
+          match_strength: strength,
+          note: note || "",
+        });
+      };
+
+      // 1. Own voter_token
+      if (voterToken && typeof voterToken === "string") {
+        try {
+          const ownRows = await db
+            .prepare(
+              `SELECT fv.created_at, fv.ip, fv.device_hash,
+                      n.code AS nominee_code, n.name AS nominee_name,
+                      c.name AS category
+               FROM free_votes fv
+               JOIN nominees n ON n.id = fv.nominee_id
+               JOIN categories c ON c.id = fv.category_id
+               WHERE fv.voter_token = ?
+               ORDER BY fv.created_at ASC`,
+            )
+            .all(voterToken);
+          ownRows.forEach((v) =>
+            pushMatch(
+              v,
+              "own_token",
+              "high",
+              "This exact browser session is on record",
+            ),
+          );
+        } catch (e) {
+          console.warn("[Report] own_token lookup:", e.message);
+        }
+      }
+
+      // 2. Same device_hash (collision candidates)
+      if (deviceHash && typeof deviceHash === "string") {
+        try {
+          const hashRows = await db
+            .prepare(
+              `SELECT fv.created_at, fv.ip, fv.device_hash, fv.voter_token,
+                      n.code AS nominee_code, n.name AS nominee_name,
+                      c.name AS category
+               FROM free_votes fv
+               JOIN nominees n ON n.id = fv.nominee_id
+               JOIN categories c ON c.id = fv.category_id
+               WHERE fv.device_hash = ?
+               ORDER BY fv.created_at ASC`,
+            )
+            .all(deviceHash);
+          hashRows.forEach((v) => {
+            const sameIp = cleanIP(v.ip) === ip;
+            const sameToken = v.voter_token === voterToken;
+            if (sameToken) return;
+            pushMatch(
+              v,
+              sameIp ? "same_hash_same_ip" : "collision",
+              sameIp ? "medium" : "low",
+              sameIp
+                ? "Same fingerprint AND same IP (probably same device, cleared storage)"
+                : "Same fingerprint, different IP (fingerprint collision — different device)",
+            );
+          });
+        } catch (e) {
+          console.warn("[Report] device_hash lookup:", e.message);
+        }
+      }
+
+      // 3. Same IP
+      if (ip && !isPrivateIP(ip)) {
+        try {
+          const ipRows = await db
+            .prepare(
+              `SELECT fv.created_at, fv.ip, fv.device_hash, fv.voter_token,
+                      n.code AS nominee_code, n.name AS nominee_name,
+                      c.name AS category
+               FROM free_votes fv
+               JOIN nominees n ON n.id = fv.nominee_id
+               JOIN categories c ON c.id = fv.category_id
+               WHERE fv.ip = ?
+               ORDER BY fv.created_at ASC
+               LIMIT 50`,
+            )
+            .all(ip);
+          ipRows.forEach((v) => {
+            if (v.voter_token === voterToken) return;
+            pushMatch(
+              v,
+              "same_ip",
+              "weak",
+              "Same network IP only — different browser and fingerprint",
+            );
+          });
+        } catch (e) {
+          console.warn("[Report] same_ip lookup:", e.message);
+        }
+      }
+
+      // Verdict
+      let verdict;
+      if (matches.length === 0) verdict = "NO_RECORD_FOUND";
+      else if (matches.some((m) => m.match_type === "own_token"))
+        verdict = "VOTED_BY_THIS_BROWSER";
+      else if (matches.some((m) => m.match_type === "collision"))
+        verdict = "FINGERPRINT_COLLISION";
+      else verdict = "VOTED_FROM_THIS_NETWORK";
+
+      // Geo lookups
+      const reporterGeo = await lookupIP(ip);
+      const uniqueVotingIps = [
+        ...new Set(matches.map((m) => m.ip_at_vote)),
+      ].filter((v) => v && v !== "unknown" && !isPrivateIP(v));
+      const geosByIp = {};
+      for (const vip of uniqueVotingIps.slice(0, 10)) {
+        geosByIp[vip] = await lookupIP(vip);
+      }
+      for (const m of matches) {
+        if (m.ip_at_vote && geosByIp[m.ip_at_vote]) {
+          m.ip_geo = geosByIp[m.ip_at_vote];
+        }
+      }
+
+      // Persist
+      const reportCode = `RPT-${Date.now().toString(36).toUpperCase()}-${crypto
+        .randomBytes(3)
+        .toString("hex")
+        .toUpperCase()}`;
+      const id = uuidv4();
+
+      await db
+        .prepare(
+          `INSERT INTO vote_reports (
+             id, report_code, ip, user_agent, voter_token, device_hash,
+             fingerprint_details, report_description, reporter_name, reporter_contact,
+             verdict, matched_votes, geo_info
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          id,
+          reportCode,
+          ip,
+          ua,
+          voterToken || null,
+          deviceHash || null,
+          JSON.stringify(fingerprintDetails || {}),
+          String(description).slice(0, 2000),
+          (name || "").slice(0, 100),
+          (contact || "").slice(0, 200),
+          verdict,
+          JSON.stringify({ matches }),
+          JSON.stringify(reporterGeo),
+        );
+
+      console.log(
+        `[Report] ${reportCode} from ${ip} → ${verdict} (${matches.length} match${
+          matches.length === 1 ? "" : "es"
+        })`,
+      );
+      broadcastAdminEvent({ type: "vote_report:new", reportCode, verdict });
+
+      const maskIp = (v) => {
+        if (!v || v === "unknown") return v;
+        if (v === ip) return v;
+        if (v.includes(":")) {
+          const parts = v.split(":");
+          return parts.slice(0, 2).join(":") + ":····";
+        }
+        const p = v.split(".");
+        if (p.length === 4) return `${p[0]}.${p[1]}.xxx.xxx`;
+        return v;
+      };
+
+      res.json({
+        success: true,
+        reportCode,
+        verdict,
+        message: VERDICT_MESSAGES[verdict],
+        yourIP: ip,
+        yourIPInfo: reporterGeo,
+        matchCount: matches.length,
+        matches: matches.map((m) => ({
+          ...m,
+          ip_at_vote: maskIp(m.ip_at_vote),
+          ip_geo: m.ip_geo
+            ? {
+                country: m.ip_geo.country,
+                region: m.ip_geo.region,
+                city: m.ip_geo.city,
+                isp: m.ip_geo.isp,
+                org: m.ip_geo.org,
+                asn: m.ip_geo.asn,
+              }
+            : null,
+        })),
+      });
+    } catch (e) {
+      console.error("[Report] Fatal:", e);
+      res.status(500).json({ error: "Report failed: " + e.message });
+    }
+  },
+);
+
+app.get("/api/report/:code", async (req, res) => {
+  const code = String(req.params.code || "")
+    .trim()
+    .toUpperCase();
+  if (!/^RPT-[A-Z0-9]+-[A-Z0-9]+$/.test(code)) {
+    return res.status(400).json({ error: "Invalid report code" });
+  }
+  const row = await db
+    .prepare("SELECT * FROM vote_reports WHERE report_code = ?")
+    .get(code);
+  if (!row) return res.status(404).json({ error: "Report not found" });
+
+  let matches = [];
+  try {
+    matches = JSON.parse(row.matched_votes || "{}").matches || [];
+  } catch {}
+  let geo = {};
+  try {
+    geo = JSON.parse(row.geo_info || "{}");
+  } catch {}
+
+  res.json({
+    reportCode: row.report_code,
+    reportedAt: row.reported_at,
+    verdict: row.verdict,
+    description: row.report_description,
+    matchCount: matches.length,
+    matches,
+    yourIP: row.ip,
+    yourIPInfo: geo,
+  });
+});
+
+app.get("/api/admin/reports", superAuth, async (req, res) => {
+  const verdict = req.query.verdict ? String(req.query.verdict) : null;
+  const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
+
+  const where = verdict ? "WHERE verdict = ?" : "";
+  const params = verdict ? [verdict, limit] : [limit];
+
+  const rows = await db
+    .prepare(
+      `SELECT * FROM vote_reports ${where}
+       ORDER BY reported_at DESC LIMIT ?`,
+    )
+    .all(...params);
+
+  const enriched = rows.map((r) => {
+    let matches = [];
+    try {
+      matches = JSON.parse(r.matched_votes || "{}").matches || [];
+    } catch {}
+    let geo = {};
+    try {
+      geo = JSON.parse(r.geo_info || "{}");
+    } catch {}
+    let fp = {};
+    try {
+      fp = JSON.parse(r.fingerprint_details || "{}");
+    } catch {}
+    return {
+      ...r,
+      matched_votes: undefined,
+      geo_info: undefined,
+      fingerprint_details: undefined,
+      matches,
+      geo,
+      fingerprint: fp,
+    };
+  });
+
+  const counts = (
+    await db
+      .prepare(
+        `SELECT verdict, COUNT(*) AS c FROM vote_reports GROUP BY verdict`,
+      )
+      .all()
+  ).reduce((a, r) => ({ ...a, [r.verdict]: r.c }), {});
+
+  res.json({ reports: enriched, counts, total: enriched.length });
+});
+
+// ============================================================
+// ADMIN: STATS
 // ============================================================
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
@@ -2069,7 +2741,9 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
     ).t;
     const pending = (
       await db
-        .prepare(`SELECT COUNT(*) as c FROM transactions WHERE status='pending'`)
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='pending'`,
+        )
         .get()
     ).c;
     const successful = (
@@ -2346,7 +3020,7 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: TRANSACTIONS / LOGS (super only)
+// ADMIN: TRANSACTIONS / LOGS
 // ============================================================
 app.get("/api/admin/transactions", superAuth, async (req, res) => {
   res.json(
@@ -2547,9 +3221,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       doc.y += 3;
     };
 
-    // ============================================================
-    // PAGE 1 — Cover + Executive Summary (no finance)
-    // ============================================================
     doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
 
     doc.moveDown(1.2);
@@ -2683,14 +3354,10 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .font("Helvetica-Bold")
         .text(String(value), x + 12, y + 22, { width: cardW - 24 });
     }
-    doc.y =
-      gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
+    doc.y = gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
 
     footer();
 
-    // ============================================================
-    // RESULTS BY CATEGORY
-    // ============================================================
     doc.addPage();
     doc
       .fillColor(INDIGO)
@@ -2829,9 +3496,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
 
     footer();
 
-    // ============================================================
-    // SIGNATURE PAGE — QR-verifiable
-    // ============================================================
     doc.addPage();
 
     doc
@@ -3060,18 +3724,13 @@ app.get("/sitemap.xml", async (req, res) => {
   }
 });
 
-// ✅ Deep Link Redirect: Handles /nominee/:code by redirecting to the main voting page
-//    with the code as a query parameter, which the frontend (index.html) can parse.
 app.get("/nominee/:code", async (req, res) => {
   try {
     const nominee = await db
       .prepare("SELECT id, code FROM nominees WHERE code = ?")
       .get(req.params.code);
     if (!nominee) return res.redirect("/");
-
-    // Redirect to the main voting page with the nominee code as a query param
-    const redirectUrl = `/?c=${encodeURIComponent(nominee.code)}`;
-    res.redirect(redirectUrl);
+    res.redirect(`/?c=${encodeURIComponent(nominee.code)}`);
   } catch (e) {
     console.error("[Nominee Redirect]", e.message);
     res.redirect("/");
@@ -3107,6 +3766,8 @@ function sendHTMLNoCache(file) {
 app.get("/", sendHTMLNoCache("index.html"));
 app.get("/nominee", sendHTMLNoCache("nominee.html"));
 app.get("/admin", sendHTMLNoCache("admin.html"));
+app.get("/report", sendHTMLNoCache("report.html"));
+app.get("/admin/reports", sendHTMLNoCache("admin-reports.html"));
 
 // ============================================================
 // CLEANUP JOBS
@@ -3295,6 +3956,9 @@ const server = app.listen(PORT, async () => {
   );
   console.log(`  Exports:     /api/admin/export/{csv,pdf} · no financial data`);
   console.log(`  QR verify:   /verify · ${QRCode ? "enabled" : "text-only"}`);
+  console.log(
+    `  Forensics:   /report · /api/report-auto-vote · /admin/reports`,
+  );
   console.log(`  Leaderboard: 1m=10 · 1h=25 · 12h=50 · 24h=100`);
   console.log(
     `  Boost:       +${BOOST_VOTES} votes = KES ${PRICES.boost_50} (once)`,

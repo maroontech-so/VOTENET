@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#0f172a" />
+        <title>Vote Report · Voteus</title>
+        <meta name="robots" content="noindex, nofollow" />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <style>
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            body {
+                background: #f8fafc;
+                color: #1d1d1f;
+            }
+            .card {
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 18px;
+                box-shadow: 0 4px 24px -8px rgba(15, 23, 42, 0.08);
+            }
+            .btn {
+                background: #2563eb;
+                color: #fff;
+                border-radius: 12px;
+                padding: 12px 22px;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+            }
+            .btn:hover {
+                background: #1d4ed8;
+            }
+            .btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .btn-outline {
+                background: #fff;
+                color: #374151;
+                border: 1px solid #e5e7eb;
+            }
+            .btn-outline:hover {
+                background: #f9fafb;
+            }
+            .input {
+                width: 100%;
+                padding: 12px 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                font-size: 15px;
+                background: #fff;
+            }
+            .input:focus {
+                outline: none;
+                border-color: #2563eb;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            }
+            .verdict-ok {
+                background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+                border: 2px solid #10b981;
+            }
+            .verdict-bad {
+                background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+                border: 2px solid #ef4444;
+            }
+            .verdict-warn {
+                background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+                border: 2px solid #f59e0b;
+            }
+            .verdict-neutral {
+                background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+                border: 2px solid #6b7280;
+            }
+        </style>
+    </head>
+    <body class="min-h-screen py-8 px-4">
+        <div class="max-w-2xl mx-auto">
+            <div class="text-center mb-6">
+                <a
+                    href="/"
+                    class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 mb-4"
+                >
+                    <i class="ph ph-arrow-left"></i> Back to voting
+                </a>
+                <div
+                    class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                >
+                    <i class="ph-fill ph-shield-check text-3xl"></i>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                    Report a Voting Issue
+                </h1>
+                <p class="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+                    If the system said you already voted but you never did,
+                    submit this form. We'll match your device fingerprint
+                    against our records and show you exactly what we find — no
+                    guessing.
+                </p>
+            </div>
+
+            <div id="form-view" class="card p-6 sm:p-8">
+                <div class="space-y-4">
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >
+                            Your Name
+                            <span class="text-gray-400 font-normal normal-case"
+                                >(optional)</span
+                            >
+                        </label>
+                        <input
+                            id="r-name"
+                            class="input"
+                            placeholder="e.g. Jane Doe"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >
+                            Phone or Email
+                            <span class="text-gray-400 font-normal normal-case"
+                                >(optional, for follow-up)</span
+                            >
+                        </label>
+                        <input
+                            id="r-contact"
+                            class="input"
+                            placeholder="07XX XXX XXX or email"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                        >
+                            What happened?
+                        </label>
+                        <textarea
+                            id="r-desc"
+                            class="input resize-none"
+                            rows="4"
+                            placeholder="e.g. I opened the link, clicked on a nominee, and the button said 'Voted' before I could do anything. I have never voted in this category before."
+                        ></textarea>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                        <div class="flex items-start gap-3">
+                            <i
+                                class="ph-fill ph-info text-blue-600 text-xl shrink-0 mt-0.5"
+                            ></i>
+                            <div class="text-xs text-blue-900 leading-relaxed">
+                                <strong>What we capture automatically</strong> —
+                                your device fingerprint (same method used when
+                                voting), your browser token, and your IP
+                                address. We do not capture personal files,
+                                photos, or messages. Everything stays on our
+                                server for 30 days.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        id="submit-btn"
+                        onclick="submitReport()"
+                        class="btn w-full py-3.5"
+                    >
+                        <i class="ph ph-paper-plane-tilt"></i> Submit Report
+                    </button>
+                    <p class="text-[11px] text-gray-400 text-center">
+                        Takes about 5 seconds · You'll see the full forensic
+                        result immediately
+                    </p>
+                </div>
+            </div>
+
+            <div id="result-view" class="hidden"></div>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+            const VOTER_TOKEN_KEY = "vn_voter_token";
+
+            function getVoterToken() {
+                let t = localStorage.getItem(VOTER_TOKEN_KEY);
+                if (!t || typeof t !== "string" || t.length < 10) return null;
+                return t;
+            }
+
+            // SAME algorithm as index.html — required for valid match
+            async function getDeviceFingerprint() {
+                if (window.__voteus_fp) return window.__voteus_fp;
+                const parts = [];
+                try {
+                    parts.push(navigator.userAgent || "");
+                    parts.push(navigator.language || "");
+                    parts.push((navigator.languages || []).join(","));
+                    parts.push(String(navigator.platform || ""));
+                    parts.push(
+                        `${screen.width}x${screen.height}x${screen.colorDepth}`,
+                    );
+                    parts.push(String(new Date().getTimezoneOffset()));
+                    parts.push(String(navigator.hardwareConcurrency || 0));
+                    parts.push(String(navigator.deviceMemory || 0));
+                    parts.push(String(navigator.maxTouchPoints || 0));
+                    parts.push(String(screen.availWidth || 0));
+                    parts.push(String(screen.availHeight || 0));
+                    parts.push(String(window.innerWidth));
+                    parts.push(String(window.innerHeight));
+                    parts.push(String(navigator.cookieEnabled));
+                    parts.push(String(navigator.doNotTrack));
+                    parts.push(String(navigator.plugins.length));
+
+                    try {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = 240;
+                        canvas.height = 60;
+                        const ctx = canvas.getContext("2d");
+                        if (ctx) {
+                            ctx.textBaseline = "top";
+                            ctx.font = "16px 'Arial'";
+                            ctx.fillStyle = "#f60";
+                            ctx.fillRect(100, 1, 62, 20);
+                            ctx.fillStyle = "#069";
+                            ctx.fillText("Voteus🔒Fp", 2, 15);
+                            ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+                            ctx.fillText("Voteus🔒Fp", 4, 17);
+                            parts.push(canvas.toDataURL());
+                        }
+                    } catch {}
+
+                    try {
+                        const canvas = document.createElement("canvas");
+                        const gl =
+                            canvas.getContext("webgl") ||
+                            canvas.getContext("experimental-webgl");
+                        if (gl) {
+                            const dbg = gl.getExtension(
+                                "WEBGL_debug_renderer_info",
+                            );
+                            if (dbg) {
+                                parts.push(
+                                    String(
+                                        gl.getParameter(
+                                            dbg.UNMASKED_VENDOR_WEBGL,
+                                        ) || "",
+                                    ),
+                                );
+                                parts.push(
+                                    String(
+                                        gl.getParameter(
+                                            dbg.UNMASKED_RENDERER_WEBGL,
+                                        ) || "",
+                                    ),
+                                );
+                            }
+                        }
+                    } catch {}
+                } catch {}
+
+                const raw = parts.join("||");
+                let hash;
+                try {
+                    const buf = await crypto.subtle.digest(
+                        "SHA-256",
+                        new TextEncoder().encode(raw),
+                    );
+                    hash = Array.from(new Uint8Array(buf))
+                        .map((b) => b.toString(16).padStart(2, "0"))
+                        .join("");
+                } catch {
+                    let h = 0;
+                    for (let i = 0; i < raw.length; i++)
+                        h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+                    hash =
+                        "fp_" +
+                        Math.abs(h).toString(16).padStart(8, "0") +
+                        "_" +
+                        raw.length.toString(16);
+                }
+                window.__voteus_fp = hash;
+                return hash;
+            }
+
+            function captureExtendedFingerprint() {
+                const details = {
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    platform: navigator.platform,
+                    screen: `${screen.width}x${screen.height}@${screen.colorDepth}`,
+                    availScreen: `${screen.availWidth}x${screen.availHeight}`,
+                    viewport: `${window.innerWidth}x${window.innerHeight}`,
+                    timezoneOffset: new Date().getTimezoneOffset(),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    hardwareConcurrency: navigator.hardwareConcurrency,
+                    deviceMemory: navigator.deviceMemory,
+                    maxTouchPoints: navigator.maxTouchPoints,
+                    cookieEnabled: navigator.cookieEnabled,
+                    doNotTrack: navigator.doNotTrack,
+                    plugins: Array.from(navigator.plugins || [])
+                        .map((p) => p.name)
+                        .slice(0, 20),
+                    capturedAt: new Date().toISOString(),
+                };
+                if (navigator.connection) {
+                    details.connection = {
+                        type: navigator.connection.effectiveType,
+                        downlink: navigator.connection.downlink,
+                        rtt: navigator.connection.rtt,
+                        saveData: navigator.connection.saveData,
+                    };
+                }
+                return details;
+            }
+
+            function escapeHtml(s) {
+                return String(s == null ? "" : s)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            async function submitReport() {
+                const name = $("r-name").value.trim();
+                const contact = $("r-contact").value.trim();
+                const description = $("r-desc").value.trim();
+
+                if (description.length < 10) {
+                    alert(
+                        "Please describe what happened (at least 10 characters).",
+                    );
+                    return;
+                }
+
+                const btn = $("submit-btn");
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin"></i> Analyzing your device…';
+
+                try {
+                    const deviceHash = await getDeviceFingerprint();
+                    const voterToken = getVoterToken();
+                    const fingerprintDetails = captureExtendedFingerprint();
+
+                    const res = await fetch("/api/report-auto-vote", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            name,
+                            contact,
+                            description,
+                            voterToken,
+                            deviceHash,
+                            fingerprintDetails,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Report failed");
+
+                    renderResult(data);
+                } catch (e) {
+                    alert(e.message || "Report failed. Please try again.");
+                    btn.disabled = false;
+                    btn.innerHTML =
+                        '<i class="ph ph-paper-plane-tilt"></i> Submit Report';
+                }
+            }
+
+            function renderResult(d) {
+                $("form-view").classList.add("hidden");
+                const v = d.verdict;
+                const isOk =
+                    v === "NO_RECORD_FOUND" || v === "FINGERPRINT_COLLISION";
+                const isBad = v === "VOTED_BY_THIS_BROWSER";
+                const isWarn = v === "VOTED_FROM_THIS_NETWORK";
+
+                const cls = isOk
+                    ? "verdict-ok"
+                    : isBad
+                      ? "verdict-bad"
+                      : isWarn
+                        ? "verdict-warn"
+                        : "verdict-neutral";
+                const icon = isOk
+                    ? "ph-check-circle"
+                    : isBad
+                      ? "ph-x-circle"
+                      : isWarn
+                        ? "ph-warning"
+                        : "ph-info";
+                const iconColor = isOk
+                    ? "text-emerald-600"
+                    : isBad
+                      ? "text-red-600"
+                      : isWarn
+                        ? "text-amber-600"
+                        : "text-gray-600";
+                const title = isOk
+                    ? "You did NOT vote — confirmed"
+                    : isBad
+                      ? "A vote IS on record"
+                      : isWarn
+                        ? "A vote exists near your network"
+                        : "No clear match";
+
+                const rows =
+                    d.matches && d.matches.length
+                        ? d.matches
+                              .map((m, i) => {
+                                  const geo = m.ip_geo || {};
+                                  const location =
+                                      [
+                                          geo.city,
+                                          geo.region,
+                                          geo.country,
+                                      ]
+                                          .filter(Boolean)
+                                          .join(", ") || "Unknown location";
+                                  const strengthLabel =
+                                      m.match_strength === "high"
+                                          ? "High"
+                                          : m.match_strength === "medium"
+                                            ? "Medium"
+                                            : m.match_strength === "weak"
+                                              ? "Weak"
+                                              : "Low";
+                                  return `
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Record #${i + 1}</div>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    m.match_strength === "high"
+                                        ? "bg-red-100 text-red-700"
+                                        : m.match_strength === "medium"
+                                          ? "bg-amber-100 text-amber-700"
+                                          : "bg-gray-100 text-gray-600"
+                                }">${strengthLabel} match</span>
+                            </div>
+                            <div class="text-sm font-semibold text-gray-900 mb-1">${escapeHtml(m.nominee_name)} · ${escapeHtml(m.category)}</div>
+                            <div class="text-xs text-gray-500 font-mono mb-3">${escapeHtml(m.nominee_code)}</div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Voted At</div>
+                                    <div class="text-gray-800 font-medium">${new Date(m.created_at).toLocaleString()}</div>
+                                </div>
+                                <div>
+                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">IP Address</div>
+                                    <div class="text-gray-800 font-mono">${escapeHtml(m.ip_at_vote || "—")}</div>
+                                </div>
+                                <div class="col-span-2">
+                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Network / Location</div>
+                                    <div class="text-gray-800">${escapeHtml(location)}${geo.isp ? " · " + escapeHtml(geo.isp) : ""}</div>
+                                </div>
+                                <div class="col-span-2">
+                                    <div class="text-gray-400 font-bold uppercase text-[10px] tracking-wider">Match Reason</div>
+                                    <div class="text-gray-700">${escapeHtml(m.note)}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                              })
+                              .join("")
+                        : '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-sm text-gray-500">No votes recorded for your fingerprint, browser, or network.</div>';
+
+                const yourGeo = d.yourIPInfo || {};
+                const yourLocation =
+                    [yourGeo.city, yourGeo.region, yourGeo.country]
+                        .filter(Boolean)
+                        .join(", ") || "—";
+
+                $("result-view").innerHTML = `
+                    <div class="${cls} rounded-2xl p-6 mb-6">
+                        <div class="flex items-start gap-3 mb-3">
+                            <i class="ph-fill ${icon} ${iconColor} text-3xl shrink-0"></i>
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900">${title}</h2>
+                                <div class="text-xs font-mono font-bold text-gray-500 mt-1">${escapeHtml(d.reportCode)}</div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-700 leading-relaxed">${escapeHtml(d.message)}</p>
+                    </div>
+
+                    <div class="card p-5 mb-4">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Your Connection</h3>
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <div class="text-[10px] text-gray-400 font-bold uppercase">Your IP</div>
+                                <div class="font-mono text-gray-900">${escapeHtml(d.yourIP)}</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-gray-400 font-bold uppercase">Location</div>
+                                <div class="text-gray-900">${escapeHtml(yourLocation)}</div>
+                            </div>
+                            ${yourGeo.isp ? `<div class="col-span-2"><div class="text-[10px] text-gray-400 font-bold uppercase">ISP</div><div class="text-gray-900">${escapeHtml(yourGeo.isp)}${yourGeo.asn ? " · AS" + escapeHtml(yourGeo.asn) : ""}</div></div>` : ""}
+                        </div>
+                    </div>
+
+                    <div class="card p-5 mb-4">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                            Records found (${d.matchCount})
+                        </h3>
+                        ${rows}
+                    </div>
+
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-xs text-gray-600 leading-relaxed">
+                        <strong>Save your report code:</strong>
+                        <span class="font-mono font-bold text-gray-900">${escapeHtml(d.reportCode)}</span>
+                        — you can use it to look up this report at any time, or to
+                        cross-reference with the admin team.
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button onclick="window.print()" class="btn btn-outline flex-1">
+                            <i class="ph ph-printer"></i> Print / Save PDF
+                        </button>
+                        <button onclick="location.reload()" class="btn flex-1">
+                            <i class="ph ph-arrow-clockwise"></i> New Report
+                        </button>
+                    </div>
+                `;
+                $("result-view").classList.remove("hidden");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+        </script>
+    </body>
+</html>
