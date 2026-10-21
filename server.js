@@ -193,8 +193,7 @@ async function initSchema() {
     console.warn("[Schema] category_id backfill:", e.message);
   }
 
-  // ✅ FIX: normalize any NULL votes rows left over from older schemas or
-  // cloud pulls. Without this, `votes = votes + 1` produces NULL forever.
+  // ✅ FIX: normalize NULL votes so `votes = votes + 1` can never freeze at NULL.
   try {
     const r = await db.exec("UPDATE nominees SET votes = 0 WHERE votes IS NULL");
     if (r && r.changes)
@@ -290,8 +289,7 @@ function auth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
-// ✅ FIX: SSE can't send Authorization headers — allow ?token= for that one
-// endpoint (EventSource is the only caller).
+// SSE-aware auth — allows `?token=` because EventSource can't set headers.
 function authAllowQuery(req, res, next) {
   let token = null;
   const h = req.headers.authorization || "";
@@ -344,25 +342,41 @@ function superAuth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
-
-// ✅ FIX: live vote push via SSE. Keyed by user_id so the nominee's browser
-// (which has user.id in its JWT) receives the event.
-const sseClients = new Map(); // userId → Set<res>
-
-async function broadcastVotes(nomineeId, votes) {
+// SSE-aware admin auth — accepts ?token= for /api/live/admin.
+function adminAuthAllowQuery(req, res, next) {
+  let token = null;
+  const h = req.headers.authorization || "";
+  if (h.startsWith("Bearer ")) token = h.slice(7);
+  else if (req.query && req.query.token) token = String(req.query.token);
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const row = await db
-      .prepare("SELECT user_id FROM nominees WHERE id = ?")
-      .get(nomineeId);
-    if (!row || !row.user_id) return;
-    const payload = `event: votes\ndata: ${JSON.stringify({ votes })}\n\n`;
-    sseClients.get(row.user_id)?.forEach((r) => r.write(payload));
-  } catch (e) {
-    console.warn("[SSE broadcast]", e.message);
+    const p = jwt.verify(token, JWT_SECRET);
+    if (p.role !== "admin" && p.role !== "super")
+      return res.status(403).json({ error: "Admin only" });
+    req.admin = p;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 
-app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
+// ============================================================
+// ✅ LIVE SSE STREAMS
+//   nomineeVoteClients — nominee dashboard (existing)
+//   publicVoteClients  — public index page
+//   adminStreamClients — admin dashboard
+// ============================================================
+const nomineeVoteClients = new Map(); // user_id → Set<res>
+const publicVoteClients = new Set();
+const adminStreamClients = new Set();
+
+function writeSSE(res, payload) {
+  try {
+    res.write(payload);
+  } catch {}
+}
+
+function initSSE(req, res, bucketSet, key) {
   res.set({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -370,18 +384,64 @@ app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
     "X-Accel-Buffering": "no",
   });
   res.flushHeaders();
-
-  const userId = req.user.id;
-  if (!sseClients.has(userId)) sseClients.set(userId, new Set());
-  sseClients.get(userId).add(res);
-
   res.write(": connected\n\n");
 
-  const hb = setInterval(() => res.write(": ping\n\n"), 25_000);
+  if (bucketSet instanceof Map) {
+    if (!bucketSet.has(key)) bucketSet.set(key, new Set());
+    bucketSet.get(key).add(res);
+  } else {
+    bucketSet.add(res);
+  }
+
+  const hb = setInterval(() => writeSSE(res, ": ping\n\n"), 25_000);
   req.on("close", () => {
     clearInterval(hb);
-    sseClients.get(userId)?.delete(res);
+    if (bucketSet instanceof Map) {
+      bucketSet.get(key)?.delete(res);
+    } else {
+      bucketSet.delete(res);
+    }
   });
+}
+
+// Nominee sees their own dashboard ticks
+async function broadcastVotes(nomineeId, votes) {
+  try {
+    const row = await db
+      .prepare("SELECT user_id FROM nominees WHERE id = ?")
+      .get(nomineeId);
+    if (!row || !row.user_id) return;
+    const payload = `event: votes\ndata: ${JSON.stringify({ votes })}\n\n`;
+    nomineeVoteClients.get(row.user_id)?.forEach((r) => writeSSE(r, payload));
+  } catch (e) {
+    console.warn("[SSE nominee broadcast]", e.message);
+  }
+}
+
+// Everyone on the public voting page sees the category badge tick
+function broadcastPublicVote(nomineeId, votes) {
+  const payload = `event: vote\ndata: ${JSON.stringify({ nomineeId, votes })}\n\n`;
+  for (const r of publicVoteClients) writeSSE(r, payload);
+}
+
+// Every connected admin sees stats/lists update
+function broadcastAdminEvent(event) {
+  const payload = `event: update\ndata: ${JSON.stringify(event)}\n\n`;
+  for (const r of adminStreamClients) writeSSE(r, payload);
+}
+
+// --- Endpoints -------------------------------------------------
+
+app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
+  initSSE(req, res, nomineeVoteClients, req.user.id);
+});
+
+app.get("/api/live/votes", (req, res) => {
+  initSSE(req, res, publicVoteClients, null);
+});
+
+app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
+  initSSE(req, res, adminStreamClients, null);
 });
 
 async function completeTransaction(reference, receipt) {
@@ -457,6 +517,8 @@ async function completeTransaction(reference, receipt) {
     if (result.ok) {
       console.log(`✓ ${reference} completed (${result.type})`);
       db.push().catch((e) => console.warn("[Push after payment]", e.message));
+      // ✅ Live admin update
+      broadcastAdminEvent({ type: "transaction:completed", reference });
     } else {
       await logEvent(reference, "complete_skipped", { reason: result.reason });
     }
@@ -476,6 +538,8 @@ async function failTransaction(reference, reason) {
       )
       .run(reference);
     await logEvent(reference, "failed", { reason });
+    // ✅ Live admin update
+    broadcastAdminEvent({ type: "transaction:failed", reference });
   } catch (e) {
     console.error("[Fail Error]", e.message);
   }
@@ -757,6 +821,11 @@ app.get("/api/health", async (req, res) => {
     db: dbOk ? "ok" : "error",
     payhero: PAYHERO_API_KEY ? "live" : "simulation",
     images: { storage: "sqlite-blob", count: imageCount },
+    sse: {
+      nominees: nomineeVoteClients.size,
+      public: publicVoteClients.size,
+      admins: adminStreamClients.size,
+    },
   });
 });
 
@@ -799,6 +868,11 @@ app.get("/api/nominees", async (req, res) => {
   `,
     )
     .all();
+
+  // ✅ COALESCE votes in every response so NULL never leaks to the client
+  for (const r of rows) {
+    if (r.votes === null || r.votes === undefined) r.votes = 0;
+  }
 
   if (voterToken || deviceHash) {
     try {
@@ -868,6 +942,7 @@ app.get("/api/nominees/:code", async (req, res) => {
     )
     .get(req.params.code);
   if (!n) return res.status(404).json({ error: "Not found" });
+  if (n.votes === null || n.votes === undefined) n.votes = 0;
   res.json(n);
 });
 
@@ -1149,7 +1224,6 @@ async function getLeaderboardAccess(userId) {
   return { allowed: false, type: "none" };
 }
 
-// ✅ FIX: COALESCE votes everywhere so NULL never leaks to the client.
 app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
@@ -1260,6 +1334,10 @@ app.post(
   `,
       )
       .get(id);
+
+    // ✅ Live admin update
+    broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
+
     res.json({ nominee });
   },
 );
@@ -1412,7 +1490,6 @@ app.post(
             nominee.category_id,
           ],
         });
-        // ✅ FIX: COALESCE guards against NULL so votes always increments.
         await t.execute({
           sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + 1 WHERE id = ?",
           args: [nominee.id],
@@ -1454,11 +1531,20 @@ app.post(
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
 
-    // ✅ FIX: broadcast the new total to the nominee's live dashboard.
     const updated = await db
       .prepare("SELECT COALESCE(votes, 0) AS votes FROM nominees WHERE id = ?")
       .get(nominee.id);
-    broadcastVotes(nominee.id, updated.votes);
+
+    // ✅ Live fan-out
+    broadcastVotes(nominee.id, updated.votes); // nominee dashboard
+    broadcastPublicVote(nominee.id, updated.votes); // public voting page
+    broadcastAdminEvent({
+      // admin overview
+      type: "vote",
+      nomineeId: nominee.id,
+      votes: updated.votes,
+      at: new Date().toISOString(),
+    });
 
     res.json({ success: true, votes: updated.votes });
   },
@@ -1768,7 +1854,7 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
       `
-    SELECT n.name, n.votes, c.name as category FROM nominees n
+    SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category FROM nominees n
     JOIN categories c ON n.category_id = c.id
     ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5
   `,
@@ -1778,7 +1864,7 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const categoryDistribution = await db
     .prepare(
       `
-    SELECT c.name, COALESCE(SUM(n.votes),0) as votes FROM categories c
+    SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes FROM categories c
     LEFT JOIN nominees n ON n.category_id = c.id
     GROUP BY c.id ORDER BY c.created_at ASC
   `,
@@ -1820,6 +1906,8 @@ app.post("/api/admin/categories", adminAuth, async (req, res) => {
     await db
       .prepare("INSERT INTO categories (id, name) VALUES (?,?)")
       .run(id, name.trim());
+    // ✅ Live admin update
+    broadcastAdminEvent({ type: "category:update" });
     res.json({ id, name: name.trim() });
   } catch {
     res.status(409).json({ error: "Category already exists" });
@@ -1840,6 +1928,8 @@ app.patch("/api/admin/categories/:id", adminAuth, async (req, res) => {
     await db
       .prepare("UPDATE categories SET name = ? WHERE id = ?")
       .run(name.trim(), req.params.id);
+    // ✅ Live admin update
+    broadcastAdminEvent({ type: "category:update" });
     res.json({ id: req.params.id, name: name.trim() });
   } catch {
     res.status(409).json({ error: "Category name already exists" });
@@ -1857,6 +1947,8 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
       .status(400)
       .json({ error: "Cannot delete — category has nominees" });
   await db.prepare("DELETE FROM categories WHERE id = ?").run(req.params.id);
+  // ✅ Live admin update
+  broadcastAdminEvent({ type: "category:update" });
   res.json({ success: true });
 });
 
@@ -1919,6 +2011,9 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
     )
     .run(id, userId, name, categoryId, code, img || null, desc || null);
 
+  // ✅ Live admin update
+  broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
+
   res.json({
     id,
     code,
@@ -1932,6 +2027,8 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
     .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
     .run(req.params.id);
   await db.prepare("DELETE FROM nominees WHERE id = ?").run(req.params.id);
+  // ✅ Live admin update
+  broadcastAdminEvent({ type: "nominee:delete", nomineeId: req.params.id });
   res.json({ success: true });
 });
 
@@ -2501,7 +2598,9 @@ const server = app.listen(PORT, async () => {
   console.log(
     `  Voting:      FREE · one per device per category (fingerprint-enforced)`,
   );
-  console.log(`  Live votes:  SSE at /api/nominee/stream + 15s polling fallback`);
+  console.log(
+    `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,
+  );
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
