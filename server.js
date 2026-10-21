@@ -1,190 +1,6 @@
-// server.js
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-
-const PORT = process.env.PORT || 3000;
-const ROOT = __dirname;
-const DATA_FILE = path.join(ROOT, "data.json");
-
-function loadData() {
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  } catch {
-    return { profiles: {}, messages: {} };
-  }
-}
-function saveData(d) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2));
-}
-let store = loadData();
-
-function send(res, status, body, type = "application/json; charset=utf-8") {
-  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
-  res.end(typeof body === "string" ? body : JSON.stringify(body));
-}
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c) => {
-      data += c;
-      if (data.length > 10 * 1024 * 1024) {
-        reject(new Error("payload too large"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (e) {
-        reject(e);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-const cleanHandle = (h) => (h || "").trim().toLowerCase().replace(/[@\s]/g, "");
-const newId = () => crypto.randomBytes(8).toString("hex");
-
-async function handleApi(req, res, parts, url) {
-  const method = req.method;
-
-  // --- PROFILES ---
-  if (parts[1] === "profile") {
-    if (parts.length === 2 && method === "POST") {
-      const body = await readBody(req);
-      const h = cleanHandle(body.handle);
-      if (!h) return send(res, 400, { error: "handle required" });
-
-      const existing = store.profiles[h] || {};
-      const profile = {
-        handle: h,
-        photoURL:
-          body.photoURL !== undefined
-            ? body.photoURL
-            : existing.photoURL || null,
-        prompt:
-          body.prompt !== undefined
-            ? body.prompt
-            : existing.prompt || "send me anonymous messages!",
-        theme: body.theme !== undefined ? body.theme : existing.theme || "dark",
-        paused:
-          body.paused !== undefined ? body.paused : existing.paused || false,
-        createdAt: existing.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      store.profiles[h] = profile;
-      saveData(store);
-      return send(res, 200, profile);
-    }
-    if (parts.length === 3 && method === "GET") {
-      const p = store.profiles[cleanHandle(parts[2])];
-      return p ? send(res, 200, p) : send(res, 404, { error: "not found" });
-    }
-    if (parts.length === 3 && method === "DELETE") {
-      const h = cleanHandle(parts[2]);
-      delete store.profiles[h];
-      delete store.messages[h];
-      saveData(store);
-      return send(res, 200, { ok: true });
-    }
-  }
-
-  // --- MESSAGES ---
-  if (parts[1] === "messages") {
-    const h = cleanHandle(parts[2]);
-
-    if (parts.length === 3 && method === "POST") {
-      const body = await readBody(req);
-      const msg = {
-        id: newId(),
-        text: (body.text || "").slice(0, 500),
-        files: Array.isArray(body.files) ? body.files.slice(0, 5) : [],
-        reply: null,
-        createdAt: Date.now(),
-      };
-      if (!store.messages[h]) store.messages[h] = [];
-      store.messages[h].unshift(msg);
-      saveData(store);
-      return send(res, 200, { id: msg.id });
-    }
-
-    if (parts.length === 3 && method === "GET") {
-      return send(res, 200, store.messages[h] || []);
-    }
-
-    if (parts.length === 4 && method === "DELETE") {
-      const id = parts[3];
-      store.messages[h] = (store.messages[h] || []).filter((x) => x.id !== id);
-      saveData(store);
-      return send(res, 200, { ok: true });
-    }
-
-    if (parts.length === 5 && method === "POST" && parts[4] === "reply") {
-      const id = parts[3];
-      const body = await readBody(req);
-      const m = (store.messages[h] || []).find((x) => x.id === id);
-      if (!m) return send(res, 404, { error: "not found" });
-      m.reply = (body.reply || "").slice(0, 240);
-      m.repliedAt = new Date().toISOString();
-      saveData(store);
-      return send(res, 200, { ok: true, message: m });
-    }
-  }
-
-  return send(res, 404, { error: "unknown endpoint" });
-}
-
-const MIME = {
-  ".html": "text/html",
-  ".js": "application/javascript",
-  ".css": "text/css",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".json": "application/json",
-};
-
-function serveStatic(req, res, pathname) {
-  let file = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  if (file === "app") file = "app.html";
-  if (file === "send") file = "send.html";
-
-  if (file === "data.json" || file === "server.js")
-    return send(res, 403, "forbidden");
-
-  const fullPath = path.join(ROOT, file);
-  fs.readFile(fullPath, (err, data) => {
-    if (err) return send(res, 404, "not found");
-    res.writeHead(200, {
-      "Content-Type":
-        MIME[path.extname(fullPath)] || "application/octet-stream",
-    });
-    res.end(data);
-  });
-}
-
-const server = http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, "http://" + (req.headers.host || "localhost"));
-    if (url.pathname.startsWith("/api/")) {
-      const parts = url.pathname.split("/").filter(Boolean); // FIXED ROUTING HERE
-      return await handleApi(req, res, parts, url);
-    }
-    serveStatic(req, res, url.pathname);
-  } catch (e) {
-    console.error(e);
-    send(res, 500, { error: "server error" });
-  }
-});
-
-server.listen(PORT, () =>
-  console.log(`\n  ✨ NGL running at http://localhost:${PORT}\n`),
-);
 require("dotenv").config();
 const express = require("express");
+const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
@@ -411,9 +227,6 @@ async function initSchema() {
     console.warn("[Schema] nominee_boosts:", e.message);
   }
 
-  // ============================================================
-  // ✅ NEW: Forensics — vote reports + IP geo cache
-  // ============================================================
   try {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS vote_reports (
@@ -463,9 +276,6 @@ async function initSchema() {
     console.warn("[Schema] ip_lookup_cache:", e.message);
   }
 
-  // ============================================================
-  // Existing migration: credits → timed access
-  // ============================================================
   try {
     const withCredits = await db
       .prepare(
@@ -566,7 +376,6 @@ function deepFind(obj, predicate, seen = new Set()) {
   return undefined;
 }
 
-// ✅ NEW: IP helpers for forensic report
 function cleanIP(ip) {
   if (!ip) return "unknown";
   if (ip.startsWith("::ffff:")) return ip.slice(7);
@@ -739,9 +548,6 @@ function adminAuthAllowQuery(req, res, next) {
   }
 }
 
-// ============================================================
-// LIVE SSE
-// ============================================================
 const nomineeVoteClients = new Map();
 const publicVoteClients = new Set();
 const adminStreamClients = new Set();
@@ -817,9 +623,6 @@ app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
   initSSE(req, res, adminStreamClients, null);
 });
 
-// ============================================================
-// REPORT HELPERS
-// ============================================================
 function buildReportId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const r = crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -963,9 +766,6 @@ async function loadReportData(req) {
   };
 }
 
-// ============================================================
-// PAYMENT ENGINE
-// ============================================================
 async function extendLeaderboardAccess(t, userId, durationMs) {
   const existing = await t.get(
     "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
@@ -1270,9 +1070,6 @@ function interpretPayHeroStatus(payload) {
   return null;
 }
 
-// ============================================================
-// UPLOAD / IMAGES
-// ============================================================
 app.post(
   "/api/upload",
   anyAuth,
@@ -1332,9 +1129,6 @@ app.get("/api/images/:id", async (req, res) => {
   }
 });
 
-// ============================================================
-// HEALTH / CONFIG / PUBLIC DATA
-// ============================================================
 app.get("/api/health", async (req, res) => {
   let dbOk = true;
   try {
@@ -1533,9 +1327,6 @@ app.get("/api/nominees/:code", async (req, res) => {
   res.json(n);
 });
 
-// ============================================================
-// AUTH
-// ============================================================
 app.post(
   "/api/auth/register",
   rateLimit({ key: "register", max: 10 }),
@@ -1756,9 +1547,6 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// ============================================================
-// LEADERBOARD ACCESS
-// ============================================================
 async function getLeaderboardAccess(userId) {
   const acc = await db
     .prepare("SELECT * FROM leaderboard_access WHERE user_id = ?")
@@ -2015,9 +1803,6 @@ app.post(
   },
 );
 
-// ============================================================
-// VOTES
-// ============================================================
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -2157,9 +1942,6 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   }
 });
 
-// ============================================================
-// TRANSACTIONS
-// ============================================================
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
     .prepare(
@@ -2237,9 +2019,6 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
   });
 });
 
-// ============================================================
-// PAYHERO CALLBACK
-// ============================================================
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
   (async () => {
@@ -2355,9 +2134,6 @@ app.post("/api/payhero/callback", (req, res) => {
   })();
 });
 
-// ============================================================
-// ✅ NEW: FORENSIC REPORT — "I didn't vote but system says I did"
-// ============================================================
 const VERDICT_MESSAGES = {
   NO_RECORD_FOUND:
     "No votes exist on record for your browser, your device fingerprint, or your network. If you saw an 'already voted' message, it was NOT because of a recorded vote — it was a frontend/UI bug or a transient loading state.",
@@ -2410,7 +2186,6 @@ app.post(
         });
       };
 
-      // 1. Own voter_token
       if (voterToken && typeof voterToken === "string") {
         try {
           const ownRows = await db
@@ -2438,7 +2213,6 @@ app.post(
         }
       }
 
-      // 2. Same device_hash (collision candidates)
       if (deviceHash && typeof deviceHash === "string") {
         try {
           const hashRows = await db
@@ -2471,7 +2245,6 @@ app.post(
         }
       }
 
-      // 3. Same IP
       if (ip && !isPrivateIP(ip)) {
         try {
           const ipRows = await db
@@ -2501,7 +2274,6 @@ app.post(
         }
       }
 
-      // Verdict
       let verdict;
       if (matches.length === 0) verdict = "NO_RECORD_FOUND";
       else if (matches.some((m) => m.match_type === "own_token"))
@@ -2510,7 +2282,6 @@ app.post(
         verdict = "FINGERPRINT_COLLISION";
       else verdict = "VOTED_FROM_THIS_NETWORK";
 
-      // Geo lookups
       const reporterGeo = await lookupIP(ip);
       const uniqueVotingIps = [
         ...new Set(matches.map((m) => m.ip_at_vote)),
@@ -2525,7 +2296,6 @@ app.post(
         }
       }
 
-      // Persist
       const reportCode = `RPT-${Date.now().toString(36).toUpperCase()}-${crypto
         .randomBytes(3)
         .toString("hex")
@@ -2687,9 +2457,6 @@ app.get("/api/admin/reports", superAuth, async (req, res) => {
   res.json({ reports: enriched, counts, total: enriched.length });
 });
 
-// ============================================================
-// ADMIN: STATS
-// ============================================================
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
     const isSuper = req.admin.role === "super";
@@ -2774,9 +2541,6 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
   }
 });
 
-// ============================================================
-// ADMIN: CHARTS
-// ============================================================
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
@@ -2888,9 +2652,6 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   });
 });
 
-// ============================================================
-// ADMIN: CATEGORIES
-// ============================================================
 app.post("/api/admin/categories", adminAuth, async (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim())
@@ -2943,9 +2704,6 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// ============================================================
-// ADMIN: NOMINEES
-// ============================================================
 app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   const { name, categoryId, img, desc, email, password } = req.body || {};
   if (!name || !categoryId)
@@ -3018,9 +2776,6 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// ============================================================
-// ADMIN: TRANSACTIONS / LOGS
-// ============================================================
 app.get("/api/admin/transactions", superAuth, async (req, res) => {
   res.json(
     await db
@@ -3043,9 +2798,6 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-// ============================================================
-// ADMIN: SIGNED EXPORTS — NO FINANCIAL DATA
-// ============================================================
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
@@ -3643,9 +3395,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   }
 });
 
-// ============================================================
-// SEO / STATIC / NOMINEE META
-// ============================================================
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(__dirname, "manifest.json"));
@@ -3768,9 +3517,6 @@ app.get("/admin", sendHTMLNoCache("admin.html"));
 app.get("/report", sendHTMLNoCache("report.html"));
 app.get("/admin/reports", sendHTMLNoCache("admin-reports.html"));
 
-// ============================================================
-// CLEANUP JOBS
-// ============================================================
 setInterval(async () => {
   try {
     const cutoff = new Date(
