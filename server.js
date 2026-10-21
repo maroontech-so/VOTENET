@@ -2040,32 +2040,27 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
-      `
-    SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category FROM nominees n
-    JOIN categories c ON n.category_id = c.id
-    ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5
-  `,
+      `SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category
+       FROM nominees n JOIN categories c ON n.category_id = c.id
+       ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5`,
     )
     .all();
 
   const categoryDistribution = await db
     .prepare(
-      `
-    SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes FROM categories c
-    LEFT JOIN nominees n ON n.category_id = c.id
-    GROUP BY c.id ORDER BY c.created_at ASC
-  `,
+      `SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes
+       FROM categories c
+       LEFT JOIN nominees n ON n.category_id = c.id
+       GROUP BY c.id ORDER BY c.created_at ASC`,
     )
     .all();
 
   const dailyRows = await db
     .prepare(
-      `
-    SELECT date(created_at) as day, COUNT(*) as votes
-    FROM free_votes
-    WHERE created_at >= datetime('now', '-7 days')
-    GROUP BY day ORDER BY day ASC
-  `,
+      `SELECT date(created_at) as day, COUNT(*) as votes
+       FROM free_votes
+       WHERE created_at >= datetime('now', '-7 days')
+       GROUP BY day ORDER BY day ASC`,
     )
     .all();
 
@@ -2081,7 +2076,80 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     });
   }
 
-  res.json({ topNominees, categoryDistribution, dailyVotes: days });
+  // ✅ NEW: per-category distribution with every nominee ranked
+  const allCategories = await db
+    .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
+    .all();
+
+  const allNominees = await db
+    .prepare(
+      `SELECT n.id, n.name, n.code, n.img, n.category_id,
+              COALESCE(n.votes, 0) as votes
+       FROM nominees n
+       ORDER BY n.category_id, COALESCE(n.votes, 0) DESC`,
+    )
+    .all();
+
+  const perCategory = allCategories.map((cat) => {
+    const list = allNominees.filter((n) => n.category_id === cat.id);
+    const total = list.reduce((s, n) => s + (n.votes || 0), 0);
+    return {
+      id: cat.id,
+      name: cat.name,
+      totalVotes: total,
+      nominees: list.map((n, i) => ({
+        id: n.id,
+        name: n.name,
+        code: n.code,
+        img: n.img,
+        votes: n.votes,
+        rank: i + 1,
+        percent: total > 0 ? Math.round((n.votes / total) * 1000) / 10 : 0,
+      })),
+    };
+  });
+
+  // ✅ NEW: daily votes broken down per category (last 7 days)
+  const dailyCatRows = await db
+    .prepare(
+      `SELECT date(fv.created_at) as day, c.name as category, COUNT(*) as votes
+       FROM free_votes fv
+       JOIN nominees n ON fv.nominee_id = n.id
+       JOIN categories c ON n.category_id = c.id
+       WHERE fv.created_at >= datetime('now', '-7 days')
+       GROUP BY day, category
+       ORDER BY day ASC`,
+    )
+    .all();
+
+  const categories = categoryDistribution.map((c) => c.name);
+  const catByDay = {};
+  for (const r of dailyCatRows) {
+    if (!catByDay[r.day]) catByDay[r.day] = {};
+    catByDay[r.day][r.category] = r.votes;
+  }
+
+  const dailyByCategory = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const cats = catByDay[key] || {};
+    const entry = { day: d.toLocaleDateString("en-US", { weekday: "short" }) };
+    for (const catName of categories) {
+      entry[catName] = cats[catName] || 0;
+    }
+    dailyByCategory.push(entry);
+  }
+
+  res.json({
+    topNominees,
+    categoryDistribution,
+    dailyVotes: days,
+    perCategory,
+    dailyByCategory,
+    categories,
+  });
 });
 
 app.post("/api/admin/categories", adminAuth, async (req, res) => {

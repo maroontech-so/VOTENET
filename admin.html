@@ -6,13 +6,10 @@
         <meta name="theme-color" content="#3f51b5" />
         <meta name="color-scheme" content="light" />
         <meta name="robots" content="noindex, nofollow" />
-        <title>
-            Admin — Voteus | Gala Awards 2026 | Mount Kenya University Parklands
-            Law Campus
-        </title>
+        <title>Admin — Voteus | Gala Awards 2026 | MKUPLC</title>
         <meta
             name="description"
-            content="Voteus Admin Panel for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Manage nominees, categories, transactions, and view analytics. Built by emojistudios."
+            content="Voteus Admin Panel — manage nominees, categories, transactions, and analytics."
         />
         <link rel="canonical" href="https://gala.voteus.xyz/admin" />
         <meta name="generator" content="Voteus v1.0" />
@@ -177,8 +174,6 @@
             table tbody tr:hover {
                 background: #f9fafb;
             }
-
-            /* Live indicator */
             .live-dot {
                 width: 8px;
                 height: 8px;
@@ -204,8 +199,6 @@
                     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
                 }
             }
-
-            /* ---------- Photo picker ---------- */
             .photo-picker {
                 position: relative;
                 width: 120px;
@@ -289,6 +282,71 @@
                 font-size: 11px;
                 color: #6b7280;
                 margin-top: 4px;
+            }
+
+            /* ✅ New: per-category distribution cards */
+            .cat-card {
+                background: white;
+                border: 1px solid #eef0f3;
+                border-radius: 16px;
+                overflow: hidden;
+                transition: all 0.2s;
+            }
+            .cat-card:hover {
+                border-color: #c7d2fe;
+                box-shadow: 0 10px 24px -12px rgba(63, 81, 181, 0.25);
+            }
+            .cat-card-header {
+                padding: 14px 16px;
+                background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+                border-bottom: 1px solid #e0e7ff;
+            }
+            .nom-row {
+                transition: background 0.15s;
+                border-radius: 8px;
+                padding: 6px 4px;
+            }
+            .nom-row:hover {
+                background: #f9fafb;
+            }
+            .nom-bar {
+                height: 4px;
+                background: #f3f4f6;
+                border-radius: 999px;
+                overflow: hidden;
+            }
+            .nom-bar > div {
+                height: 100%;
+                background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+                border-radius: 999px;
+                transition: width 0.4s ease;
+            }
+            .rank-badge {
+                width: 22px;
+                height: 22px;
+                border-radius: 999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+                font-weight: 800;
+                flex-shrink: 0;
+            }
+            .rank-1 {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .rank-2 {
+                background: #e5e7eb;
+                color: #374151;
+            }
+            .rank-3 {
+                background: #fed7aa;
+                color: #9a3412;
+            }
+            .rank-other {
+                background: #f3f4f6;
+                color: #9ca3af;
             }
         </style>
     </head>
@@ -468,7 +526,7 @@
                 </aside>
 
                 <main class="flex-1 overflow-y-auto p-4 lg:p-8">
-                    <!-- OVERVIEW -->
+                    <!-- ============================== OVERVIEW ============================== -->
                     <section id="tab-overview">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -495,9 +553,10 @@
                             </div>
                         </div>
 
+                        <!-- Primary stats -->
                         <div
                             id="stats-grid"
-                            class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8"
+                            class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6"
                         >
                             <div class="stat-card">
                                 <div
@@ -601,6 +660,74 @@
                             </div>
                         </div>
 
+                        <!-- Secondary stats (unique voters, categories, avg votes) -->
+                        <div
+                            id="stats-secondary"
+                            class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+                        >
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl px-4 py-3"
+                            >
+                                <div
+                                    class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+                                >
+                                    Categories
+                                </div>
+                                <div
+                                    class="text-lg font-bold text-gray-900"
+                                    id="s-cats"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl px-4 py-3"
+                            >
+                                <div
+                                    class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+                                >
+                                    Avg / Nominee
+                                </div>
+                                <div
+                                    class="text-lg font-bold text-gray-900"
+                                    id="s-avg"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl px-4 py-3"
+                            >
+                                <div
+                                    class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+                                >
+                                    Unique Voters
+                                </div>
+                                <div
+                                    class="text-lg font-bold text-gray-900"
+                                    id="s-unique-voters"
+                                >
+                                    —
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white border border-gray-100 rounded-xl px-4 py-3"
+                            >
+                                <div
+                                    class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1"
+                                >
+                                    Unique Devices
+                                </div>
+                                <div
+                                    class="text-lg font-bold text-gray-900"
+                                    id="s-unique-devices"
+                                >
+                                    —
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 1: Top 5 + Category doughnut -->
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                             <div
                                 class="bg-white border border-gray-100 rounded-xl p-5 lg:col-span-2"
@@ -626,19 +753,53 @@
                             </div>
                         </div>
 
+                        <!-- Row 2: Multi-line trend by category -->
                         <div
-                            class="bg-white border border-gray-100 rounded-xl p-5"
+                            class="bg-white border border-gray-100 rounded-xl p-5 mb-6"
                         >
-                            <h3 class="font-semibold mb-4">
-                                Voting Trend (Last 7 Days)
-                            </h3>
-                            <div class="h-72">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="font-semibold">
+                                        Voting Trend — Last 7 Days
+                                    </h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">
+                                        One line per category, plus a dashed
+                                        total.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="h-96">
                                 <canvas id="lineChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Row 3: Per-category distribution cards -->
+                        <div class="mb-8">
+                            <div class="flex items-end justify-between mb-4">
+                                <div>
+                                    <h3 class="text-lg font-bold">
+                                        Vote Distribution per Category
+                                    </h3>
+                                    <p class="text-sm text-gray-500 mt-0.5">
+                                        Every nominee ranked by votes with live
+                                        percentage share.
+                                    </p>
+                                </div>
+                            </div>
+                            <div
+                                id="per-category-grid"
+                                class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                            >
+                                <div
+                                    class="col-span-full text-center py-10 text-gray-400 text-sm"
+                                >
+                                    Loading categories…
+                                </div>
                             </div>
                         </div>
                     </section>
 
-                    <!-- CATEGORIES -->
+                    <!-- ============================== CATEGORIES ============================== -->
                     <section id="tab-categories" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Categories</h1>
@@ -672,7 +833,7 @@
                         </div>
                     </section>
 
-                    <!-- NOMINEES -->
+                    <!-- ============================== NOMINEES ============================== -->
                     <section id="tab-nominees" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -680,7 +841,7 @@
                             <div>
                                 <h1 class="text-2xl font-bold">Nominees</h1>
                                 <p class="text-sm text-gray-500 mt-1">
-                                    Manage nominees and their details.
+                                    Sorted by highest votes first.
                                 </p>
                             </div>
                             <button onclick="openAddNominee()" class="btn">
@@ -714,7 +875,7 @@
                         </div>
                     </section>
 
-                    <!-- TRANSACTIONS (super only) -->
+                    <!-- ============================== TRANSACTIONS ============================== -->
                     <section id="tab-transactions" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -767,7 +928,7 @@
                         </div>
                     </section>
 
-                    <!-- ADMINS (super only) -->
+                    <!-- ============================== ADMINS ============================== -->
                     <section id="tab-admins" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -792,7 +953,7 @@
                         </div>
                     </section>
 
-                    <!-- LOGS (super only) -->
+                    <!-- ============================== LOGS ============================== -->
                     <section id="tab-logs" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Payment Logs</h1>
@@ -880,7 +1041,6 @@
                             JPG, PNG, or WebP · max 10 MB
                         </p>
                     </div>
-
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
@@ -892,7 +1052,6 @@
                             placeholder="e.g. Jane Wanjiku"
                         />
                     </div>
-
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
@@ -910,7 +1069,6 @@
                             dashboard.
                         </p>
                     </div>
-
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
@@ -927,7 +1085,6 @@
                             autocomplete="off"
                         />
                     </div>
-
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
@@ -937,7 +1094,6 @@
                             <option value="">Select category</option>
                         </select>
                     </div>
-
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1"
@@ -953,7 +1109,6 @@
                             placeholder="A sentence or two about the nominee"
                         ></textarea>
                     </div>
-
                     <div class="flex gap-2 pt-2">
                         <button
                             onclick="closeModal('add-nominee-modal')"
@@ -973,7 +1128,7 @@
             </div>
         </div>
 
-        <!-- ============ MODAL: NOMINEE CREDENTIALS ============ -->
+        <!-- ============ MODAL: CREDENTIALS ============ -->
         <div id="creds-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -1107,6 +1262,15 @@
             };
             const isSuper = () => getAdmin()?.role === "super";
 
+            function escapeHtml(str) {
+                return String(str == null ? "" : str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
             let charts = [];
             let CATEGORIES = [];
             let NOMINEES = [];
@@ -1115,7 +1279,6 @@
             let anUploadedUrl = null;
             let lastCreds = null;
 
-            // ✅ FIX: live-update state
             let liveStream = null;
             let livePollTimer = null;
             let liveRefreshTimer = null;
@@ -1168,13 +1331,11 @@
             }
 
             function startLiveUpdates() {
-                // 15s polling fallback
                 if (livePollTimer) clearInterval(livePollTimer);
                 livePollTimer = setInterval(() => {
                     if (document.hidden) return;
                     refreshCurrentTab();
                 }, 15_000);
-
                 connectLiveStream();
             }
 
@@ -1209,9 +1370,7 @@
                         liveStream = null;
                         setLiveStatus(false);
                         sseRetries++;
-                        if (sseRetries < 4) {
-                            setTimeout(connectLiveStream, 5000);
-                        }
+                        if (sseRetries < 4) setTimeout(connectLiveStream, 5000);
                     };
                 } catch (err) {
                     console.warn("[SSE]", err.message);
@@ -1219,9 +1378,7 @@
                 }
             }
 
-            // Debounced so a burst of votes fires at most one refresh per 1s
-            function scheduleLiveRefresh(evt) {
-                // Don't disturb a user mid-action (modal open)
+            function scheduleLiveRefresh() {
                 if (document.querySelector(".modal.show")) return;
                 if (liveRefreshTimer) return;
                 liveRefreshTimer = setTimeout(() => {
@@ -1234,9 +1391,8 @@
                 if (refreshing) return;
                 refreshing = true;
                 try {
-                    const activeTab = document.querySelector(
-                        ".nav-item.active",
-                    )?.dataset.tab;
+                    const activeTab =
+                        document.querySelector(".nav-item.active")?.dataset.tab;
                     if (!activeTab) return;
                     if (activeTab === "overview") await loadOverview();
                     else if (activeTab === "categories") await loadCategories();
@@ -1273,7 +1429,6 @@
             }
 
             function doLogout() {
-                // ✅ FIX: tear down live machinery before reload
                 if (liveStream) {
                     try {
                         liveStream.close();
@@ -1309,9 +1464,9 @@
                     "transactions",
                     "admins",
                     "logs",
-                ].forEach((t) => {
-                    $(`tab-${t}`).classList.toggle("hidden", t !== tab);
-                });
+                ].forEach((t) =>
+                    $(`tab-${t}`).classList.toggle("hidden", t !== tab),
+                );
 
                 if (window.innerWidth < 1024) closeSidebar();
 
@@ -1349,7 +1504,6 @@
                 )
                     .charAt(0)
                     .toUpperCase();
-
                 $("admin-role").innerText = "Administrator";
 
                 if (!isSuper()) {
@@ -1357,13 +1511,11 @@
                         .querySelectorAll("[data-super]")
                         .forEach((el) => el.classList.add("hidden"));
                     $("stats-grid").className =
-                        "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8";
+                        "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6";
                 }
 
                 await refreshBase();
                 await loadOverview();
-
-                // ✅ FIX: start live updates once the dashboard is up
                 startLiveUpdates();
             }
 
@@ -1376,7 +1528,8 @@
                     CATEGORIES = cats;
                     NOMINEES = noms;
                     const opts = CATEGORIES.map(
-                        (c) => `<option value="${c.id}">${c.name}</option>`,
+                        (c) =>
+                            `<option value="${c.id}">${escapeHtml(c.name)}</option>`,
                     ).join("");
                     $("an-category").innerHTML =
                         '<option value="">Select category</option>' + opts;
@@ -1394,12 +1547,23 @@
                         api("/api/admin/stats"),
                         api("/api/admin/charts"),
                     ]);
+
                     $("s-votes").innerText = Number(
                         stats.totalVotes,
                     ).toLocaleString();
                     $("s-nominees").innerText = Number(
                         stats.nomineesCount,
                     ).toLocaleString();
+                    $("s-cats").innerText = Number(
+                        stats.categoriesCount || 0,
+                    ).toLocaleString();
+
+                    if (stats.nomineesCount > 0) {
+                        const avg = stats.totalVotes / stats.nomineesCount;
+                        $("s-avg").innerText = avg.toFixed(1);
+                    } else {
+                        $("s-avg").innerText = "0";
+                    }
 
                     if (isSuper()) {
                         $("s-gross").innerText =
@@ -1409,8 +1573,19 @@
                             "KES " +
                             Number(stats.platformRevenue || 0).toLocaleString();
                         $("s-pending").innerText = stats.pendingPayments || 0;
+                        $("s-unique-voters").innerText = Number(
+                            stats.uniqueVoters || 0,
+                        ).toLocaleString();
+                        $("s-unique-devices").innerText = Number(
+                            stats.uniqueDevices || 0,
+                        ).toLocaleString();
+                    } else {
+                        $("s-unique-voters").innerText = "—";
+                        $("s-unique-devices").innerText = "—";
                     }
+
                     renderCharts(chartsData);
+                    renderPerCategory(chartsData.perCategory || []);
                 } catch (e) {
                     toast(e.message, false);
                 }
@@ -1427,6 +1602,7 @@
                 Chart.defaults.font.family = "Inter, sans-serif";
                 Chart.defaults.color = "#6b7280";
 
+                /* ---------- Bar chart: Top 5 ---------- */
                 const barEl = $("barChart");
                 if (barEl) {
                     const labels = data.topNominees.map((n) => n.name);
@@ -1472,6 +1648,7 @@
                     );
                 }
 
+                /* ---------- Doughnut: Votes by Category ---------- */
                 const doEl = $("doughnutChart");
                 if (doEl) {
                     const labels = data.categoryDistribution.map((c) => c.name);
@@ -1487,6 +1664,10 @@
                         "#06B6D4",
                         "#EF4444",
                         "#84CC16",
+                        "#F97316",
+                        "#14B8A6",
+                        "#A855F7",
+                        "#64748B",
                     ];
                     charts.push(
                         new Chart(doEl.getContext("2d"), {
@@ -1516,7 +1697,7 @@
                                         labels: {
                                             usePointStyle: true,
                                             boxWidth: 8,
-                                            padding: 14,
+                                            padding: 12,
                                             font: { size: 11 },
                                         },
                                     },
@@ -1526,44 +1707,95 @@
                     );
                 }
 
+                /* ---------- Multi-line chart: votes per category over 7 days ---------- */
                 const lineEl = $("lineChart");
                 if (lineEl) {
-                    const labels = data.dailyVotes.map((d) => d.day);
-                    const values = data.dailyVotes.map((d) => d.votes || 0);
-                    const ctx = lineEl.getContext("2d");
-                    const grad = ctx.createLinearGradient(0, 0, 0, 300);
-                    grad.addColorStop(0, "rgba(63,81,181,0.35)");
-                    grad.addColorStop(1, "rgba(63,81,181,0)");
+                    const categories = data.categories || [];
+                    const dailyByCategory = data.dailyByCategory || [];
+                    const dailyTotals = data.dailyVotes || [];
+                    const labels = dailyByCategory.map((d) => d.day);
+                    const palette = [
+                        "#3F51B5",
+                        "#10B981",
+                        "#F59E0B",
+                        "#8B5CF6",
+                        "#EC4899",
+                        "#06B6D4",
+                        "#EF4444",
+                        "#84CC16",
+                        "#F97316",
+                        "#14B8A6",
+                        "#A855F7",
+                        "#64748B",
+                    ];
+
+                    const datasets = categories.map((catName, i) => ({
+                        label: catName,
+                        data: dailyByCategory.map((d) => d[catName] || 0),
+                        borderColor: palette[i % palette.length],
+                        backgroundColor: palette[i % palette.length] + "20",
+                        borderWidth: 2,
+                        pointBackgroundColor: "#fff",
+                        pointBorderColor: palette[i % palette.length],
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        fill: false,
+                        tension: 0.35,
+                    }));
+
+                    // Dashed total line for context
+                    datasets.push({
+                        label: "Total",
+                        data: dailyTotals.map((d) => d.votes || 0),
+                        borderColor: "#111827",
+                        backgroundColor: "rgba(17,24,39,0.05)",
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        pointBackgroundColor: "#fff",
+                        pointBorderColor: "#111827",
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        fill: false,
+                        tension: 0.35,
+                    });
+
                     charts.push(
-                        new Chart(ctx, {
+                        new Chart(lineEl.getContext("2d"), {
                             type: "line",
-                            data: {
-                                labels,
-                                datasets: [
-                                    {
-                                        label: "Votes",
-                                        data: values,
-                                        borderColor: "#3F51B5",
-                                        backgroundColor: grad,
-                                        borderWidth: 2,
-                                        pointBackgroundColor: "#fff",
-                                        pointBorderColor: "#3F51B5",
-                                        pointBorderWidth: 2,
-                                        pointRadius: 4,
-                                        fill: true,
-                                        tension: 0.4,
-                                    },
-                                ],
-                            },
+                            data: { labels, datasets },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
+                                interaction: {
+                                    mode: "index",
+                                    intersect: false,
+                                },
+                                plugins: {
+                                    legend: {
+                                        position: "bottom",
+                                        labels: {
+                                            usePointStyle: true,
+                                            pointStyle: "line",
+                                            boxWidth: 22,
+                                            padding: 10,
+                                            font: { size: 11 },
+                                        },
+                                    },
+                                    tooltip: {
+                                        backgroundColor: "rgba(17,24,39,0.95)",
+                                        padding: 10,
+                                        titleFont: { size: 12 },
+                                        bodyFont: { size: 11 },
+                                    },
+                                },
                                 scales: {
                                     y: {
                                         beginAtZero: true,
                                         grid: { color: "#f3f4f6" },
                                         border: { display: false },
+                                        ticks: { precision: 0 },
                                     },
                                     x: {
                                         grid: { display: false },
@@ -1574,6 +1806,84 @@
                         }),
                     );
                 }
+            }
+
+            /* ---------- PER-CATEGORY DISTRIBUTION GRID ---------- */
+            function rankClass(rank) {
+                if (rank === 1) return "rank-1";
+                if (rank === 2) return "rank-2";
+                if (rank === 3) return "rank-3";
+                return "rank-other";
+            }
+
+            function nomineeImg(name, img) {
+                if (img) return img;
+                const initial = encodeURIComponent(
+                    (name || "?").charAt(0).toUpperCase(),
+                );
+                return `https://placehold.co/40x40/3F51B5/ffffff?text=${initial}`;
+            }
+
+            function renderPerCategory(perCategory) {
+                const grid = $("per-category-grid");
+                if (!grid) return;
+
+                if (!perCategory || !perCategory.length) {
+                    grid.innerHTML =
+                        '<div class="col-span-full bg-white border border-gray-100 rounded-xl p-10 text-center text-gray-400 text-sm">No categories yet — create one from the Categories tab.</div>';
+                    return;
+                }
+
+                grid.innerHTML = perCategory
+                    .map((cat) => {
+                        const header = `
+                        <div class="cat-card-header flex items-center justify-between gap-2">
+                            <h4 class="font-bold text-sm text-gray-900 truncate">${escapeHtml(cat.name)}</h4>
+                            <span class="text-[10px] font-bold text-indigo-700 bg-white/70 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">${cat.totalVotes.toLocaleString()} vote${cat.totalVotes === 1 ? "" : "s"}</span>
+                        </div>`;
+
+                        if (!cat.nominees || !cat.nominees.length) {
+                            return `<div class="cat-card">${header}
+                                <div class="p-6 text-center text-xs text-gray-400">No nominees in this category yet.</div>
+                            </div>`;
+                        }
+
+                        const rows = cat.nominees
+                            .map(
+                                (n) => `
+                            <div class="nom-row flex items-center gap-2.5">
+                                <div class="rank-badge ${rankClass(n.rank)}">${n.rank}</div>
+                                <img
+                                    src="${nomineeImg(n.name, n.img)}"
+                                    alt=""
+                                    class="w-9 h-9 rounded-lg object-cover bg-gray-100 shrink-0"
+                                    onerror="this.onerror=null;this.src='https://placehold.co/40x40/3F51B5/ffffff?text=?'"
+                                />
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-2 mb-1">
+                                        <div class="min-w-0">
+                                            <div class="text-xs font-semibold text-gray-900 truncate">${escapeHtml(n.name)}</div>
+                                            <div class="text-[9px] font-mono text-gray-400 truncate">${escapeHtml(n.code || "")}</div>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <div class="text-xs font-bold text-indigo-600">${n.votes.toLocaleString()}</div>
+                                            <div class="text-[9px] font-medium text-gray-500">${n.percent}%</div>
+                                        </div>
+                                    </div>
+                                    <div class="nom-bar">
+                                        <div style="width: ${Math.max(n.percent, 1)}%"></div>
+                                    </div>
+                                </div>
+                            </div>`,
+                            )
+                            .join("");
+
+                        return `<div class="cat-card">
+                            ${header}
+                            <div class="p-3 space-y-1.5 max-h-[420px] overflow-y-auto">${rows}</div>
+                        </div>`;
+                    })
+                    .join("");
             }
 
             /* ---------- CATEGORIES ---------- */
@@ -1590,29 +1900,25 @@
                     counts[n.category_id] = (counts[n.category_id] || 0) + 1;
                 list.innerHTML = CATEGORIES.map(
                     (c) => `
-    <div class="flex items-center justify-between p-4">
-      <div class="flex items-center gap-3 min-w-0">
-        <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="ph ph-folder"></i></div>
-        <div class="min-w-0">
-          <div class="font-semibold truncate">${c.name}</div>
-          <div class="text-xs text-gray-500">${counts[c.id] || 0} nominees</div>
-        </div>
-      </div>
-      <div class="flex gap-2 shrink-0">
-        <button onclick="editCategory('${c.id}','${c.name.replace(/'/g, "\\'")}')" class="btn btn-outline btn-sm"><i class="ph ph-pencil"></i> Rename</button>
-        <button onclick="deleteCategory('${c.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
-      </div>
-    </div>
-  `,
+                <div class="flex items-center justify-between p-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="ph ph-folder"></i></div>
+                        <div class="min-w-0">
+                            <div class="font-semibold truncate">${escapeHtml(c.name)}</div>
+                            <div class="text-xs text-gray-500">${counts[c.id] || 0} nominees</div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="editCategory('${c.id}','${escapeHtml(c.name).replace(/'/g, "\\'")}')" class="btn btn-outline btn-sm"><i class="ph ph-pencil"></i> Rename</button>
+                        <button onclick="deleteCategory('${c.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
+                    </div>
+                </div>`,
                 ).join("");
             }
 
             async function createCategory() {
                 const name = $("new-cat-name").value.trim();
-                if (!name) {
-                    toast("Enter a name", false);
-                    return;
-                }
+                if (!name) return toast("Enter a name", false);
                 try {
                     await api("/api/admin/categories", {
                         method: "POST",
@@ -1657,7 +1963,7 @@
                 }
             }
 
-            /* ---------- NOMINEES ---------- */
+            /* ---------- NOMINEES (sorted by votes DESC) ---------- */
             async function loadNominees() {
                 await refreshBase();
                 renderNomineeList();
@@ -1673,7 +1979,9 @@
                         n.name.toLowerCase().includes(q) ||
                         n.code.toLowerCase().includes(q)
                     );
-                });
+                })
+                    // ✅ Sort by highest votes first
+                    .sort((a, b) => (b.votes || 0) - (a.votes || 0));
 
                 const list = $("nominees-list");
                 if (!filtered.length) {
@@ -1682,22 +1990,24 @@
                     return;
                 }
                 list.innerHTML = filtered
-                    .map(
-                        (n) => `
+                    .map((n) => {
+                        const img = n.img
+                            ? n.img
+                            : `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent((n.name || "?")[0])}`;
+                        return `
                         <div class="flex items-center gap-4 p-4">
-                          <img src="${n.img || `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent(n.name[0] || "?")}`}" class="w-12 h-12 rounded-lg object-cover" onerror="this.onerror=null;this.src='https://placehold.co/80x80/3F51B5/ffffff?text=?';">
-      <div class="flex-1 min-w-0">
-        <div class="font-semibold truncate">${n.name}</div>
-        <div class="text-xs text-gray-500">${n.category} · <span class="font-mono">${n.code}</span></div>
-      </div>
-      <div class="text-right hidden sm:block">
-        <div class="text-sm font-bold text-indigo-600">${(n.votes || 0).toLocaleString()}</div>
-        <div class="text-[10px] text-gray-400 uppercase tracking-wider">Votes</div>
-      </div>
-      <button onclick="deleteNominee('${n.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
-    </div>
-  `,
-                    )
+                            <img src="${img}" class="w-12 h-12 rounded-lg object-cover bg-gray-100" onerror="this.onerror=null;this.src='https://placehold.co/80x80/3F51B5/ffffff?text=?';">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold truncate">${escapeHtml(n.name)}</div>
+                                <div class="text-xs text-gray-500">${escapeHtml(n.category)} · <span class="font-mono">${escapeHtml(n.code)}</span></div>
+                            </div>
+                            <div class="text-right hidden sm:block">
+                                <div class="text-sm font-bold text-indigo-600">${(n.votes || 0).toLocaleString()}</div>
+                                <div class="text-[10px] text-gray-400 uppercase tracking-wider">Votes</div>
+                            </div>
+                            <button onclick="deleteNominee('${n.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
+                        </div>`;
+                    })
                     .join("");
             }
 
@@ -1720,14 +2030,10 @@
             function handleAdminImage(event) {
                 const f = event.target.files[0];
                 if (!f) return;
-                if (!f.type.startsWith("image/")) {
-                    toast("Please choose an image file", false);
-                    return;
-                }
-                if (f.size > 10 * 1024 * 1024) {
-                    toast("Image must be under 10 MB", false);
-                    return;
-                }
+                if (!f.type.startsWith("image/"))
+                    return toast("Please choose an image file", false);
+                if (f.size > 10 * 1024 * 1024)
+                    return toast("Image must be under 10 MB", false);
                 anSelectedFile = f;
                 anUploadedUrl = null;
                 const reader = new FileReader();
@@ -1778,14 +2084,7 @@
                         try {
                             const parsed = JSON.parse(xhr.responseText);
                             if (parsed && parsed.error) msg = parsed.error;
-                            if (parsed && parsed.detail)
-                                msg += " — " + parsed.detail;
                         } catch {}
-                        console.error(
-                            "[Upload] Server response:",
-                            xhr.status,
-                            xhr.responseText,
-                        );
                         reject(new Error(msg));
                     };
                     xhr.onerror = () => {
@@ -1803,18 +2102,10 @@
                 const categoryId = $("an-category").value;
                 const desc = $("an-desc").value.trim();
 
-                if (!name) {
-                    toast("Enter the nominee's full name", false);
-                    return;
-                }
-                if (!categoryId) {
-                    toast("Select a category", false);
-                    return;
-                }
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    toast("Enter a valid email address", false);
-                    return;
-                }
+                if (!name) return toast("Enter the nominee's full name", false);
+                if (!categoryId) return toast("Select a category", false);
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                    return toast("Enter a valid email address", false);
 
                 const btn = $("an-create-btn");
                 const origHtml = btn.innerHTML;
@@ -1824,9 +2115,8 @@
 
                 try {
                     let imgUrl = anUploadedUrl;
-                    if (anSelectedFile && !imgUrl) {
+                    if (anSelectedFile && !imgUrl)
                         imgUrl = await uploadAdminImage();
-                    }
 
                     const r = await api("/api/admin/nominees", {
                         method: "POST",
@@ -1906,7 +2196,7 @@
                 }
             }
 
-            /* ---------- TRANSACTIONS (super only) ---------- */
+            /* ---------- TRANSACTIONS ---------- */
             async function loadTransactions() {
                 try {
                     const txs = await api("/api/admin/transactions");
@@ -1920,32 +2210,35 @@
                         ({
                             vote: "Vote",
                             category_change: "Category Change",
-                            leaderboard_once: "Leaderboard (1x)",
-                            leaderboard_2h: "Leaderboard (2h)",
+                            leaderboard_once: "Leaderboard (1 min)",
+                            leaderboard_1h: "Leaderboard (1 h)",
+                            leaderboard_12h: "Leaderboard (12 h)",
+                            leaderboard_24h: "Leaderboard (1 day)",
+                            leaderboard_2h: "Leaderboard (2 h · legacy)",
+                            boost_50: "Power Boost (+50)",
                         })[t] || t;
                     tbody.innerHTML = txs
                         .map(
                             (tx) => `
-      <tr>
-        <td class="px-4 py-3 font-mono text-xs">${tx.reference}</td>
-        <td class="px-4 py-3 text-xs">${label(tx.type)}</td>
-        <td class="px-4 py-3 text-xs">${tx.nominee_name || "—"}</td>
-        <td class="px-4 py-3 text-xs font-semibold">KES ${tx.amount}</td>
-        <td class="px-4 py-3 text-xs">${tx.phone}</td>
-        <td class="px-4 py-3">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-              tx.status === "success"
-                  ? "bg-green-100 text-green-700"
-                  : tx.status === "pending"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : tx.status === "abandoned"
-                      ? "bg-gray-100 text-gray-600"
-                      : "bg-red-100 text-red-700"
-          }">${tx.status}</span>
-        </td>
-        <td class="px-4 py-3 text-xs text-gray-500">${new Date(tx.created_at).toLocaleString()}</td>
-      </tr>
-    `,
+                        <tr>
+                            <td class="px-4 py-3 font-mono text-xs">${escapeHtml(tx.reference)}</td>
+                            <td class="px-4 py-3 text-xs">${escapeHtml(label(tx.type))}</td>
+                            <td class="px-4 py-3 text-xs">${escapeHtml(tx.nominee_name || "—")}</td>
+                            <td class="px-4 py-3 text-xs font-semibold">KES ${Number(tx.amount).toLocaleString()}</td>
+                            <td class="px-4 py-3 text-xs">${escapeHtml(tx.phone)}</td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                    tx.status === "success"
+                                        ? "bg-green-100 text-green-700"
+                                        : tx.status === "pending"
+                                          ? "bg-yellow-100 text-yellow-700"
+                                          : tx.status === "abandoned"
+                                            ? "bg-gray-100 text-gray-600"
+                                            : "bg-red-100 text-red-700"
+                                }">${escapeHtml(tx.status)}</span>
+                            </td>
+                            <td class="px-4 py-3 text-xs text-gray-500">${new Date(tx.created_at).toLocaleString()}</td>
+                        </tr>`,
                         )
                         .join("");
                 } catch (e) {
@@ -1953,47 +2246,45 @@
                 }
             }
 
-            /* ---------- ADMINS (super only) ---------- */
+            /* ---------- ADMINS ---------- */
             async function loadAdmins() {
                 try {
                     const d = await api("/api/admin/users");
                     const list = $("admins-list");
                     const rows = [];
                     rows.push(`
-      <div class="flex items-center justify-between p-4 bg-indigo-50/50">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><i class="ph-fill ph-shield-star"></i></div>
-          <div>
-            <div class="font-semibold">${d.super.username}</div>
-            <div class="text-xs text-indigo-700">Root account · from .env</div>
-          </div>
-        </div>
-        <span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-indigo-100 text-indigo-700">Root</span>
-      </div>
-    `);
+                    <div class="flex items-center justify-between p-4 bg-indigo-50/50">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><i class="ph-fill ph-shield-star"></i></div>
+                            <div>
+                                <div class="font-semibold">${escapeHtml(d.super.username)}</div>
+                                <div class="text-xs text-indigo-700">Root account · from .env</div>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-indigo-100 text-indigo-700">Root</span>
+                    </div>`);
                     for (const a of d.admins) {
                         rows.push(`
-        <div class="flex items-center justify-between p-4 ${a.revoked ? "opacity-60" : ""}">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center"><i class="ph ph-user"></i></div>
-            <div>
-              <div class="font-semibold">${a.display_name || a.username} <span class="text-gray-400 text-xs font-normal">@${a.username}</span></div>
-              <div class="text-xs text-gray-500">
-                ${
-                    a.revoked
-                        ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
-                        : `Created ${new Date(a.created_at).toLocaleDateString()}`
-                }
-              </div>
-            </div>
-          </div>
-          ${
-              a.revoked
-                  ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
-                  : `<button onclick="revokeAdmin('${a.id}','${a.username}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`
-          }
-        </div>
-      `);
+                        <div class="flex items-center justify-between p-4 ${a.revoked ? "opacity-60" : ""}">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center"><i class="ph ph-user"></i></div>
+                                <div>
+                                    <div class="font-semibold">${escapeHtml(a.display_name || a.username)} <span class="text-gray-400 text-xs font-normal">@${escapeHtml(a.username)}</span></div>
+                                    <div class="text-xs text-gray-500">
+                                        ${
+                                            a.revoked
+                                                ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
+                                                : `Created ${new Date(a.created_at).toLocaleDateString()}`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            ${
+                                a.revoked
+                                    ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
+                                    : `<button onclick="revokeAdmin('${a.id}','${escapeHtml(a.username)}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`
+                            }
+                        </div>`);
                     }
                     list.innerHTML = rows.join("");
                 } catch (e) {
@@ -2012,10 +2303,8 @@
                 const username = $("aa-username").value.trim();
                 const displayName = $("aa-display").value.trim();
                 const password = $("aa-password").value;
-                if (!username || !password) {
-                    toast("Username and password required", false);
-                    return;
-                }
+                if (!username || !password)
+                    return toast("Username and password required", false);
                 try {
                     await api("/api/admin/users", {
                         method: "POST",
@@ -2044,13 +2333,10 @@
                 }
             }
 
-            /* ---------- LOGS (super only) ---------- */
+            /* ---------- LOGS ---------- */
             async function loadLogs() {
                 const ref = $("log-ref").value.trim();
-                if (!ref) {
-                    toast("Enter a reference", false);
-                    return;
-                }
+                if (!ref) return toast("Enter a reference", false);
                 try {
                     const logs = await api(
                         "/api/admin/logs/" + encodeURIComponent(ref),
@@ -2064,19 +2350,18 @@
                     list.innerHTML = logs
                         .map(
                             (l) => `
-      <div class="p-3 flex items-start gap-3 border-b border-gray-50 last:border-0">
-        <div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
-          <i class="ph ph-activity"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="flex flex-wrap gap-2 items-baseline">
-            <span class="font-semibold text-sm">${l.event}</span>
-            <span class="text-xs text-gray-400">${new Date(l.created_at).toLocaleString()}</span>
-          </div>
-          ${l.details ? `<div class="text-xs text-gray-500 mt-1 font-mono break-all">${l.details}</div>` : ""}
-        </div>
-      </div>
-    `,
+                        <div class="p-3 flex items-start gap-3 border-b border-gray-50 last:border-0">
+                            <div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
+                                <i class="ph ph-activity"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-wrap gap-2 items-baseline">
+                                    <span class="font-semibold text-sm">${escapeHtml(l.event)}</span>
+                                    <span class="text-xs text-gray-400">${new Date(l.created_at).toLocaleString()}</span>
+                                </div>
+                                ${l.details ? `<div class="text-xs text-gray-500 mt-1 font-mono break-all">${escapeHtml(l.details)}</div>` : ""}
+                            </div>
+                        </div>`,
                         )
                         .join("");
                 } catch (e) {
@@ -2084,7 +2369,7 @@
                 }
             }
 
-            /* ---------- EXPORT (super only) ---------- */
+            /* ---------- EXPORT ---------- */
             async function downloadExport(kind) {
                 try {
                     const res = await fetch(`/api/admin/export/${kind}`, {
