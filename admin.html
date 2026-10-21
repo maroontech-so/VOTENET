@@ -283,8 +283,6 @@
                 color: #6b7280;
                 margin-top: 4px;
             }
-
-            /* ✅ New: per-category distribution cards */
             .cat-card {
                 background: white;
                 border: 1px solid #eef0f3;
@@ -351,7 +349,7 @@
         </style>
     </head>
     <body>
-        <!-- =================== LOGIN =================== -->
+        <!-- LOGIN -->
         <div
             id="login-view"
             class="min-h-screen flex items-center justify-center p-4"
@@ -395,7 +393,7 @@
             </div>
         </div>
 
-        <!-- =================== DASHBOARD =================== -->
+        <!-- DASHBOARD -->
         <div id="dash-view" class="hidden min-h-screen flex flex-col">
             <header
                 class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-20"
@@ -490,7 +488,6 @@
                         >
                             <i class="ph ph-receipt"></i> Transactions
                         </a>
-
                         <div
                             class="px-5 mb-2 mt-6 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
                             data-super
@@ -526,18 +523,33 @@
                 </aside>
 
                 <main class="flex-1 overflow-y-auto p-4 lg:p-8">
-                    <!-- ============================== OVERVIEW ============================== -->
+                    <!-- ===================== OVERVIEW ===================== -->
                     <section id="tab-overview">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
                         >
                             <div>
                                 <h1 class="text-2xl font-bold">Overview</h1>
-                                <p class="text-sm text-gray-500 mt-1">
-                                    Real-time metrics across all categories.
+                                <p
+                                    class="text-sm text-gray-500 mt-1 flex items-center gap-2 flex-wrap"
+                                >
+                                    <span
+                                        >Real-time metrics across all
+                                        categories.</span
+                                    >
+                                    <span
+                                        id="overview-updated"
+                                        class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md"
+                                    >
+                                        <span
+                                            class="live-dot"
+                                            style="width: 6px; height: 6px"
+                                        ></span>
+                                        Live
+                                    </span>
                                 </p>
                             </div>
-                            <div class="flex gap-2" data-super>
+                            <div class="flex gap-2">
                                 <button
                                     onclick="downloadExport('csv')"
                                     class="btn btn-outline"
@@ -548,12 +560,11 @@
                                     onclick="downloadExport('pdf')"
                                     class="btn"
                                 >
-                                    <i class="ph ph-file-pdf"></i> PDF Report
+                                    <i class="ph ph-file-pdf"></i> Signed PDF
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Primary stats -->
                         <div
                             id="stats-grid"
                             class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6"
@@ -660,7 +671,6 @@
                             </div>
                         </div>
 
-                        <!-- Secondary stats (unique voters, categories, avg votes) -->
                         <div
                             id="stats-secondary"
                             class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
@@ -727,7 +737,6 @@
                             </div>
                         </div>
 
-                        <!-- Row 1: Top 5 + Category doughnut -->
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                             <div
                                 class="bg-white border border-gray-100 rounded-xl p-5 lg:col-span-2"
@@ -753,7 +762,6 @@
                             </div>
                         </div>
 
-                        <!-- Row 2: Multi-line trend by category -->
                         <div
                             class="bg-white border border-gray-100 rounded-xl p-5 mb-6"
                         >
@@ -773,7 +781,6 @@
                             </div>
                         </div>
 
-                        <!-- Row 3: Per-category distribution cards -->
                         <div class="mb-8">
                             <div class="flex items-end justify-between mb-4">
                                 <div>
@@ -797,9 +804,49 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div
+                            class="mt-8 p-5 bg-gradient-to-r from-indigo-50 via-white to-purple-50 border border-indigo-100 rounded-2xl flex items-center gap-4"
+                        >
+                            <div
+                                class="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200"
+                            >
+                                <i class="ph-fill ph-seal-check text-2xl"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-bold text-gray-900 text-sm">
+                                    Official Voteus Report System
+                                </div>
+                                <div
+                                    class="text-xs text-gray-600 mt-0.5 leading-relaxed"
+                                >
+                                    Every export is cryptographically signed
+                                    with a unique
+                                    <strong>Report ID</strong> and a SHA-256
+                                    <strong>Signature</strong>. Financial data
+                                    is only included for Super Administrators.
+                                    Verify any report's authenticity with the
+                                    signature on its cover.
+                                </div>
+                            </div>
+                            <div
+                                class="hidden md:flex flex-col items-end shrink-0"
+                            >
+                                <div
+                                    class="text-[10px] font-bold uppercase tracking-wider text-indigo-600"
+                                >
+                                    Signature method
+                                </div>
+                                <div
+                                    class="text-[11px] font-mono text-gray-500"
+                                >
+                                    SHA-256 + server secret
+                                </div>
+                            </div>
+                        </div>
                     </section>
 
-                    <!-- ============================== CATEGORIES ============================== -->
+                    <!-- ===================== CATEGORIES ===================== -->
                     <section id="tab-categories" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Categories</h1>
@@ -833,7 +880,7 @@
                         </div>
                     </section>
 
-                    <!-- ============================== NOMINEES ============================== -->
+                    <!-- ===================== NOMINEES ===================== -->
                     <section id="tab-nominees" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -875,7 +922,7 @@
                         </div>
                     </section>
 
-                    <!-- ============================== TRANSACTIONS ============================== -->
+                    <!-- ===================== TRANSACTIONS ===================== -->
                     <section id="tab-transactions" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -928,7 +975,7 @@
                         </div>
                     </section>
 
-                    <!-- ============================== ADMINS ============================== -->
+                    <!-- ===================== ADMINS ===================== -->
                     <section id="tab-admins" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -953,7 +1000,7 @@
                         </div>
                     </section>
 
-                    <!-- ============================== LOGS ============================== -->
+                    <!-- ===================== LOGS ===================== -->
                     <section id="tab-logs" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Payment Logs</h1>
@@ -994,7 +1041,7 @@
             </div>
         </div>
 
-        <!-- ============ MODAL: ADD NOMINEE ============ -->
+        <!-- MODAL: ADD NOMINEE -->
         <div id="add-nominee-modal" class="modal">
             <div
                 class="bg-white rounded-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto"
@@ -1128,7 +1175,7 @@
             </div>
         </div>
 
-        <!-- ============ MODAL: CREDENTIALS ============ -->
+        <!-- MODAL: CREDENTIALS -->
         <div id="creds-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -1200,7 +1247,7 @@
             </div>
         </div>
 
-        <!-- ============ MODAL: ADD ADMIN ============ -->
+        <!-- MODAL: ADD ADMIN -->
         <div id="add-admin-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -1274,7 +1321,6 @@
             let charts = [];
             let CATEGORIES = [];
             let NOMINEES = [];
-
             let anSelectedFile = null;
             let anUploadedUrl = null;
             let lastCreds = null;
@@ -1358,8 +1404,7 @@
                         sseRetries = 0;
                         setLiveStatus(true);
                         try {
-                            const evt = JSON.parse(e.data);
-                            scheduleLiveRefresh(evt);
+                            scheduleLiveRefresh(JSON.parse(e.data));
                         } catch {}
                     });
                     liveStream.onopen = () => setLiveStatus(true);
@@ -1447,7 +1492,7 @@
                 location.reload();
             }
 
-            /* ---------- TAB SWITCHING ---------- */
+            /* ---------- TABS ---------- */
             function switchTab(tab) {
                 document
                     .querySelectorAll(".nav-item")
@@ -1469,7 +1514,6 @@
                 );
 
                 if (window.innerWidth < 1024) closeSidebar();
-
                 if (tab === "overview") loadOverview();
                 if (tab === "categories") loadCategories();
                 if (tab === "nominees") loadNominees();
@@ -1494,10 +1538,8 @@
                     location.reload();
                     return;
                 }
-
                 $("login-view").classList.add("hidden");
                 $("dash-view").classList.remove("hidden");
-
                 $("admin-name").innerText = user.displayName || user.username;
                 $("admin-avatar").innerText = (
                     user.displayName || user.username
@@ -1543,51 +1585,58 @@
             /* ---------- OVERVIEW ---------- */
             async function loadOverview() {
                 try {
-                    const [stats, chartsData] = await Promise.all([
-                        api("/api/admin/stats"),
-                        api("/api/admin/charts"),
-                    ]);
-
+                    const stats = await api("/api/admin/stats");
                     $("s-votes").innerText = Number(
-                        stats.totalVotes,
+                        stats.totalVotes || 0,
                     ).toLocaleString();
                     $("s-nominees").innerText = Number(
-                        stats.nomineesCount,
+                        stats.nomineesCount || 0,
                     ).toLocaleString();
                     $("s-cats").innerText = Number(
                         stats.categoriesCount || 0,
                     ).toLocaleString();
-
-                    if (stats.nomineesCount > 0) {
-                        const avg = stats.totalVotes / stats.nomineesCount;
-                        $("s-avg").innerText = avg.toFixed(1);
-                    } else {
-                        $("s-avg").innerText = "0";
-                    }
+                    $("s-avg").innerText = Number(
+                        stats.avgVotesPerNominee || 0,
+                    ).toFixed(1);
 
                     if (isSuper()) {
-                        $("s-gross").innerText =
-                            "KES " +
-                            Number(stats.grossRevenue || 0).toLocaleString();
-                        $("s-plat").innerText =
-                            "KES " +
-                            Number(stats.platformRevenue || 0).toLocaleString();
-                        $("s-pending").innerText = stats.pendingPayments || 0;
                         $("s-unique-voters").innerText = Number(
                             stats.uniqueVoters || 0,
                         ).toLocaleString();
                         $("s-unique-devices").innerText = Number(
                             stats.uniqueDevices || 0,
                         ).toLocaleString();
+                        $("s-gross").innerText =
+                            "KES " +
+                            Number(stats.grossRevenue || 0).toLocaleString();
+                        $("s-plat").innerText =
+                            "KES " +
+                            Number(stats.platformRevenue || 0).toLocaleString();
+                        $("s-pending").innerText = Number(
+                            stats.pendingPayments || 0,
+                        ).toLocaleString();
                     } else {
                         $("s-unique-voters").innerText = "—";
                         $("s-unique-devices").innerText = "—";
                     }
 
+                    const upd = $("overview-updated");
+                    if (upd)
+                        upd.innerHTML =
+                            '<span class="live-dot" style="width:6px;height:6px"></span> Updated ' +
+                            new Date().toLocaleTimeString();
+                } catch (e) {
+                    console.error("[Stats]", e);
+                    toast("Stats: " + e.message, false);
+                }
+
+                try {
+                    const chartsData = await api("/api/admin/charts");
                     renderCharts(chartsData);
                     renderPerCategory(chartsData.perCategory || []);
                 } catch (e) {
-                    toast(e.message, false);
+                    console.error("[Charts]", e);
+                    toast("Charts: " + e.message, false);
                 }
             }
 
@@ -1602,7 +1651,6 @@
                 Chart.defaults.font.family = "Inter, sans-serif";
                 Chart.defaults.color = "#6b7280";
 
-                /* ---------- Bar chart: Top 5 ---------- */
                 const barEl = $("barChart");
                 if (barEl) {
                     const labels = data.topNominees.map((n) => n.name);
@@ -1648,7 +1696,6 @@
                     );
                 }
 
-                /* ---------- Doughnut: Votes by Category ---------- */
                 const doEl = $("doughnutChart");
                 if (doEl) {
                     const labels = data.categoryDistribution.map((c) => c.name);
@@ -1707,7 +1754,6 @@
                     );
                 }
 
-                /* ---------- Multi-line chart: votes per category over 7 days ---------- */
                 const lineEl = $("lineChart");
                 if (lineEl) {
                     const categories = data.categories || [];
@@ -1744,7 +1790,6 @@
                         tension: 0.35,
                     }));
 
-                    // Dashed total line for context
                     datasets.push({
                         label: "Total",
                         data: dailyTotals.map((d) => d.votes || 0),
@@ -1808,7 +1853,6 @@
                 }
             }
 
-            /* ---------- PER-CATEGORY DISTRIBUTION GRID ---------- */
             function rankClass(rank) {
                 if (rank === 1) return "rank-1";
                 if (rank === 2) return "rank-2";
@@ -1900,25 +1944,28 @@
                     counts[n.category_id] = (counts[n.category_id] || 0) + 1;
                 list.innerHTML = CATEGORIES.map(
                     (c) => `
-                <div class="flex items-center justify-between p-4">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="ph ph-folder"></i></div>
-                        <div class="min-w-0">
-                            <div class="font-semibold truncate">${escapeHtml(c.name)}</div>
-                            <div class="text-xs text-gray-500">${counts[c.id] || 0} nominees</div>
+                    <div class="flex items-center justify-between p-4">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="ph ph-folder"></i></div>
+                            <div class="min-w-0">
+                                <div class="font-semibold truncate">${escapeHtml(c.name)}</div>
+                                <div class="text-xs text-gray-500">${counts[c.id] || 0} nominees</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="flex gap-2 shrink-0">
-                        <button onclick="editCategory('${c.id}','${escapeHtml(c.name).replace(/'/g, "\\'")}')" class="btn btn-outline btn-sm"><i class="ph ph-pencil"></i> Rename</button>
-                        <button onclick="deleteCategory('${c.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
-                    </div>
-                </div>`,
+                        <div class="flex gap-2 shrink-0">
+                            <button onclick="editCategory('${c.id}','${escapeHtml(c.name).replace(/'/g, "\\'")}')" class="btn btn-outline btn-sm"><i class="ph ph-pencil"></i> Rename</button>
+                            <button onclick="deleteCategory('${c.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
+                        </div>
+                    </div>`,
                 ).join("");
             }
 
             async function createCategory() {
                 const name = $("new-cat-name").value.trim();
-                if (!name) return toast("Enter a name", false);
+                if (!name) {
+                    toast("Enter a name", false);
+                    return;
+                }
                 try {
                     await api("/api/admin/categories", {
                         method: "POST",
@@ -1979,9 +2026,7 @@
                         n.name.toLowerCase().includes(q) ||
                         n.code.toLowerCase().includes(q)
                     );
-                })
-                    // ✅ Sort by highest votes first
-                    .sort((a, b) => (b.votes || 0) - (a.votes || 0));
+                }).sort((a, b) => (b.votes || 0) - (a.votes || 0));
 
                 const list = $("nominees-list");
                 if (!filtered.length) {
@@ -2030,10 +2075,14 @@
             function handleAdminImage(event) {
                 const f = event.target.files[0];
                 if (!f) return;
-                if (!f.type.startsWith("image/"))
-                    return toast("Please choose an image file", false);
-                if (f.size > 10 * 1024 * 1024)
-                    return toast("Image must be under 10 MB", false);
+                if (!f.type.startsWith("image/")) {
+                    toast("Please choose an image file", false);
+                    return;
+                }
+                if (f.size > 10 * 1024 * 1024) {
+                    toast("Image must be under 10 MB", false);
+                    return;
+                }
                 anSelectedFile = f;
                 anUploadedUrl = null;
                 const reader = new FileReader();
@@ -2101,23 +2150,27 @@
                 const password = $("an-password").value.trim();
                 const categoryId = $("an-category").value;
                 const desc = $("an-desc").value.trim();
-
-                if (!name) return toast("Enter the nominee's full name", false);
-                if (!categoryId) return toast("Select a category", false);
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-                    return toast("Enter a valid email address", false);
-
+                if (!name) {
+                    toast("Enter the nominee's full name", false);
+                    return;
+                }
+                if (!categoryId) {
+                    toast("Select a category", false);
+                    return;
+                }
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    toast("Enter a valid email address", false);
+                    return;
+                }
                 const btn = $("an-create-btn");
                 const origHtml = btn.innerHTML;
                 btn.disabled = true;
                 btn.innerHTML =
                     '<i class="ph ph-spinner animate-spin"></i> Adding…';
-
                 try {
                     let imgUrl = anUploadedUrl;
                     if (anSelectedFile && !imgUrl)
                         imgUrl = await uploadAdminImage();
-
                     const r = await api("/api/admin/nominees", {
                         method: "POST",
                         body: JSON.stringify({
@@ -2129,10 +2182,8 @@
                             password,
                         }),
                     });
-
                     closeModal("add-nominee-modal");
                     toast("Nominee added");
-
                     if (r.credentials) {
                         lastCreds = {
                             name,
@@ -2146,7 +2197,6 @@
                         $("creds-pass").innerText = r.credentials.password;
                         $("creds-modal").classList.add("show");
                     }
-
                     loadNominees();
                 } catch (e) {
                     toast(e.message, false);
@@ -2303,8 +2353,10 @@
                 const username = $("aa-username").value.trim();
                 const displayName = $("aa-display").value.trim();
                 const password = $("aa-password").value;
-                if (!username || !password)
-                    return toast("Username and password required", false);
+                if (!username || !password) {
+                    toast("Username and password required", false);
+                    return;
+                }
                 try {
                     await api("/api/admin/users", {
                         method: "POST",
@@ -2325,7 +2377,9 @@
             async function revokeAdmin(id, username) {
                 if (!confirm(`Revoke admin access for @${username}?`)) return;
                 try {
-                    await api("/api/admin/users/" + id, { method: "DELETE" });
+                    await api("/api/admin/users/" + id, {
+                        method: "DELETE",
+                    });
                     toast("Admin revoked");
                     loadAdmins();
                 } catch (e) {
@@ -2336,7 +2390,10 @@
             /* ---------- LOGS ---------- */
             async function loadLogs() {
                 const ref = $("log-ref").value.trim();
-                if (!ref) return toast("Enter a reference", false);
+                if (!ref) {
+                    toast("Enter a reference", false);
+                    return;
+                }
                 try {
                     const logs = await api(
                         "/api/admin/logs/" + encodeURIComponent(ref),
@@ -2369,33 +2426,48 @@
                 }
             }
 
-            /* ---------- EXPORT ---------- */
+            /* ---------- EXPORT (available to all admins) ---------- */
             async function downloadExport(kind) {
                 try {
                     const res = await fetch(`/api/admin/export/${kind}`, {
                         headers: { Authorization: "Bearer " + getToken() },
                     });
-                    if (!res.ok) throw new Error("Export failed");
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || "Export failed");
+                    }
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
+
+                    let filename = `votenet-report-${new Date()
+                        .toISOString()
+                        .slice(0, 10)}.${kind}`;
+                    const disp = res.headers.get("Content-Disposition") || "";
+                    const match = disp.match(/filename="([^"]+)"/);
+                    if (match) filename = match[1];
+
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `votenet-report-${new Date().toISOString().slice(0, 10)}.${kind}`;
+                    a.download = filename;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
                     URL.revokeObjectURL(url);
-                    toast(`${kind.toUpperCase()} downloaded`);
+
+                    const reportId = res.headers.get("X-Report-Id");
+                    toast(
+                        `${kind.toUpperCase()} downloaded${
+                            reportId ? " · " + reportId : ""
+                        }`,
+                    );
                 } catch (e) {
                     toast(e.message, false);
                 }
             }
 
-            /* ---------- MOBILE SIDEBAR ---------- */
             $("menu-toggle").addEventListener("click", openSidebar);
             $("sidebar-overlay").addEventListener("click", closeSidebar);
 
-            /* ---------- BOOT ---------- */
             (async () => {
                 if (getToken() && getAdmin()) {
                     try {

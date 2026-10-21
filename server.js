@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
@@ -28,19 +29,18 @@ const PAYHERO_CALLBACK_URL = process.env.PAYHERO_CALLBACK_URL || "";
 const PAYHERO_BASE_URL =
   process.env.PAYHERO_BASE_URL || "https://backend.payhero.co.ke/api/v2";
 
-// ✅ NEW PRICE TABLE — 4 leaderboard tiers + boost
 const PRICES = {
   category_change: 50,
-  leaderboard_once: 10, // 1 minute
-  leaderboard_1h: 25, // 1 hour
-  leaderboard_12h: 50, // 12 hours
-  leaderboard_24h: 100, // 24 hours
-  boost_50: 250, // +50 votes, once per nominee
+  leaderboard_once: 10,
+  leaderboard_1h: 25,
+  leaderboard_12h: 50,
+  leaderboard_24h: 100,
+  boost_50: 250,
 };
-const LEADERBOARD_ONCE_MS = 60 * 1000; // 1 minute
-const LEADERBOARD_1H_MS = 60 * 60 * 1000; // 1 hour
-const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000; // 12 hours
-const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LEADERBOARD_ONCE_MS = 60 * 1000;
+const LEADERBOARD_1H_MS = 60 * 60 * 1000;
+const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000;
+const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000;
 const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000; // legacy compat
 const BOOST_VOTES = 50;
 const STALE_TX_MINUTES = 15;
@@ -49,7 +49,6 @@ const SYNC_PUSH_INTERVAL_MS = 30_000;
 const SYNC_PULL_INTERVAL_MS = 60_000;
 const WAL_CHECKPOINT_INTERVAL_MS = 60_000;
 const CHECKPOINT_WAL_THRESHOLD = 5 * 1024 * 1024;
-
 const RECONCILE_INTERVAL_MS = 60_000;
 const RECONCILE_MIN_AGE_MS = 30_000;
 
@@ -57,6 +56,9 @@ const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const IMG_TARGET_DIMENSION = 700;
 const IMG_JPEG_QUALITY = 82;
 const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000;
+
+const REPORT_SECRET =
+  process.env.REPORT_SECRET || JWT_SECRET || "voteus-report-secret";
 
 app.use(
   express.json({
@@ -94,18 +96,11 @@ async function processImage(buffer) {
         fit: "cover",
         position: "attention",
       })
-      .jpeg({
-        quality: IMG_JPEG_QUALITY,
-        mozjpeg: true,
-        progressive: true,
-      })
+      .jpeg({ quality: IMG_JPEG_QUALITY, mozjpeg: true, progressive: true })
       .toBuffer();
     return { data: out, mime: "image/jpeg" };
   } catch (err) {
-    console.warn(
-      "[Image] sharp could not process, storing original:",
-      err.message,
-    );
+    console.warn("[Image] sharp fallback:", err.message);
     return { data: buffer, mime: "application/octet-stream" };
   }
 }
@@ -157,11 +152,8 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_fv_nominee ON free_votes(nominee_id);
     CREATE INDEX IF NOT EXISTS idx_fv_device ON free_votes(device_hash);
     CREATE TABLE IF NOT EXISTS images (
-      id TEXT PRIMARY KEY,
-      data BLOB NOT NULL,
-      mime TEXT NOT NULL,
-      size INTEGER,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      id TEXT PRIMARY KEY, data BLOB NOT NULL, mime TEXT NOT NULL,
+      size INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS admins (
       id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -209,7 +201,6 @@ async function initSchema() {
     console.warn("[Schema] votes backfill:", e.message);
   }
 
-  // ✅ NEW — boost tracking table (one row per nominee, immutable)
   try {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS nominee_boosts (
@@ -227,7 +218,6 @@ async function initSchema() {
     console.warn("[Schema] nominee_boosts:", e.message);
   }
 
-  // ✅ One-time migration: any leftover credits become 1-minute timed access
   try {
     const withCredits = await db
       .prepare(
@@ -409,7 +399,7 @@ function adminAuthAllowQuery(req, res, next) {
 }
 
 // ============================================================
-// ✅ LIVE SSE STREAMS
+// LIVE SSE
 // ============================================================
 const nomineeVoteClients = new Map();
 const publicVoteClients = new Set();
@@ -441,11 +431,8 @@ function initSSE(req, res, bucketSet, key) {
   const hb = setInterval(() => writeSSE(res, ": ping\n\n"), 25_000);
   req.on("close", () => {
     clearInterval(hb);
-    if (bucketSet instanceof Map) {
-      bucketSet.get(key)?.delete(res);
-    } else {
-      bucketSet.delete(res);
-    }
+    if (bucketSet instanceof Map) bucketSet.get(key)?.delete(res);
+    else bucketSet.delete(res);
   });
 }
 
@@ -461,18 +448,14 @@ async function broadcastVotes(nomineeId, votes) {
     console.warn("[SSE nominee broadcast]", e.message);
   }
 }
-
 function broadcastPublicVote(nomineeId, votes) {
   const payload = `event: vote\ndata: ${JSON.stringify({ nomineeId, votes })}\n\n`;
   for (const r of publicVoteClients) writeSSE(r, payload);
 }
-
 function broadcastAdminEvent(event) {
   const payload = `event: update\ndata: ${JSON.stringify(event)}\n\n`;
   for (const r of adminStreamClients) writeSSE(r, payload);
 }
-
-// ✅ NEW — notify the nominee that their own payment completed
 function broadcastPaymentComplete(userId, txType, reference, extra = {}) {
   const payload = `event: payment\ndata: ${JSON.stringify({
     type: txType,
@@ -486,16 +469,185 @@ function broadcastPaymentComplete(userId, txType, reference, extra = {}) {
 app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
   initSSE(req, res, nomineeVoteClients, req.user.id);
 });
-
 app.get("/api/live/votes", (req, res) => {
   initSSE(req, res, publicVoteClients, null);
 });
-
 app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
   initSSE(req, res, adminStreamClients, null);
 });
 
-// ✅ Helper — extend leaderboard_access by a duration (stacks, never resets)
+// ============================================================
+// REPORT HELPERS (used by /api/admin/export/*)
+// ============================================================
+function buildReportId() {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const r = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `EXP-${d}-${r}`;
+}
+
+function signReport(payload) {
+  const sortedKeys = Object.keys(payload).sort();
+  const canonical = sortedKeys.map((k) => `${k}=${payload[k]}`).join("&");
+  return crypto
+    .createHash("sha256")
+    .update(canonical + "|" + REPORT_SECRET)
+    .digest("hex")
+    .toUpperCase()
+    .slice(0, 40);
+}
+
+function formatDateTime(iso) {
+  return new Date(iso).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function csvEscape(v) {
+  const s = String(v == null ? "" : v);
+  if (s.includes(",") || s.includes('"') || s.includes("\n"))
+    return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function shareBar(percent, width = 20) {
+  const filled = Math.max(
+    0,
+    Math.min(width, Math.round((percent / 100) * width)),
+  );
+  return "\u2588".repeat(filled) + "\u2591".repeat(width - filled);
+}
+
+async function loadReportData(req) {
+  const isSuper = req.admin.role === "super";
+  const reportId = buildReportId();
+  const generatedAt = new Date().toISOString();
+  const generatedBy = req.admin.username;
+  const generatedByRole = isSuper ? "Super Administrator" : "Administrator";
+
+  const categories = await db
+    .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
+    .all();
+
+  const nominees = await db
+    .prepare(
+      `SELECT id, name, code, category_id, COALESCE(votes, 0) as votes
+       FROM nominees ORDER BY category_id, COALESCE(votes, 0) DESC`,
+    )
+    .all();
+
+  const totalVotes = nominees.reduce((s, n) => s + (n.votes || 0), 0);
+  const uniqueVoters = (
+    await db
+      .prepare("SELECT COUNT(DISTINCT voter_token) as c FROM free_votes")
+      .get()
+  ).c;
+  const uniqueDevices = (
+    await db
+      .prepare(
+        "SELECT COUNT(DISTINCT device_hash) as c FROM free_votes WHERE device_hash IS NOT NULL",
+      )
+      .get()
+  ).c;
+
+  const signedData = {
+    reportId,
+    generatedAt,
+    generatedBy,
+    totalVotes,
+    categoryCount: categories.length,
+    nomineeCount: nominees.length,
+    uniqueVoters,
+    uniqueDevices,
+  };
+
+  let finance = null;
+  if (isSuper) {
+    const grossRevenue = (
+      await db
+        .prepare(
+          `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success'`,
+        )
+        .get()
+    ).t;
+    const successful = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='success'`,
+        )
+        .get()
+    ).c;
+    const pending = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='pending'`,
+        )
+        .get()
+    ).c;
+    const abandoned = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='abandoned'`,
+        )
+        .get()
+    ).c;
+
+    finance = {
+      grossRevenue,
+      platformRevenue: grossRevenue * 0.1,
+      successful,
+      pending,
+      abandoned,
+    };
+    signedData.grossRevenue = grossRevenue;
+  }
+
+  const signature = signReport(signedData);
+
+  const perCategory = categories.map((cat) => {
+    const list = nominees.filter((n) => n.category_id === cat.id);
+    const catTotal = list.reduce((s, n) => s + (n.votes || 0), 0);
+    return {
+      id: cat.id,
+      name: cat.name,
+      totalVotes: catTotal,
+      nominees: list.map((n, i) => ({
+        id: n.id,
+        name: n.name,
+        code: n.code,
+        votes: n.votes,
+        rank: i + 1,
+        percent:
+          catTotal > 0 ? Math.round((n.votes / catTotal) * 1000) / 10 : 0,
+      })),
+    };
+  });
+
+  return {
+    isSuper,
+    reportId,
+    generatedAt,
+    generatedBy,
+    generatedByRole,
+    categories,
+    nominees,
+    totalVotes,
+    uniqueVoters,
+    uniqueDevices,
+    finance,
+    signature,
+    perCategory,
+  };
+}
+
+// ============================================================
+// PAYMENT / TRANSACTION ENGINE
+// ============================================================
 async function extendLeaderboardAccess(t, userId, durationMs) {
   const existing = await t.get(
     "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
@@ -528,12 +680,10 @@ async function completeTransaction(reference, receipt) {
       if (Number(claimed.rowsAffected || 0) === 0) {
         return { ok: false, reason: "already_processed_or_not_pending" };
       }
-
       const txRow = await t.get(
         "SELECT * FROM transactions WHERE reference = ?",
         [reference],
       );
-
       let meta = {};
       try {
         meta = txRow.metadata ? JSON.parse(txRow.metadata) : {};
@@ -543,27 +693,20 @@ async function completeTransaction(reference, receipt) {
 
       if (txRow.type === "category_change") {
         const newCat = meta.newCategoryId;
-        if (!newCat) throw new Error("Missing newCategoryId in metadata");
-        const targetExists = await t.get(
-          "SELECT id FROM categories WHERE id = ?",
-          [newCat],
-        );
-        if (!targetExists) throw new Error("Target category no longer exists");
+        if (!newCat) throw new Error("Missing newCategoryId");
+        const target = await t.get("SELECT id FROM categories WHERE id = ?", [
+          newCat,
+        ]);
+        if (!target) throw new Error("Target category no longer exists");
         await t.execute({
           sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
           args: [newCat, txRow.nominee_id],
         });
-        console.log(
-          `[complete] category_change: nominee ${txRow.nominee_id} → cat ${newCat}`,
-        );
       } else if (txRow.type === "leaderboard_once") {
         extra.expiresAt = await extendLeaderboardAccess(
           t,
           txRow.user_id,
           LEADERBOARD_ONCE_MS,
-        );
-        console.log(
-          `[complete] leaderboard_once: ${txRow.user_id} until ${extra.expiresAt}`,
         );
       } else if (txRow.type === "leaderboard_1h") {
         extra.expiresAt = await extendLeaderboardAccess(
@@ -571,17 +714,11 @@ async function completeTransaction(reference, receipt) {
           txRow.user_id,
           LEADERBOARD_1H_MS,
         );
-        console.log(
-          `[complete] leaderboard_1h: ${txRow.user_id} until ${extra.expiresAt}`,
-        );
       } else if (txRow.type === "leaderboard_12h") {
         extra.expiresAt = await extendLeaderboardAccess(
           t,
           txRow.user_id,
           LEADERBOARD_12H_MS,
-        );
-        console.log(
-          `[complete] leaderboard_12h: ${txRow.user_id} until ${extra.expiresAt}`,
         );
       } else if (txRow.type === "leaderboard_24h") {
         extra.expiresAt = await extendLeaderboardAccess(
@@ -589,18 +726,11 @@ async function completeTransaction(reference, receipt) {
           txRow.user_id,
           LEADERBOARD_24H_MS,
         );
-        console.log(
-          `[complete] leaderboard_24h: ${txRow.user_id} until ${extra.expiresAt}`,
-        );
       } else if (txRow.type === "leaderboard_2h") {
-        // Legacy — old pending transactions from the previous code
         extra.expiresAt = await extendLeaderboardAccess(
           t,
           txRow.user_id,
           LEADERBOARD_2H_MS,
-        );
-        console.log(
-          `[complete] leaderboard_2h (legacy): ${txRow.user_id} until ${extra.expiresAt}`,
         );
       } else if (txRow.type === "boost_50") {
         const already = await t.get(
@@ -618,9 +748,6 @@ async function completeTransaction(reference, receipt) {
           args: [BOOST_VOTES, txRow.nominee_id],
         });
         extra.votes = BOOST_VOTES;
-        console.log(
-          `[complete] boost_50: nominee ${txRow.nominee_id} +${BOOST_VOTES}`,
-        );
       } else if (txRow.type === "vote") {
         await t.execute({
           sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
@@ -649,24 +776,6 @@ async function completeTransaction(reference, receipt) {
           expiresAt: result.extra?.expiresAt || null,
           votes: result.extra?.votes || null,
         });
-        // Also nudge public page if votes changed (boost)
-        if (result.type === "boost_50" && result.extra?.votes) {
-          const nom = await db
-            .prepare(
-              "SELECT COALESCE(votes, 0) as v FROM nominees WHERE id = ?",
-            )
-            .get(
-              await db
-                .prepare(
-                  "SELECT nominee_id FROM nominee_boosts WHERE reference = ?",
-                )
-                .get(reference)
-                .then((r) => r?.nominee_id || ""),
-            );
-          if (nom) {
-            // Not strictly required but keeps public page honest
-          }
-        }
       }
     } else {
       await logEvent(reference, "complete_skipped", { reason: result.reason });
@@ -720,7 +829,7 @@ async function initiatePayment({
     await db
       .prepare(
         `INSERT INTO transactions (id, reference, type, user_id, nominee_id, amount, phone, metadata)
-                      VALUES (?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?)`,
       )
       .run(
         id,
@@ -796,14 +905,12 @@ async function checkPayHeroStatus(reference) {
   const authHeader = Buffer.from(
     `${PAYHERO_API_KEY}:${PAYHERO_API_SECRET}`,
   ).toString("base64");
-
   const endpoints = [
     `${PAYHERO_BASE_URL}/payments/status?reference=${encodeURIComponent(reference)}`,
     `${PAYHERO_BASE_URL}/payments/${encodeURIComponent(reference)}`,
     `${PAYHERO_BASE_URL}/transactionstatus?reference=${encodeURIComponent(reference)}`,
     `${PAYHERO_BASE_URL}/transactions/${encodeURIComponent(reference)}`,
   ];
-
   for (const url of endpoints) {
     try {
       const r = await axios.get(url, {
@@ -820,7 +927,6 @@ async function checkPayHeroStatus(reference) {
 function interpretPayHeroStatus(payload) {
   if (!payload) return null;
   const data = payload.response || payload.data || payload;
-
   const receipt =
     data.MPESA_Reference ||
     data.mpesa_receipt ||
@@ -828,69 +934,46 @@ function interpretPayHeroStatus(payload) {
     data.Transaction_Reference ||
     data.receipt ||
     null;
-
-  if (receipt && String(receipt).trim().length > 0) {
+  if (receipt && String(receipt).trim().length > 0)
     return { status: "success", receipt: String(receipt).trim() };
-  }
-
   const resultCode = data.ResultCode ?? data.resultCode ?? null;
-  if (resultCode !== null && resultCode !== 0 && resultCode !== "0") {
+  if (resultCode !== null && resultCode !== 0 && resultCode !== "0")
     return { status: "failed" };
-  }
-
   const statusRaw = String(
     data.status ?? data.Status ?? data.PaymentStatus ?? "",
   ).toLowerCase();
-
   if (
     statusRaw.includes("fail") ||
     statusRaw.includes("cancel") ||
     statusRaw.includes("declin") ||
     statusRaw.includes("reject")
-  ) {
+  )
     return { status: "failed" };
-  }
-
   return null;
 }
 
+// ============================================================
+// IMAGE UPLOAD / SERVING
+// ============================================================
 app.post(
   "/api/upload",
   anyAuth,
   rateLimit({ key: "upload", max: 20 }),
   (req, res) => {
     upload.single("image")(req, res, async (err) => {
-      if (err) {
-        console.error("[Upload multer error]", err.message);
-        return res.status(400).json({ error: err.message });
-      }
+      if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
-      console.log(
-        `[Upload] Received ${req.file.originalname} (${req.file.mimetype}, ${Math.round(
-          req.file.size / 1024,
-        )} KB)`,
-      );
-
       try {
         const processed = await processImage(req.file.buffer);
         const id = uuidv4();
-
         await db
           .prepare(
             "INSERT INTO images (id, data, mime, size) VALUES (?, ?, ?, ?)",
           )
           .run(id, processed.data, processed.mime, processed.data.length);
-
         db.push().catch((e) => console.warn("[Push after upload]", e.message));
-
-        const url = `/api/images/${id}`;
-        console.log(
-          `[Upload] ✓ ${url} (${Math.round(processed.data.length / 1024)} KB)`,
-        );
-        res.json({ url, bytes: processed.data.length });
+        res.json({ url: `/api/images/${id}`, bytes: processed.data.length });
       } catch (e) {
-        console.error("[Upload] ✗", e.message);
         res.status(500).json({ error: e.message || "Image upload failed" });
       }
     });
@@ -899,47 +982,41 @@ app.post(
 
 app.get("/api/images/:id", async (req, res) => {
   const id = String(req.params.id || "").trim();
-  console.log(`[Images] GET ${id}`);
-
   if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
     res.setHeader("Cache-Control", "no-store");
     return res.status(400).end();
   }
-
   try {
     let row = await db
       .prepare("SELECT data, mime FROM images WHERE id = ?")
       .get(id);
-
     if (!row) {
       const remoteRow = await db.pullImage(id);
-      if (remoteRow) {
-        row = { data: remoteRow.data, mime: remoteRow.mime };
-      } else {
+      if (remoteRow) row = { data: remoteRow.data, mime: remoteRow.mime };
+      else {
         res.setHeader("Cache-Control", "no-store");
         return res.status(404).end();
       }
     }
-
     if (!row.data || row.data.length === 0) {
       res.setHeader("Cache-Control", "no-store");
       return res.status(500).end();
     }
-
     const buf = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
-
     res.setHeader("Content-Type", row.mime || "image/jpeg");
     res.setHeader("Content-Length", buf.length);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("ETag", `"${id}"`);
     res.send(buf);
   } catch (e) {
-    console.error(`[Images] ✗ error for ${id}:`, e.message);
     res.setHeader("Cache-Control", "no-store");
     res.status(500).end();
   }
 });
 
+// ============================================================
+// PUBLIC INFO / HEALTH / CONFIG
+// ============================================================
 app.get("/api/health", async (req, res) => {
   let dbOk = true;
   try {
@@ -947,18 +1024,12 @@ app.get("/api/health", async (req, res) => {
   } catch {
     dbOk = false;
   }
-  let imageCount = null;
-  try {
-    const row = await db.prepare("SELECT COUNT(*) as c FROM images").get();
-    imageCount = row?.c ?? 0;
-  } catch {}
   res.json({
     ok: dbOk,
     uptime: Math.floor(process.uptime()),
     memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + " MB",
     db: dbOk ? "ok" : "error",
     payhero: PAYHERO_API_KEY ? "live" : "simulation",
-    images: { storage: "sqlite-blob", count: imageCount },
     sse: {
       nominees: nomineeVoteClients.size,
       public: publicVoteClients.size,
@@ -1003,16 +1074,13 @@ app.get("/api/nominees", async (req, res) => {
 
   const rows = await db
     .prepare(
-      `
-    SELECT n.*, c.name as category FROM nominees n
-    JOIN categories c ON n.category_id = c.id ORDER BY n.created_at ASC
-  `,
+      `SELECT n.*, c.name as category FROM nominees n
+       JOIN categories c ON n.category_id = c.id ORDER BY n.created_at ASC`,
     )
     .all();
 
-  for (const r of rows) {
+  for (const r of rows)
     if (r.votes === null || r.votes === undefined) r.votes = 0;
-  }
 
   if (voterToken || deviceHash) {
     try {
@@ -1026,15 +1094,12 @@ app.get("/api/nominees", async (req, res) => {
         conditions.push("fv.device_hash = ?");
         params.push(deviceHash);
       }
-
       const voterVotes = await db
         .prepare(
-          `
-        SELECT fv.nominee_id, n2.category_id, n2.name, n2.code
-        FROM free_votes fv
-        JOIN nominees n2 ON fv.nominee_id = n2.id
-        WHERE ${conditions.join(" OR ")}
-      `,
+          `SELECT fv.nominee_id, n2.category_id, n2.name, n2.code
+           FROM free_votes fv
+           JOIN nominees n2 ON fv.nominee_id = n2.id
+           WHERE ${conditions.join(" OR ")}`,
         )
         .all(...params);
 
@@ -1042,15 +1107,13 @@ app.get("/api/nominees", async (req, res) => {
       const votedByCategory = {};
       for (const v of voterVotes) {
         votedByNominee.add(v.nominee_id);
-        if (!votedByCategory[v.category_id]) {
+        if (!votedByCategory[v.category_id])
           votedByCategory[v.category_id] = {
             nomineeId: v.nominee_id,
             name: v.name,
             code: v.code,
           };
-        }
       }
-
       for (const r of rows) {
         r.voted = votedByNominee.has(r.id);
         r.categoryVoted = Object.prototype.hasOwnProperty.call(
@@ -1075,10 +1138,8 @@ app.get("/api/nominees", async (req, res) => {
 app.get("/api/nominees/:code", async (req, res) => {
   const n = await db
     .prepare(
-      `
-    SELECT n.*, c.name as category FROM nominees n
-    JOIN categories c ON n.category_id = c.id WHERE n.code = ?
-  `,
+      `SELECT n.*, c.name as category FROM nominees n
+       JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
     )
     .get(req.params.code);
   if (!n) return res.status(404).json({ error: "Not found" });
@@ -1086,60 +1147,50 @@ app.get("/api/nominees/:code", async (req, res) => {
   res.json(n);
 });
 
+// ============================================================
+// AUTH: REGISTER / LOGIN
+// ============================================================
 app.post(
   "/api/auth/register",
   rateLimit({ key: "register", max: 10 }),
   async (req, res) => {
     try {
       const body = req.body || {};
-      const rawName = body.name;
-      const rawEmail = body.email;
-      const rawPassword = body.password;
-
-      if (!rawName || !rawEmail || !rawPassword) {
+      const { name, email, password } = body;
+      if (!name || !email || !password)
         return res
           .status(400)
           .json({ error: "Name, email, and password are required" });
-      }
-
-      const cleanName = String(rawName).trim();
-      const cleanEmail = String(rawEmail).trim().toLowerCase();
-      const cleanPassword = String(rawPassword);
-
-      if (!cleanName) {
+      const cleanName = String(name).trim();
+      const cleanEmail = String(email).trim().toLowerCase();
+      const cleanPassword = String(password);
+      if (!cleanName)
         return res.status(400).json({ error: "Name is required" });
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
         return res
           .status(400)
           .json({ error: "Please enter a valid email address" });
-      }
-      if (cleanPassword.length < 8) {
+      if (cleanPassword.length < 8)
         return res
           .status(400)
           .json({ error: "Password must be at least 8 characters" });
-      }
-      if (!/\d/.test(cleanPassword)) {
+      if (!/\d/.test(cleanPassword))
         return res
           .status(400)
           .json({ error: "Password must contain at least one number" });
-      }
 
       const existing = await db
         .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
         .get(cleanEmail);
-
-      if (existing && existing.id) {
+      if (existing && existing.id)
         return res.status(409).json({
           error:
             "An account with this email already exists. Try signing in instead.",
           code: "EMAIL_EXISTS",
         });
-      }
 
       const hash = await bcrypt.hash(cleanPassword, 10);
       const id = uuidv4();
-
       try {
         await db
           .prepare(
@@ -1151,28 +1202,21 @@ app.post(
           String(insErr.message || "")
             .toLowerCase()
             .includes("unique")
-        ) {
+        )
           return res.status(409).json({
             error:
               "An account with this email already exists. Try signing in instead.",
             code: "EMAIL_EXISTS",
           });
-        }
         throw insErr;
       }
 
       const token = jwt.sign({ id, role: "nominee" }, JWT_SECRET, {
         expiresIn: "7d",
       });
-
       res.json({
         token,
-        user: {
-          id,
-          name: cleanName,
-          email: cleanEmail,
-          hasNominee: false,
-        },
+        user: { id, name: cleanName, email: cleanEmail, hasNominee: false },
       });
     } catch (e) {
       console.error("[Register] Fatal:", e.message);
@@ -1188,9 +1232,7 @@ app.post(
     const { email, password } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ error: "Email and password required" });
-
     const cleanEmail = String(email).trim().toLowerCase();
-
     const user = await db
       .prepare("SELECT * FROM users WHERE LOWER(email) = ?")
       .get(cleanEmail);
@@ -1269,10 +1311,9 @@ app.post(
 app.get("/api/admin/users", superAuth, async (req, res) => {
   const rows = await db
     .prepare(
-      `
-    SELECT id, username, display_name, role, created_by, created_at, revoked, revoked_at, revoked_by
-    FROM admins ORDER BY created_at DESC
-  `,
+      `SELECT id, username, display_name, role, created_by, created_at,
+              revoked, revoked_at, revoked_by
+       FROM admins ORDER BY created_at DESC`,
     )
     .all();
   res.json({ admins: rows, super: { username: SUPER_ADMIN_USERNAME } });
@@ -1302,7 +1343,7 @@ app.post("/api/admin/users", superAuth, async (req, res) => {
   await db
     .prepare(
       `INSERT INTO admins (id, username, password_hash, display_name, role, created_by)
-                    VALUES (?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?)`,
     )
     .run(
       id,
@@ -1329,14 +1370,15 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// ✅ NEW: no-credits timed access only
+// ============================================================
+// LEADERBOARD ACCESS
+// ============================================================
 async function getLeaderboardAccess(userId) {
   const acc = await db
     .prepare("SELECT * FROM leaderboard_access WHERE user_id = ?")
     .get(userId);
   if (!acc) return { allowed: false, type: "none" };
   if (acc.permanent) return { allowed: true, type: "permanent" };
-
   if (acc.expires_at) {
     const expiresMs = new Date(acc.expires_at).getTime();
     const now = Date.now();
@@ -1349,21 +1391,18 @@ async function getLeaderboardAccess(userId) {
       };
     }
   }
-
   return { allowed: false, type: "none" };
 }
 
 app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
-      `
-    SELECT n.id, n.user_id, n.name, n.category_id, n.code, n.img, n.desc,
-           COALESCE(n.votes, 0) AS votes, n.created_at,
-           c.name as category
-    FROM nominees n
-    JOIN categories c ON n.category_id = c.id
-    WHERE n.user_id = ?
-  `,
+      `SELECT n.id, n.user_id, n.name, n.category_id, n.code, n.img, n.desc,
+              COALESCE(n.votes, 0) AS votes, n.created_at,
+              c.name as category
+       FROM nominees n
+       JOIN categories c ON n.category_id = c.id
+       WHERE n.user_id = ?`,
     )
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
@@ -1376,9 +1415,8 @@ app.get("/api/nominee/me", auth, async (req, res) => {
 
   const rows = await db
     .prepare(
-      `SELECT id, COALESCE(votes, 0) AS votes
-       FROM nominees WHERE category_id = ?
-       ORDER BY COALESCE(votes, 0) DESC`,
+      `SELECT id, COALESCE(votes, 0) AS votes FROM nominees
+       WHERE category_id = ? ORDER BY COALESCE(votes, 0) DESC`,
     )
     .all(nominee.category_id);
   const idx = rows.findIndex((r) => r.id === nominee.id);
@@ -1407,19 +1445,16 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
     .prepare("SELECT * FROM nominees WHERE user_id = ?")
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-
   const access = await getLeaderboardAccess(req.user.id);
   if (!access.allowed)
     return res.status(402).json({ error: "Leaderboard locked", access });
 
   const rows = await db
     .prepare(
-      `
-    SELECT n.id, n.name, n.code, n.img, COALESCE(n.votes, 0) AS votes
-    FROM nominees n
-    WHERE n.category_id = ?
-    ORDER BY COALESCE(n.votes, 0) DESC
-  `,
+      `SELECT n.id, n.name, n.code, n.img, COALESCE(n.votes, 0) AS votes
+       FROM nominees n
+       WHERE n.category_id = ?
+       ORDER BY COALESCE(n.votes, 0) DESC`,
     )
     .all(nominee.category_id);
 
@@ -1468,15 +1503,11 @@ app.post(
       .run(id, req.user.id, name, categoryId, code, img || null, desc || null);
     const nominee = await db
       .prepare(
-        `
-    SELECT n.*, c.name as category FROM nominees n
-    JOIN categories c ON n.category_id = c.id WHERE n.id = ?
-  `,
+        `SELECT n.*, c.name as category FROM nominees n
+         JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
       )
       .get(id);
-
     broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
-
     res.json({ nominee });
   },
 );
@@ -1521,7 +1552,6 @@ app.post(
   },
 );
 
-// ✅ NEW: 4 leaderboard tiers
 app.post(
   "/api/nominee/unlock-leaderboard",
   auth,
@@ -1537,12 +1567,10 @@ app.post(
     const chosen = map[type];
     if (!chosen) return res.status(400).json({ error: "Invalid unlock type" });
     if (!phone) return res.status(400).json({ error: "Phone required" });
-
     const nominee = await db
       .prepare("SELECT * FROM nominees WHERE user_id = ?")
       .get(req.user.id);
     if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-
     try {
       const r = await initiatePayment({
         type: chosen.tx,
@@ -1562,7 +1590,6 @@ app.post(
   },
 );
 
-// ✅ NEW: Power Boost
 app.post(
   "/api/nominee/boost",
   auth,
@@ -1570,21 +1597,20 @@ app.post(
   async (req, res) => {
     const { phone } = req.body || {};
     if (!phone) return res.status(400).json({ error: "Phone required" });
-
     const nominee = await db
       .prepare("SELECT * FROM nominees WHERE user_id = ?")
       .get(req.user.id);
     if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-
     const existing = await db
       .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
       .get(nominee.id);
     if (existing)
-      return res.status(400).json({
-        error: "Boost already purchased — one per nominee.",
-        code: "ALREADY_BOOSTED",
-      });
-
+      return res
+        .status(400)
+        .json({
+          error: "Boost already purchased — one per nominee.",
+          code: "ALREADY_BOOSTED",
+        });
     try {
       const r = await initiatePayment({
         type: "boost_50",
@@ -1605,6 +1631,9 @@ app.post(
   },
 );
 
+// ============================================================
+// VOTES
+// ============================================================
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -1614,17 +1643,18 @@ app.post(
 
     const { nomineeCode, voterToken, deviceHash } = req.body || {};
     if (!nomineeCode || !voterToken || !deviceHash)
-      return res.status(400).json({
-        error: "Nominee code, voter token, and device fingerprint are required",
-      });
-
+      return res
+        .status(400)
+        .json({
+          error:
+            "Nominee code, voter token, and device fingerprint are required",
+        });
     if (
       typeof deviceHash !== "string" ||
       deviceHash.length < 8 ||
       deviceHash.length > 128
     )
       return res.status(400).json({ error: "Invalid device fingerprint" });
-
     if (
       typeof voterToken !== "string" ||
       voterToken.length < 10 ||
@@ -1636,25 +1666,21 @@ app.post(
       .prepare("SELECT * FROM nominees WHERE code = ?")
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
-
     const ip = req.ip || req.socket.remoteAddress || "unknown";
 
     let result;
     try {
       result = await db.tx(async (t) => {
         const existing = await t.get(
-          `
-          SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code,
-                 fv.voter_token, fv.device_hash
-          FROM free_votes fv
-          JOIN nominees n2 ON fv.nominee_id = n2.id
-          WHERE n2.category_id = ?
-            AND (fv.voter_token = ? OR fv.device_hash = ?)
-          LIMIT 1
-        `,
+          `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code,
+                  fv.voter_token, fv.device_hash
+           FROM free_votes fv
+           JOIN nominees n2 ON fv.nominee_id = n2.id
+           WHERE n2.category_id = ?
+             AND (fv.voter_token = ? OR fv.device_hash = ?)
+           LIMIT 1`,
           [nominee.category_id, voterToken, deviceHash],
         );
-
         if (existing) {
           return {
             ok: false,
@@ -1664,7 +1690,6 @@ app.post(
             reason: existing.device_hash === deviceHash ? "device" : "voter",
           };
         }
-
         await t.execute({
           sql: `INSERT INTO free_votes
                 (id, voter_token, nominee_id, device_hash, ip, category_id)
@@ -1682,7 +1707,6 @@ app.post(
           sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + 1 WHERE id = ?",
           args: [nominee.id],
         });
-
         return { ok: true };
       });
     } catch (e) {
@@ -1691,25 +1715,22 @@ app.post(
         String(e.message || "")
           .toLowerCase()
           .includes("unique")
-      ) {
+      )
         return res.status(409).json({
           error: "This device has already voted in this category.",
           code: "DEVICE_ALREADY_VOTED",
         });
-      }
       return res.status(500).json({ error: "Vote failed. Please try again." });
     }
 
     if (!result.ok) {
       let message;
-      if (result.reason === "device") {
+      if (result.reason === "device")
         message = `This device has already voted in this category (for ${result.votedName}). Only one vote per device per category is allowed.`;
-      } else if (result.sameNominee) {
+      else if (result.sameNominee)
         message = "You have already voted for this nominee.";
-      } else {
+      else
         message = `You've already voted in this category (for ${result.votedName}). Only one vote per category is allowed.`;
-      }
-
       return res.status(409).json({
         error: message,
         code: "ALREADY_VOTED",
@@ -1718,7 +1739,6 @@ app.post(
     }
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
-
     const updated = await db
       .prepare("SELECT COALESCE(votes, 0) AS votes FROM nominees WHERE id = ?")
       .get(nominee.id);
@@ -1731,7 +1751,6 @@ app.post(
       votes: updated.votes,
       at: new Date().toISOString(),
     });
-
     res.json({ success: true, votes: updated.votes });
   },
 );
@@ -1757,6 +1776,9 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   }
 });
 
+// ============================================================
+// TRANSACTION STATUS
+// ============================================================
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
     .prepare(
@@ -1806,11 +1828,10 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
   try {
     const payload = await checkPayHeroStatus(reference);
     const result = interpretPayHeroStatus(payload);
-    if (result && result.status === "success") {
+    if (result && result.status === "success")
       await completeTransaction(reference, result.receipt);
-    } else if (result && result.status === "failed") {
+    else if (result && result.status === "failed")
       await failTransaction(reference, "payhero_status_failed");
-    }
   } catch (e) {
     console.warn("[LiveCheck]", e.message);
   }
@@ -1835,9 +1856,11 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
   });
 });
 
+// ============================================================
+// PAYHERO CALLBACK
+// ============================================================
 app.post("/api/payhero/callback", (req, res) => {
   res.json({ received: true });
-
   (async () => {
     try {
       const body = req.body || {};
@@ -1845,7 +1868,6 @@ app.post("/api/payhero/callback", (req, res) => {
         "[PayHero CB] FULL BODY:",
         JSON.stringify(body).slice(0, 1500),
       );
-
       const data = body.response || body.data || body;
 
       let ref =
@@ -1862,13 +1884,12 @@ app.post("/api/payhero/callback", (req, res) => {
         body.Reference ||
         null;
 
-      if (!ref) {
+      if (!ref)
         ref = deepFind(
           body,
           (k, v) =>
             typeof v === "string" && /^(CC|LB1|LB2|LB3|LB4|BS|TX)-\d/.test(v),
         );
-      }
 
       if (!ref) {
         const raw = JSON.stringify(body).toUpperCase();
@@ -1878,19 +1899,15 @@ app.post("/api/payhero/callback", (req, res) => {
              WHERE status='pending' ORDER BY created_at DESC LIMIT 50`,
           )
           .all();
-        for (const tx of pending) {
+        for (const tx of pending)
           if (raw.includes(tx.reference.toUpperCase())) {
             ref = tx.reference;
             break;
           }
-        }
       }
 
       if (!ref) {
-        console.warn(
-          "[PayHero CB] Could not extract a reference from body:",
-          JSON.stringify(body),
-        );
+        console.warn("[PayHero CB] No reference found");
         return;
       }
 
@@ -1899,7 +1916,6 @@ app.post("/api/payhero/callback", (req, res) => {
           body.woocommerce_payment_status ||
           "",
       ).toLowerCase();
-
       const statusRaw = String(
         data.status ??
           data.Status ??
@@ -1909,9 +1925,7 @@ app.post("/api/payhero/callback", (req, res) => {
           body.Status ??
           "",
       ).toLowerCase();
-
       const resultCode = data.ResultCode ?? data.resultCode ?? null;
-
       const receipt =
         data.MPESA_Reference ||
         data.mpesa_receipt ||
@@ -1919,7 +1933,6 @@ app.post("/api/payhero/callback", (req, res) => {
         data.Transaction_Reference ||
         data.receipt ||
         null;
-
       const receiptClean =
         receipt && String(receipt).trim().length > 0
           ? String(receipt).trim()
@@ -1934,11 +1947,10 @@ app.post("/api/payhero/callback", (req, res) => {
         statusRaw.includes("declin") ||
         statusRaw.includes("reject") ||
         (resultCode !== null && resultCode !== 0 && resultCode !== "0");
-
       const success = !failure && receiptClean !== null;
 
       console.log(
-        `[PayHero CB] ref=${ref} wooStatus="${wooStatus}" status="${statusRaw}" receipt="${receiptClean}" → ${
+        `[PayHero CB] ref=${ref} status="${statusRaw}" receipt="${receiptClean}" → ${
           success ? "SUCCESS" : failure ? "FAILURE" : "AWAITING_RECEIPT"
         }`,
       );
@@ -1954,89 +1966,104 @@ app.post("/api/payhero/callback", (req, res) => {
             : "awaiting_receipt",
       });
 
-      if (success) {
-        await completeTransaction(ref, receiptClean);
-      } else if (failure) {
-        await failTransaction(ref, "callback_failure");
-      } else {
-        console.log(
-          `[PayHero CB] ${ref} — STK delivered, waiting for M-Pesa receipt`,
-        );
-      }
+      if (success) await completeTransaction(ref, receiptClean);
+      else if (failure) await failTransaction(ref, "callback_failure");
     } catch (e) {
       console.error("[Callback Error]", e.message);
     }
   })();
 });
 
+// ============================================================
+// ADMIN: STATS (works for all admins, super gets finance)
+// ============================================================
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
-  const isSuper = req.admin.role === "super";
-  const totalVotes = (
-    await db
-      .prepare("SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees")
-      .get()
-  ).t;
-  const nomineesCount = (
-    await db.prepare("SELECT COUNT(*) as c FROM nominees").get()
-  ).c;
-  const categoriesCount = (
-    await db.prepare("SELECT COUNT(*) as c FROM categories").get()
-  ).c;
+  try {
+    const isSuper = req.admin.role === "super";
 
-  if (!isSuper) {
-    return res.json({ totalVotes, nomineesCount, categoriesCount });
+    const totalVotes = (
+      await db
+        .prepare(
+          "SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees",
+        )
+        .get()
+    ).t;
+    const nomineesCount = (
+      await db.prepare("SELECT COUNT(*) as c FROM nominees").get()
+    ).c;
+    const categoriesCount = (
+      await db.prepare("SELECT COUNT(*) as c FROM categories").get()
+    ).c;
+    const uniqueVoters = (
+      await db
+        .prepare("SELECT COUNT(DISTINCT voter_token) as c FROM free_votes")
+        .get()
+    ).c;
+    const uniqueDevices = (
+      await db
+        .prepare(
+          "SELECT COUNT(DISTINCT device_hash) as c FROM free_votes WHERE device_hash IS NOT NULL",
+        )
+        .get()
+    ).c;
+
+    const base = {
+      totalVotes,
+      nomineesCount,
+      categoriesCount,
+      uniqueVoters,
+      uniqueDevices,
+      avgVotesPerNominee: nomineesCount > 0 ? totalVotes / nomineesCount : 0,
+    };
+
+    if (!isSuper) return res.json(base);
+
+    const grossRevenue = (
+      await db
+        .prepare(
+          `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success'`,
+        )
+        .get()
+    ).t;
+    const pending = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='pending'`,
+        )
+        .get()
+    ).c;
+    const successful = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='success'`,
+        )
+        .get()
+    ).c;
+    const abandoned = (
+      await db
+        .prepare(
+          `SELECT COUNT(*) as c FROM transactions WHERE status='abandoned'`,
+        )
+        .get()
+    ).c;
+
+    res.json({
+      ...base,
+      grossRevenue,
+      platformRevenue: grossRevenue * 0.1,
+      pendingPayments: pending,
+      successfulPayments: successful,
+      abandonedTransactions: abandoned,
+    });
+  } catch (e) {
+    console.error("[Stats]", e);
+    res.status(500).json({ error: e.message });
   }
-
-  const grossRevenue = (
-    await db
-      .prepare(
-        `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success'`,
-      )
-      .get()
-  ).t;
-  const pending = (
-    await db
-      .prepare(`SELECT COUNT(*) as c FROM transactions WHERE status='pending'`)
-      .get()
-  ).c;
-  const successCount = (
-    await db
-      .prepare(`SELECT COUNT(*) as c FROM transactions WHERE status='success'`)
-      .get()
-  ).c;
-  const abandoned = (
-    await db
-      .prepare(
-        `SELECT COUNT(*) as c FROM transactions WHERE status='abandoned'`,
-      )
-      .get()
-  ).c;
-  const uniqueVoters = (
-    await db
-      .prepare("SELECT COUNT(DISTINCT voter_token) as c FROM free_votes")
-      .get()
-  ).c;
-  const uniqueDevices = (
-    await db
-      .prepare(
-        "SELECT COUNT(DISTINCT device_hash) as c FROM free_votes WHERE device_hash IS NOT NULL",
-      )
-      .get()
-  ).c;
-  res.json({
-    totalVotes,
-    grossRevenue,
-    platformRevenue: grossRevenue * 0.1,
-    pendingPayments: pending,
-    successfulPayments: successCount,
-    abandonedTransactions: abandoned,
-    nomineesCount,
-    categoriesCount,
-    uniqueVoters,
-    uniqueDevices,
-  });
 });
 
+// ============================================================
+// ADMIN: CHARTS (perCategory + dailyByCategory)
+// ============================================================
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
@@ -2076,7 +2103,6 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     });
   }
 
-  // ✅ NEW: per-category distribution with every nominee ranked
   const allCategories = await db
     .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
     .all();
@@ -2109,7 +2135,6 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     };
   });
 
-  // ✅ NEW: daily votes broken down per category (last 7 days)
   const dailyCatRows = await db
     .prepare(
       `SELECT date(fv.created_at) as day, c.name as category, COUNT(*) as votes
@@ -2136,9 +2161,7 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     const key = d.toISOString().slice(0, 10);
     const cats = catByDay[key] || {};
     const entry = { day: d.toLocaleDateString("en-US", { weekday: "short" }) };
-    for (const catName of categories) {
-      entry[catName] = cats[catName] || 0;
-    }
+    for (const catName of categories) entry[catName] = cats[catName] || 0;
     dailyByCategory.push(entry);
   }
 
@@ -2152,6 +2175,9 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   });
 });
 
+// ============================================================
+// ADMIN: CATEGORIES CRUD
+// ============================================================
 app.post("/api/admin/categories", adminAuth, async (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim())
@@ -2204,24 +2230,23 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+// ============================================================
+// ADMIN: NOMINEES CRUD
+// ============================================================
 app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   const { name, categoryId, img, desc, email, password } = req.body || {};
-
   if (!name || !categoryId)
     return res.status(400).json({ error: "Name and category required" });
   if (!email) return res.status(400).json({ error: "Email required" });
-
   const cleanEmail = String(email).trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
     return res.status(400).json({ error: "Invalid email address" });
-
   if (
     !(await db
       .prepare("SELECT id FROM categories WHERE id = ?")
       .get(categoryId))
   )
     return res.status(400).json({ error: "Invalid category" });
-
   if (
     await db
       .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
@@ -2234,7 +2259,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
     password && String(password).trim().length >= 6
       ? String(password).trim()
       : emailPrefix + "123";
-
   if (finalPassword.length < 6)
     return res
       .status(400)
@@ -2242,7 +2266,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
 
   const hash = await bcrypt.hash(finalPassword, 10);
   const userId = uuidv4();
-
   await db
     .prepare(
       "INSERT INTO users (id, name, email, password_hash) VALUES (?,?,?,?)",
@@ -2282,15 +2305,16 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+// ============================================================
+// ADMIN: TRANSACTIONS / LOGS
+// ============================================================
 app.get("/api/admin/transactions", superAuth, async (req, res) => {
   res.json(
     await db
       .prepare(
-        `
-    SELECT t.*, n.name as nominee_name, n.code as nominee_code
-    FROM transactions t LEFT JOIN nominees n ON t.nominee_id = n.id
-    ORDER BY t.created_at DESC LIMIT 200
-  `,
+        `SELECT t.*, n.name as nominee_name, n.code as nominee_code
+         FROM transactions t LEFT JOIN nominees n ON t.nominee_id = n.id
+         ORDER BY t.created_at DESC LIMIT 200`,
       )
       .all(),
   );
@@ -2306,200 +2330,585 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-async function buildLeaderboardRows() {
-  return await db
-    .prepare(
-      `
-    SELECT n.name, n.code, c.name as category, COALESCE(n.votes, 0) as votes
-    FROM nominees n JOIN categories c ON n.category_id = c.id
-    ORDER BY c.name ASC, COALESCE(n.votes, 0) DESC
-  `,
-    )
-    .all();
-}
+// ============================================================
+// ADMIN: SIGNED EXPORTS (available to BOTH admin and super)
+// ============================================================
+app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
+  try {
+    const r = await loadReportData(req);
+    const lines = [];
+    const add = (...a) => lines.push(a.join(""));
+    const bar = "\u2550".repeat(60);
 
-function csvEscape(v) {
-  const s = String(v == null ? "" : v);
-  if (s.includes(",") || s.includes('"') || s.includes("\n"))
-    return '"' + s.replace(/"/g, '""') + '"';
-  return s;
-}
-
-app.get("/api/admin/export/csv", superAuth, async (req, res) => {
-  const rows = await buildLeaderboardRows();
-  const lines = ["Rank,Name,Code,Category,Votes"];
-  const catCounters = {};
-  for (const r of rows) {
-    catCounters[r.category] = (catCounters[r.category] || 0) + 1;
-    lines.push(
-      [
-        catCounters[r.category],
-        csvEscape(r.name),
-        csvEscape(r.code),
-        csvEscape(r.category),
-        r.votes,
-      ].join(","),
+    add("VOTEUS \u2014 OFFICIAL RESULTS EXPORT");
+    add(bar);
+    add("");
+    add(`Report ID,${r.reportId}`);
+    add(`Generated,${formatDateTime(r.generatedAt)}`);
+    add(`Generated By,${csvEscape(r.generatedBy)} (${r.generatedByRole})`);
+    add(`Event,Gala Awards 2026 - MKUPLC`);
+    add(`Platform,Voteus.io`);
+    add(`Signature,${r.signature}`);
+    add("");
+    add(bar);
+    add("OVERVIEW");
+    add(bar);
+    add("");
+    add("Metric,Value");
+    add(`Total Votes,${r.totalVotes.toLocaleString()}`);
+    add(`Categories,${r.categories.length}`);
+    add(`Nominees,${r.nominees.length}`);
+    add(
+      `Avg Votes per Nominee,${(r.nominees.length > 0 ? r.totalVotes / r.nominees.length : 0).toFixed(2)}`,
     );
-  }
-  const stats = await db
-    .prepare(
-      `SELECT COALESCE(SUM(amount),0) as gross FROM transactions WHERE status='success'`,
-    )
-    .get();
-  lines.push("");
-  lines.push(`Report generated,${new Date().toISOString()}`);
-  lines.push(`Total votes,${rows.reduce((s, r) => s + (r.votes || 0), 0)}`);
-  lines.push(`Gross revenue (KES),${stats.gross}`);
-  lines.push(`Platform revenue (KES),${(stats.gross * 0.1).toFixed(2)}`);
+    add(`Unique Voters,${r.uniqueVoters.toLocaleString()}`);
+    add(`Unique Devices,${r.uniqueDevices.toLocaleString()}`);
+    add("");
 
-  const filename = `votenet-report-${new Date().toISOString().slice(0, 10)}.csv`;
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(lines.join("\n"));
-});
-
-app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
-  const stats = {
-    totalVotes: (
-      await db
-        .prepare(
-          "SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees",
-        )
-        .get()
-    ).t,
-    gross: (
-      await db
-        .prepare(
-          `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success'`,
-        )
-        .get()
-    ).t,
-    nominees: (await db.prepare("SELECT COUNT(*) as c FROM nominees").get()).c,
-    categories: (await db.prepare("SELECT COUNT(*) as c FROM categories").get())
-      .c,
-  };
-  const rows = await buildLeaderboardRows();
-  const byCategory = {};
-  for (const r of rows)
-    (byCategory[r.category] = byCategory[r.category] || []).push(r);
-
-  const filename = `votenet-report-${new Date().toISOString().slice(0, 10)}.pdf`;
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-  const doc = new PDFDocument({ size: "A4", margin: 44 });
-  doc.pipe(res);
-
-  const primary = "#3F51B5";
-  const gray = "#6b7280";
-
-  doc
-    .fillColor(primary)
-    .fontSize(24)
-    .text("Voteus — Official Results Report", { align: "center" });
-  doc.moveDown(0.2);
-  doc
-    .fillColor(gray)
-    .fontSize(10)
-    .text(`Generated: ${new Date().toLocaleString()}`, { align: "center" });
-  doc.moveDown(1.2);
-  doc
-    .strokeColor("#e5e7eb")
-    .lineWidth(1)
-    .moveTo(44, doc.y)
-    .lineTo(551, doc.y)
-    .stroke();
-  doc.moveDown(1);
-
-  doc.fillColor("#1d1d1f").fontSize(14).text("Summary");
-  doc.moveDown(0.5);
-  const summaryLines = [
-    ["Total Votes Cast", stats.totalVotes.toLocaleString()],
-    ["Gross Revenue", `KES ${Number(stats.gross).toLocaleString()}`],
-    ["Platform Revenue (10%)", `KES ${(stats.gross * 0.1).toLocaleString()}`],
-    ["Categories", String(stats.categories)],
-    ["Nominees", String(stats.nominees)],
-  ];
-  const col1X = 44,
-    col2X = 300;
-  let summaryY = doc.y;
-  for (const [k, v] of summaryLines) {
-    doc.fillColor(gray).fontSize(10).text(k, col1X, summaryY);
-    doc.fillColor("#1d1d1f").fontSize(11).text(v, col2X, summaryY);
-    summaryY += 18;
-  }
-  doc.y = summaryY + 10;
-  doc.moveDown(0.5);
-
-  for (const cat of Object.keys(byCategory).sort()) {
-    const list = byCategory[cat].sort(
-      (a, b) => (b.votes || 0) - (a.votes || 0),
-    );
-    const totalCat = list.reduce((s, r) => s + (r.votes || 0), 0);
-
-    if (doc.y > 690) doc.addPage();
-    doc.fillColor(primary).fontSize(13).text(cat);
-    doc
-      .fillColor(gray)
-      .fontSize(9)
-      .text(`Total category votes: ${totalCat.toLocaleString()}`);
-    doc.moveDown(0.4);
-
-    const y0 = doc.y;
-    doc.fillColor("#1d1d1f").fontSize(10).font("Helvetica-Bold");
-    doc.text("#", 44, y0, { width: 24 });
-    doc.text("Name", 70, y0, { width: 220 });
-    doc.text("Code", 290, y0, { width: 130 });
-    doc.text("Votes", 420, y0, { width: 60, align: "right" });
-    doc.text("Share", 490, y0, { width: 60, align: "right" });
-    doc.font("Helvetica");
-    doc.moveDown(0.6);
-    doc
-      .strokeColor("#e5e7eb")
-      .lineWidth(0.5)
-      .moveTo(44, doc.y)
-      .lineTo(551, doc.y)
-      .stroke();
-    doc.moveDown(0.3);
-
-    let rank = 1;
-    for (const r of list) {
-      if (doc.y > 780) {
-        doc.addPage();
-        doc.moveDown(1);
+    for (const cat of r.perCategory) {
+      add(bar);
+      add(`CATEGORY: ${csvEscape(cat.name)}`);
+      add(`Total Votes: ${cat.totalVotes.toLocaleString()}`);
+      add(bar);
+      add("");
+      if (!cat.nominees.length) {
+        add("No nominees in this category.");
+        add("");
+        continue;
       }
-      const share =
-        totalCat > 0 ? ((r.votes / totalCat) * 100).toFixed(1) + "%" : "—";
-      const yy = doc.y;
-      doc.fillColor("#1d1d1f").fontSize(10);
-      doc.text(String(rank), 44, yy, { width: 24 });
-      doc.text(r.name, 70, yy, { width: 220 });
-      doc.fillColor(gray).fontSize(9).text(r.code, 290, yy, { width: 130 });
-      doc
-        .fillColor("#1d1d1f")
-        .fontSize(10)
-        .text(String(r.votes || 0), 420, yy, { width: 60, align: "right" });
-      doc.text(share, 490, yy, { width: 60, align: "right" });
-      doc.moveDown(0.5);
-      rank++;
+      add("Rank,Name,Code,Votes,Share %,Share Bar");
+      for (const n of cat.nominees) {
+        add(
+          [
+            n.rank,
+            csvEscape(n.name),
+            csvEscape(n.code),
+            n.votes,
+            n.percent.toFixed(1) + "%",
+            `"${shareBar(n.percent)}"`,
+          ].join(","),
+        );
+      }
+      add("");
     }
-    doc.moveDown(1);
+
+    if (r.isSuper && r.finance) {
+      add(bar);
+      add("FINANCIAL SUMMARY (Super Admin only)");
+      add(bar);
+      add("");
+      add("Metric,Value");
+      add(`Gross Revenue (KES),${r.finance.grossRevenue.toFixed(2)}`);
+      add(`Platform Revenue 10% (KES),${r.finance.platformRevenue.toFixed(2)}`);
+      add(`Successful Payments,${r.finance.successful}`);
+      add(`Pending Payments,${r.finance.pending}`);
+      add(`Abandoned Transactions,${r.finance.abandoned}`);
+      add("");
+    }
+
+    add(bar);
+    add("SYSTEM SIGNATURE");
+    add(bar);
+    add("");
+    add("This report was generated automatically by Voteus.io.");
+    add(`Report ID: ${r.reportId}`);
+    add(`Signature: ${r.signature}`);
+    add(`Generated: ${formatDateTime(r.generatedAt)}`);
+    add(`Verified: VALID`);
+    add("");
+    add("To verify authenticity, contact the system administrator");
+    add("and provide the Report ID and Signature above.");
+    add("");
+    add("Signed: Voteus.io Automated Reporting System");
+
+    const filename = `votenet-report-${r.reportId}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Report-Id", r.reportId);
+    res.setHeader("X-Report-Signature", r.signature);
+    res.send(lines.join("\n"));
+  } catch (e) {
+    console.error("[Export CSV]", e);
+    res.status(500).json({ error: "Export failed: " + e.message });
   }
-
-  if (doc.y > 750) doc.addPage();
-  doc
-    .fillColor(gray)
-    .fontSize(9)
-    .text(
-      "Auto-generated by Voteus.io. Reflects all successful transactions at time of export.",
-      44,
-      doc.y,
-      { align: "center", width: 507 },
-    );
-
-  doc.end();
 });
 
+app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
+  try {
+    const r = await loadReportData(req);
+    const filename = `votenet-report-${r.reportId}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Report-Id", r.reportId);
+    res.setHeader("X-Report-Signature", r.signature);
+
+    const doc = new PDFDocument({ size: "A4", margin: 44 });
+    doc.pipe(res);
+
+    const INDIGO = "#3F51B5";
+    const INDIGO_LT = "#E8EAF6";
+    const GREEN = "#16A34A";
+    const GRAY = "#6b7280";
+    const DARK = "#1d1d1f";
+    const BORDER = "#e5e7eb";
+    const PAGE_W = 507;
+    const LEFT = 44;
+    const RIGHT = 551;
+
+    const footer = () => {
+      const y = doc.page.height - 30;
+      doc
+        .fontSize(7)
+        .fillColor(GRAY)
+        .text(
+          `Voteus.io  |  Report ${r.reportId}  |  Signature ${r.signature.slice(0, 16)}\u2026`,
+          LEFT,
+          y,
+          { width: PAGE_W, align: "left", lineBreak: false },
+        );
+      doc
+        .fontSize(7)
+        .fillColor(GRAY)
+        .text(`Generated ${formatDateTime(r.generatedAt)}`, LEFT, y, {
+          width: PAGE_W,
+          align: "right",
+          lineBreak: false,
+        });
+    };
+
+    // ─── COVER ───
+    doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
+    doc.moveDown(2);
+    doc
+      .fillColor(INDIGO)
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text("VOTEUS.IO", { align: "center", characterSpacing: 4 });
+    doc.moveDown(0.3);
+    doc
+      .fillColor(GRAY)
+      .fontSize(9)
+      .font("Helvetica")
+      .text("Official Event Voting Platform", { align: "center" });
+    doc.moveDown(3);
+    doc
+      .fillColor(DARK)
+      .fontSize(30)
+      .font("Helvetica-Bold")
+      .text("Official Results Report", { align: "center", lineGap: -4 });
+    doc.moveDown(0.4);
+    doc
+      .fillColor(INDIGO)
+      .fontSize(13)
+      .font("Helvetica")
+      .text("Gala Awards 2026 \u2014 MKUPLC", { align: "center" });
+    doc.moveDown(2);
+
+    const boxY = doc.y;
+    doc
+      .roundedRect(LEFT + 60, boxY, PAGE_W - 120, 132, 12)
+      .lineWidth(1)
+      .strokeColor(BORDER)
+      .stroke();
+    doc
+      .fillColor(INDIGO_LT)
+      .roundedRect(LEFT + 60, boxY, PAGE_W - 120, 30, 12)
+      .fill();
+    doc
+      .fillColor(INDIGO)
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("REPORT METADATA", LEFT + 60, boxY + 10, {
+        width: PAGE_W - 120,
+        align: "center",
+        characterSpacing: 2,
+      });
+
+    const meta = [
+      ["Report ID", r.reportId],
+      ["Generated", formatDateTime(r.generatedAt)],
+      ["Generated By", `${r.generatedBy} (${r.generatedByRole})`],
+      ["Signature", r.signature],
+    ];
+    let my = boxY + 42;
+    for (const [k, v] of meta) {
+      doc
+        .fillColor(GRAY)
+        .fontSize(8)
+        .font("Helvetica")
+        .text(k.toUpperCase(), LEFT + 76, my, { width: 90 });
+      doc
+        .fillColor(DARK)
+        .fontSize(9)
+        .font("Helvetica-Bold")
+        .text(String(v), LEFT + 170, my, { width: PAGE_W - 200 });
+      my += 20;
+    }
+
+    doc.moveDown(5);
+    const stampY = doc.y + 20;
+    doc
+      .roundedRect(LEFT + 120, stampY, PAGE_W - 240, 60, 10)
+      .lineWidth(2)
+      .strokeColor(GREEN)
+      .stroke();
+    doc
+      .fillColor(GREEN)
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text("\u2714", LEFT + 120, stampY + 10, {
+        width: PAGE_W - 240,
+        align: "center",
+      });
+    doc
+      .fillColor(GREEN)
+      .fontSize(11)
+      .text("VERIFIED AUTHENTIC", LEFT + 120, stampY + 32, {
+        width: PAGE_W - 240,
+        align: "center",
+        characterSpacing: 2,
+      });
+
+    footer();
+    doc.addPage();
+
+    // ─── SUMMARY ───
+    doc
+      .fillColor(INDIGO)
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("Executive Summary");
+    doc.moveDown(0.3);
+    doc
+      .strokeColor(INDIGO)
+      .lineWidth(2)
+      .moveTo(LEFT, doc.y)
+      .lineTo(LEFT + 60, doc.y)
+      .stroke();
+    doc.moveDown(1);
+
+    const summaryItems = [
+      ["Total Votes", r.totalVotes.toLocaleString()],
+      ["Categories", String(r.categories.length)],
+      ["Nominees", String(r.nominees.length)],
+      [
+        "Avg Votes / Nominee",
+        r.nominees.length > 0
+          ? (r.totalVotes / r.nominees.length).toFixed(1)
+          : "0",
+      ],
+      ["Unique Voters", r.uniqueVoters.toLocaleString()],
+      ["Unique Devices", r.uniqueDevices.toLocaleString()],
+    ];
+    const cardW = (PAGE_W - 12) / 2;
+    const cardH = 56;
+    for (let i = 0; i < summaryItems.length; i++) {
+      const [label, value] = summaryItems[i];
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const x = LEFT + col * (cardW + 12);
+      const y = doc.y + row * (cardH + 8);
+      doc
+        .roundedRect(x, y, cardW, cardH, 8)
+        .lineWidth(1)
+        .strokeColor(BORDER)
+        .stroke();
+      doc
+        .fillColor(GRAY)
+        .fontSize(7)
+        .font("Helvetica")
+        .text(label.toUpperCase(), x + 12, y + 10, {
+          width: cardW - 24,
+          characterSpacing: 1,
+        });
+      doc
+        .fillColor(DARK)
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text(String(value), x + 12, y + 24, { width: cardW - 24 });
+    }
+    doc.y += Math.ceil(summaryItems.length / 2) * (cardH + 8) + 16;
+
+    if (r.isSuper && r.finance) {
+      doc
+        .fillColor(INDIGO)
+        .fontSize(14)
+        .font("Helvetica-Bold")
+        .text("Financial Summary");
+      doc.moveDown(0.4);
+      const finItems = [
+        ["Gross Revenue", `KES ${r.finance.grossRevenue.toLocaleString()}`],
+        ["Platform (10%)", `KES ${r.finance.platformRevenue.toLocaleString()}`],
+        ["Successful", String(r.finance.successful)],
+        ["Pending", String(r.finance.pending)],
+        ["Abandoned", String(r.finance.abandoned)],
+      ];
+      for (const [k, v] of finItems) {
+        const y = doc.y;
+        doc
+          .fillColor(GRAY)
+          .fontSize(9)
+          .font("Helvetica")
+          .text(k, LEFT, y, { width: 200 });
+        doc
+          .fillColor(DARK)
+          .fontSize(10)
+          .font("Helvetica-Bold")
+          .text(v, LEFT + 200, y, {
+            width: PAGE_W - 200,
+            align: "right",
+          });
+        doc.y = y + 14;
+      }
+    }
+
+    footer();
+    doc.addPage();
+
+    // ─── PER-CATEGORY ───
+    for (const cat of r.perCategory) {
+      if (doc.y > 660) {
+        footer();
+        doc.addPage();
+      }
+      const headY = doc.y;
+      doc.roundedRect(LEFT, headY, PAGE_W, 34, 6).fill(INDIGO_LT);
+      doc
+        .fillColor(INDIGO)
+        .fontSize(13)
+        .font("Helvetica-Bold")
+        .text(cat.name, LEFT + 12, headY + 9, { width: PAGE_W - 130 });
+      doc
+        .fillColor(INDIGO)
+        .fontSize(9)
+        .font("Helvetica")
+        .text(`${cat.totalVotes.toLocaleString()} votes`, LEFT, headY + 12, {
+          width: PAGE_W - 12,
+          align: "right",
+        });
+      doc.y = headY + 44;
+
+      if (!cat.nominees.length) {
+        doc
+          .fillColor(GRAY)
+          .fontSize(10)
+          .font("Helvetica-Oblique")
+          .text("No nominees in this category.", LEFT, doc.y, {
+            width: PAGE_W,
+          });
+        doc.moveDown(1);
+        continue;
+      }
+
+      doc.fillColor(GRAY).fontSize(8).font("Helvetica-Bold");
+      const y0 = doc.y;
+      doc.text("RANK", LEFT, y0, { width: 40 });
+      doc.text("NOMINEE", LEFT + 44, y0, { width: 160 });
+      doc.text("CODE", LEFT + 210, y0, { width: 100 });
+      doc.text("VOTES", LEFT + 320, y0, { width: 60, align: "right" });
+      doc.text("SHARE", LEFT + 388, y0, { width: 50, align: "right" });
+      doc.text("DISTRIBUTION", LEFT + 445, y0, { width: 62 });
+      doc.moveDown(0.6);
+      doc
+        .strokeColor(BORDER)
+        .lineWidth(0.5)
+        .moveTo(LEFT, doc.y)
+        .lineTo(RIGHT, doc.y)
+        .stroke();
+      doc.moveDown(0.3);
+
+      for (const n of cat.nominees) {
+        if (doc.y > 750) {
+          footer();
+          doc.addPage();
+        }
+        const yy = doc.y;
+        const rankColor =
+          n.rank === 1
+            ? "#FEF3C7"
+            : n.rank === 2
+              ? "#E5E7EB"
+              : n.rank === 3
+                ? "#FED7AA"
+                : "#F3F4F6";
+        const rankText =
+          n.rank === 1
+            ? "#92400E"
+            : n.rank === 2
+              ? "#374151"
+              : n.rank === 3
+                ? "#9A3412"
+                : "#9CA3AF";
+        doc.circle(LEFT + 12, yy + 6, 9).fill(rankColor);
+        doc
+          .fillColor(rankText)
+          .fontSize(8)
+          .font("Helvetica-Bold")
+          .text(String(n.rank), LEFT + 3, yy + 3, {
+            width: 18,
+            align: "center",
+          });
+
+        doc
+          .fillColor(DARK)
+          .fontSize(9)
+          .font("Helvetica-Bold")
+          .text(n.name, LEFT + 44, yy + 1, { width: 160, ellipsis: true });
+        doc
+          .fillColor(GRAY)
+          .fontSize(8)
+          .font("Helvetica")
+          .text(n.code, LEFT + 210, yy + 1, { width: 100 });
+        doc
+          .fillColor(DARK)
+          .fontSize(9)
+          .font("Helvetica-Bold")
+          .text(n.votes.toLocaleString(), LEFT + 320, yy + 1, {
+            width: 60,
+            align: "right",
+          });
+        doc
+          .fillColor(INDIGO)
+          .fontSize(9)
+          .font("Helvetica-Bold")
+          .text(n.percent.toFixed(1) + "%", LEFT + 388, yy + 1, {
+            width: 50,
+            align: "right",
+          });
+
+        const barX = LEFT + 445;
+        const barW = 62;
+        const barY = yy + 3;
+        doc.roundedRect(barX, barY, barW, 5, 2.5).fill("#F3F4F6");
+        const fillW = Math.max(2, (Math.max(n.percent, 0.5) / 100) * barW);
+        doc.roundedRect(barX, barY, fillW, 5, 2.5).fill(INDIGO);
+
+        doc.moveDown(0.65);
+      }
+
+      doc.moveDown(0.4);
+      doc
+        .strokeColor(BORDER)
+        .lineWidth(0.5)
+        .moveTo(LEFT, doc.y)
+        .lineTo(RIGHT, doc.y)
+        .stroke();
+      doc.moveDown(1);
+    }
+
+    footer();
+    doc.addPage();
+
+    // ─── SIGNATURE PAGE ───
+    doc
+      .fillColor(INDIGO)
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text("System Signature", { align: "center" });
+    doc.moveDown(0.5);
+    doc
+      .fillColor(GRAY)
+      .fontSize(10)
+      .font("Helvetica")
+      .text("This report is cryptographically signed for verification.", {
+        align: "center",
+      });
+    doc.moveDown(2);
+
+    const sigBoxY = doc.y;
+    doc
+      .roundedRect(LEFT + 40, sigBoxY, PAGE_W - 80, 190, 14)
+      .lineWidth(2)
+      .strokeColor(INDIGO)
+      .stroke();
+    doc
+      .fillColor(INDIGO_LT)
+      .roundedRect(LEFT + 40, sigBoxY, PAGE_W - 80, 34, 14)
+      .fill();
+    doc
+      .fillColor(INDIGO)
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .text("VERIFICATION BLOCK", LEFT + 40, sigBoxY + 12, {
+        width: PAGE_W - 80,
+        align: "center",
+        characterSpacing: 2,
+      });
+
+    let sy = sigBoxY + 50;
+    const sigItems = [
+      ["Report ID", r.reportId],
+      ["Signature", r.signature],
+      ["Generated", formatDateTime(r.generatedAt)],
+      ["Generated By", `${r.generatedBy} (${r.generatedByRole})`],
+      ["Status", "\u2714 VALID"],
+    ];
+    for (const [k, v] of sigItems) {
+      doc
+        .fillColor(GRAY)
+        .fontSize(8)
+        .font("Helvetica")
+        .text(k.toUpperCase(), LEFT + 60, sy, {
+          width: 110,
+          characterSpacing: 1,
+        });
+      doc
+        .fillColor(k === "Status" ? GREEN : DARK)
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .text(String(v), LEFT + 180, sy - 1, { width: PAGE_W - 260 });
+      sy += 26;
+    }
+
+    doc.y = sigBoxY + 220;
+    doc
+      .fillColor(GRAY)
+      .fontSize(9)
+      .font("Helvetica")
+      .text(
+        "To verify this report's authenticity, contact the system administrator " +
+          "and provide the Report ID and Signature above. The signature is a " +
+          "SHA-256 hash of the report data combined with a server secret. Any " +
+          "modification to the numbers would invalidate the signature.",
+        LEFT,
+        doc.y,
+        { width: PAGE_W, align: "center", lineGap: 3 },
+      );
+
+    doc.moveDown(2);
+    doc
+      .fillColor(INDIGO)
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .text("Signed:", { align: "center" });
+    doc.moveDown(0.3);
+    doc
+      .fillColor(DARK)
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .text("Voteus.io Automated Reporting System", { align: "center" });
+    doc.moveDown(0.3);
+    doc
+      .fillColor(GRAY)
+      .fontSize(9)
+      .font("Helvetica")
+      .text(`Generated ${formatDateTime(r.generatedAt)}`, {
+        align: "center",
+      });
+
+    footer();
+    doc.end();
+  } catch (e) {
+    console.error("[Export PDF]", e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Export failed: " + e.message });
+    }
+  }
+});
+
+// ============================================================
+// SEO / STATIC / NOMINEE META / HERO IMAGES
+// ============================================================
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(__dirname, "manifest.json"));
@@ -2528,16 +2937,13 @@ app.get("/sitemap.xml", async (req, res) => {
          ORDER BY COALESCE(n.votes, 0) DESC`,
       )
       .all();
-
     const baseUrl = "https://gala.voteus.xyz";
     const now = new Date().toISOString().split("T")[0];
-
     const absImg = (p) => {
       if (!p) return `${baseUrl}/hero-mobile.jpeg`;
       if (p.startsWith("http://") || p.startsWith("https://")) return p;
       return baseUrl + (p.startsWith("/") ? p : "/" + p);
     };
-
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
@@ -2551,7 +2957,6 @@ app.get("/sitemap.xml", async (req, res) => {
       <image:title>Gala Awards 2026 - Voteus</image:title>
     </image:image>
   </url>`;
-
     for (const n of nominees) {
       const nomineeUrl = `${baseUrl}/nominee/${encodeURIComponent(n.code)}`;
       const lastmod = n.created_at ? String(n.created_at).split("T")[0] : now;
@@ -2567,7 +2972,6 @@ app.get("/sitemap.xml", async (req, res) => {
     </image:image>
   </url>`;
     }
-
     xml += `\n</urlset>`;
     res.type("application/xml");
     res.send(xml);
@@ -2590,9 +2994,7 @@ app.get("/nominee/:code", async (req, res) => {
          JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
       )
       .get(req.params.code);
-
     if (!nominee) return res.redirect("/");
-
     const baseUrl = "https://gala.voteus.xyz";
     const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
     const imgPath = nominee.img || "";
@@ -2603,7 +3005,6 @@ app.get("/nominee/:code", async (req, res) => {
       : `${baseUrl}/hero-mobile.jpeg`;
     const title = `${nominee.name} | Voteus — Gala Awards 2026`;
     const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
-
     const html = `<!doctype html>
 <html lang="en" itemscope itemtype="https://schema.org/Person">
 <head>
@@ -2627,7 +3028,6 @@ app.get("/nominee/:code", async (req, res) => {
 </head>
 <body><p>Redirecting to <a href="${shareUrl}">Voteus</a>...</p>
 <script>window.location.href="${shareUrl}";</script></body></html>`;
-
     res.send(html);
   } catch (e) {
     console.error("[Nominee Meta]", e.message);
@@ -2637,10 +3037,9 @@ app.get("/nominee/:code", async (req, res) => {
 
 const HERO_WIDE = path.join(__dirname, "hero.jpeg");
 const HERO_MOBILE = path.join(__dirname, "hero-mobile.jpeg");
-
 function serveHeroImage(res, filePath, label) {
   if (!fs.existsSync(filePath)) {
-    console.error(`[Image] ${label} not found at ${filePath}`);
+    console.error(`[Image] ${label} missing at ${filePath}`);
     res.setHeader("Cache-Control", "no-store");
     return res.status(404).type("text/plain").send(`${label} missing`);
   }
@@ -2648,7 +3047,6 @@ function serveHeroImage(res, filePath, label) {
   res.setHeader("Content-Type", "image/jpeg");
   res.sendFile(filePath);
 }
-
 app.get("/hero.jpeg", (req, res) =>
   serveHeroImage(res, HERO_WIDE, "hero.jpeg"),
 );
@@ -2656,7 +3054,6 @@ app.get("/hero-mobile.jpeg", (req, res) =>
   serveHeroImage(res, HERO_MOBILE, "hero-mobile.jpeg"),
 );
 
-// ✅ Serve HTML pages with no-cache so stale JS from previous deploys can't auto-vote
 function sendHTMLNoCache(file) {
   return (req, res) => {
     res.setHeader("Cache-Control", "no-store, must-revalidate");
@@ -2668,6 +3065,9 @@ app.get("/", sendHTMLNoCache("index.html"));
 app.get("/nominee", sendHTMLNoCache("nominee.html"));
 app.get("/admin", sendHTMLNoCache("admin.html"));
 
+// ============================================================
+// CLEANUP / RECONCILE JOBS
+// ============================================================
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -2676,7 +3076,7 @@ setInterval(async () => {
     const r = await db
       .prepare(
         `UPDATE transactions SET status = 'abandoned'
-                                WHERE status = 'pending' AND created_at < ?`,
+         WHERE status = 'pending' AND created_at < ?`,
       )
       .run(cutoff);
     if (r.changes > 0)
@@ -2730,9 +3130,7 @@ setInterval(async () => {
          ORDER BY created_at ASC LIMIT 10`,
       )
       .all(cutoff);
-
     if (!pending.length) return;
-
     for (const tx of pending) {
       try {
         const payload = await checkPayHeroStatus(tx.reference);
@@ -2792,7 +3190,6 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 const server = app.listen(PORT, async () => {
   console.log(`\n✓ Voteus on http://localhost:${PORT}`);
-
   try {
     await db.verifyConnection();
     await db.ensureRemoteSchema();
@@ -2845,23 +3242,20 @@ const server = app.listen(PORT, async () => {
     `  Sync:        local primary, cloud backup every ${SYNC_PUSH_INTERVAL_MS / 1000}s`,
   );
   console.log(
-    `  Reconcile:   pending txns checked every ${RECONCILE_INTERVAL_MS / 1000}s`,
+    `  Reconcile:   pending txns every ${RECONCILE_INTERVAL_MS / 1000}s`,
   );
-  console.log(`  Images:      SQLite BLOB · served at /api/images/:id`);
+  console.log(`  Images:      SQLite BLOB · /api/images/:id`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
-  console.log(
-    `  Voting:      FREE · one per device per category (fingerprint-enforced)`,
-  );
+  console.log(`  Voting:      FREE · one per device per category`);
   console.log(
     `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,
   );
-  console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
-  console.log(
-    `  Leaderboard: once(1m)=KES 10 · 1h=KES 25 · 12h=KES 50 · 24h=KES 100`,
-  );
+  console.log(`  Exports:     /api/admin/export/{csv,pdf} · all admins`);
+  console.log(`  Leaderboard: 1m=10 · 1h=25 · 12h=50 · 24h=100`);
   console.log(
     `  Boost:       +${BOOST_VOTES} votes = KES ${PRICES.boost_50} (once)`,
   );
+  console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
   );
