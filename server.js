@@ -3060,51 +3060,20 @@ app.get("/sitemap.xml", async (req, res) => {
   }
 });
 
+// ✅ Deep Link Redirect: Handles /nominee/:code by redirecting to the main voting page
+//    with the code as a query parameter, which the frontend (index.html) can parse.
 app.get("/nominee/:code", async (req, res) => {
   try {
     const nominee = await db
-      .prepare(
-        `SELECT n.*, c.name as category FROM nominees n
-         JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
-      )
+      .prepare("SELECT id, code FROM nominees WHERE code = ?")
       .get(req.params.code);
     if (!nominee) return res.redirect("/");
-    const baseUrl = "https://gala.voteus.xyz";
-    const shareUrl = `${baseUrl}/nominee/${encodeURIComponent(nominee.code)}`;
-    const imgPath = nominee.img || "";
-    const image = imgPath
-      ? imgPath.startsWith("http")
-        ? imgPath
-        : baseUrl + (imgPath.startsWith("/") ? imgPath : "/" + imgPath)
-      : `${baseUrl}/hero-mobile.jpeg`;
-    const title = `${nominee.name} | Voteus — Gala Awards 2026`;
-    const description = `Vote for ${nominee.name} in ${nominee.category} at the Gala Awards 2026. ${(nominee.votes || 0).toLocaleString()} votes so far!`;
-    const html = `<!doctype html>
-<html lang="en" itemscope itemtype="https://schema.org/Person">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0071e3" />
-  <title>${title}</title>
-  <meta name="description" content="${description}" />
-  <meta name="robots" content="index, follow, max-image-preview:large" />
-  <link rel="canonical" href="${shareUrl}" />
-  <meta property="og:type" content="profile" />
-  <meta property="og:url" content="${shareUrl}" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${description}" />
-  <meta property="og:image" content="${image}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${title}" />
-  <meta name="twitter:description" content="${description}" />
-  <meta name="twitter:image" content="${image}" />
-  <meta http-equiv="refresh" content="0; url=${shareUrl}" />
-</head>
-<body><p>Redirecting to <a href="${shareUrl}">Voteus</a>...</p>
-<script>window.location.href="${shareUrl}";</script></body></html>`;
-    res.send(html);
+
+    // Redirect to the main voting page with the nominee code as a query param
+    const redirectUrl = `/?c=${encodeURIComponent(nominee.code)}`;
+    res.redirect(redirectUrl);
   } catch (e) {
-    console.error("[Nominee Meta]", e.message);
+    console.error("[Nominee Redirect]", e.message);
     res.redirect("/");
   }
 });

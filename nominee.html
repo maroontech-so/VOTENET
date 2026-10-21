@@ -823,11 +823,7 @@
                                 id="d-img"
                                 class="absolute inset-0 w-full h-full object-cover"
                                 alt=""
-                                onerror="
-                                    this.onerror = null;
-                                    this.src =
-                                        'https://placehold.co/800x800/1e293b/ffffff?text=?';
-                                "
+                                onerror="this.onerror=null;this.src='https://placehold.co/800x800/1e293b/ffffff?text=?';"
                             />
                             <div
                                 class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none"
@@ -1015,7 +1011,6 @@
                             </div>
                         </div>
 
-                        <!-- ✅ NEW: Boost card injected here -->
                         <div id="boost-card-wrap"></div>
 
                         <div class="card p-6">
@@ -1216,7 +1211,10 @@
                     <p class="text-sm text-gray-600 mb-4">
                         Your category has been updated.
                     </p>
-                    <button onclick="verifyCategoryChange()" class="btn w-full">
+                    <button
+                        onclick="verifyCategoryChange()"
+                        class="btn w-full"
+                    >
                         Continue
                     </button>
                 </div>
@@ -1329,11 +1327,7 @@
                             id="opt-12h"
                             onclick="selectUnlock('12h')"
                         >
-                            <input
-                                type="radio"
-                                name="unlock-type"
-                                value="12h"
-                            />
+                            <input type="radio" name="unlock-type" value="12h" />
                             <div
                                 class="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"
                             >
@@ -1356,11 +1350,7 @@
                             id="opt-24h"
                             onclick="selectUnlock('24h')"
                         >
-                            <input
-                                type="radio"
-                                name="unlock-type"
-                                value="24h"
-                            />
+                            <input type="radio" name="unlock-type" value="24h" />
                             <div
                                 class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"
                             >
@@ -1529,9 +1519,7 @@
                                         >One-time</span
                                     >
                                 </div>
-                                <p
-                                    class="text-gray-300 text-xs leading-relaxed"
-                                >
+                                <p class="text-gray-300 text-xs leading-relaxed">
                                     Instantly add
                                     <strong class="text-yellow-300"
                                         >+50 verified votes</strong
@@ -1964,10 +1952,7 @@
                 if (!email || !isValidEmail(email))
                     return toast("Please enter a valid email", false);
                 if (password.length < 8)
-                    return toast(
-                        "Password must be at least 8 characters",
-                        false,
-                    );
+                    return toast("Password must be at least 8 characters", false);
                 if (!/\d/.test(password))
                     return toast("Password must contain a number", false);
                 if (password !== password2)
@@ -2242,7 +2227,7 @@
             function applyVotes(fresh, source) {
                 fresh = Number(fresh || 0);
                 const prev = lastVoteCount ?? fresh;
-                if (fresh < prev) return; // ignore stale responses
+                if (fresh < prev) return;
                 if (nominee) nominee.votes = fresh;
                 if (fresh > prev) {
                     const delta = fresh - prev;
@@ -2331,7 +2316,6 @@
                 startVoteStream();
             }
 
-            // ✅ Leaderboard timer
             function startLeaderboardTimer(expiresAtIso) {
                 const el = $("lb-timer");
                 if (lbTimerInterval) {
@@ -2407,8 +2391,9 @@
                     lastVoteCount = Number(nominee.votes || 0);
                     paintVotes(lastVoteCount, false);
 
+                    // ✅ FIX: Share link now uses query parameter format
                     $("d-link").value =
-                        `${location.origin}/nominee/${encodeURIComponent(nominee.code)}`;
+                        `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
 
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
@@ -2572,7 +2557,6 @@
                 list.innerHTML = eventRows + summary;
             }
 
-            // ✅ Boost card
             function renderBoostCard() {
                 const wrap = $("boost-card-wrap");
                 if (!wrap || !nominee) return;

@@ -589,7 +589,6 @@
                 bottom: 30px;
             }
 
-            /* ✅ live indicator in the hero stats bar */
             .live-pill {
                 display: inline-flex;
                 align-items: center;
@@ -1022,7 +1021,6 @@
             const MIN_NOMINEES_FOR_NO_PROMPT = 6;
             const VOTER_TOKEN_KEY = "vn_voter_token";
 
-            // ✅ FIX: live-update state
             let liveStream = null;
             let livePollTimer = null;
             let sseRetries = 0;
@@ -1060,6 +1058,7 @@
 
                 const parts = [];
                 try {
+                    // --- Basic browser info ---
                     parts.push(navigator.userAgent || "");
                     parts.push(navigator.language || "");
                     parts.push((navigator.languages || []).join(","));
@@ -1071,7 +1070,16 @@
                     parts.push(String(navigator.hardwareConcurrency || 0));
                     parts.push(String(navigator.deviceMemory || 0));
                     parts.push(String(navigator.maxTouchPoints || 0));
+                    // --- Additional entropy ---
+                    parts.push(String(screen.availWidth || 0));
+                    parts.push(String(screen.availHeight || 0));
+                    parts.push(String(window.innerWidth));
+                    parts.push(String(window.innerHeight));
+                    parts.push(String(navigator.cookieEnabled));
+                    parts.push(String(navigator.doNotTrack));
+                    parts.push(String(navigator.plugins.length));
 
+                    // --- Canvas fingerprint ---
                     try {
                         const canvas = document.createElement("canvas");
                         canvas.width = 240;
@@ -1090,6 +1098,7 @@
                         }
                     } catch {}
 
+                    // --- WebGL fingerprint ---
                     try {
                         const canvas = document.createElement("canvas");
                         const gl =
@@ -1241,8 +1250,6 @@
                 } catch (e) {
                     toast(e.message, false);
                 }
-                // ✅ Start live updates whether or not initial load succeeded,
-                // so the page self-heals once the server is reachable.
                 startLiveUpdates();
             }
 
@@ -1255,9 +1262,7 @@
                 nominees = await api("/api/nominees?" + qs);
             }
 
-            // ✅ NEW: live-update wiring
             function startLiveUpdates() {
-                // 45s polling fallback — cheap safety net behind SSE
                 if (livePollTimer) clearInterval(livePollTimer);
                 livePollTimer = setInterval(() => {
                     if (document.hidden) return;
@@ -1265,7 +1270,6 @@
                         .then(render)
                         .catch(() => {});
                 }, 45_000);
-
                 connectLiveStream();
             }
 
@@ -1302,24 +1306,20 @@
                 }
             }
 
-            // ✅ NEW: surgical live update — just bumps a category badge
             function applyLiveVote(nomineeId, votes) {
                 const n = nominees.find((x) => x.id === nomineeId);
                 if (!n) {
-                    // Unknown nominee (maybe admin just added one) — refresh
                     refreshNominees().then(render).catch(() => {});
                     return;
                 }
-                if (n.votes === votes) return; // already synced
+                if (n.votes === votes) return;
                 n.votes = votes;
-
                 const sec = document.querySelector(
                     `#nominees-container > div[data-cat-id="${n.category_id}"]`,
                 );
                 if (!sec) return;
                 const badge = sec.querySelector(".cat-badge");
                 if (!badge || badge.classList.contains("voted")) return;
-
                 const catList = nominees.filter(
                     (x) => x.category_id === n.category_id,
                 );
@@ -1329,7 +1329,7 @@
                 );
                 badge.innerHTML = `<i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes`;
                 badge.classList.remove("bump");
-                void badge.offsetWidth; // restart animation
+                void badge.offsetWidth;
                 badge.classList.add("bump");
             }
 
@@ -1449,8 +1449,6 @@
 
                     const sec = document.createElement("div");
                     sec.className = "w-full";
-                    // ✅ NEW: tag sections with their category id so live
-                    // updates can find them without a full re-render.
                     sec.setAttribute("data-cat-id", cat.id);
                     sec.innerHTML = `
       <div class="cat-header">
