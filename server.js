@@ -192,6 +192,16 @@ async function initSchema() {
   } catch (e) {
     console.warn("[Schema] category_id backfill:", e.message);
   }
+
+  // ✅ FIX: normalize any NULL votes rows left over from older schemas or
+  // cloud pulls. Without this, `votes = votes + 1` produces NULL forever.
+  try {
+    const r = await db.exec("UPDATE nominees SET votes = 0 WHERE votes IS NULL");
+    if (r && r.changes)
+      console.log(`[Schema] Normalized ${r.changes} NULL votes row(s)`);
+  } catch (e) {
+    console.warn("[Schema] votes backfill:", e.message);
+  }
 }
 
 const rateBuckets = new Map();
@@ -280,6 +290,21 @@ function auth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
+// ✅ FIX: SSE can't send Authorization headers — allow ?token= for that one
+// endpoint (EventSource is the only caller).
+function authAllowQuery(req, res, next) {
+  let token = null;
+  const h = req.headers.authorization || "";
+  if (h.startsWith("Bearer ")) token = h.slice(7);
+  else if (req.query && req.query.token) token = String(req.query.token);
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
 function anyAuth(req, res, next) {
   const h = req.headers.authorization || "";
   if (!h.startsWith("Bearer "))
@@ -319,6 +344,45 @@ function superAuth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
+
+// ✅ FIX: live vote push via SSE. Keyed by user_id so the nominee's browser
+// (which has user.id in its JWT) receives the event.
+const sseClients = new Map(); // userId → Set<res>
+
+async function broadcastVotes(nomineeId, votes) {
+  try {
+    const row = await db
+      .prepare("SELECT user_id FROM nominees WHERE id = ?")
+      .get(nomineeId);
+    if (!row || !row.user_id) return;
+    const payload = `event: votes\ndata: ${JSON.stringify({ votes })}\n\n`;
+    sseClients.get(row.user_id)?.forEach((r) => r.write(payload));
+  } catch (e) {
+    console.warn("[SSE broadcast]", e.message);
+  }
+}
+
+app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+
+  const userId = req.user.id;
+  if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+  sseClients.get(userId).add(res);
+
+  res.write(": connected\n\n");
+
+  const hb = setInterval(() => res.write(": ping\n\n"), 25_000);
+  req.on("close", () => {
+    clearInterval(hb);
+    sseClients.get(userId)?.delete(res);
+  });
+});
 
 async function completeTransaction(reference, receipt) {
   try {
@@ -373,7 +437,7 @@ async function completeTransaction(reference, receipt) {
         });
       } else if (txRow.type === "vote") {
         await t.execute({
-          sql: "UPDATE nominees SET votes = votes + ? WHERE id = ?",
+          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
           args: [meta.voteCount || 0, txRow.nominee_id],
         });
       }
@@ -605,7 +669,6 @@ app.post(
           )
           .run(id, processed.data, processed.mime, processed.data.length);
 
-        // Push immediately so image survives a fast redeploy
         db.push().catch((e) => console.warn("[Push after upload]", e.message));
 
         const url = `/api/images/${id}`;
@@ -1086,12 +1149,17 @@ async function getLeaderboardAccess(userId) {
   return { allowed: false, type: "none" };
 }
 
+// ✅ FIX: COALESCE votes everywhere so NULL never leaks to the client.
 app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
       `
-    SELECT n.*, c.name as category FROM nominees n
-    JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?
+    SELECT n.id, n.user_id, n.name, n.category_id, n.code, n.img, n.desc,
+           COALESCE(n.votes, 0) AS votes, n.created_at,
+           c.name as category
+    FROM nominees n
+    JOIN categories c ON n.category_id = c.id
+    WHERE n.user_id = ?
   `,
     )
     .get(req.user.id);
@@ -1099,7 +1167,9 @@ app.get("/api/nominee/me", auth, async (req, res) => {
 
   const rows = await db
     .prepare(
-      "SELECT id, votes FROM nominees WHERE category_id = ? ORDER BY votes DESC",
+      `SELECT id, COALESCE(votes, 0) AS votes
+       FROM nominees WHERE category_id = ?
+       ORDER BY COALESCE(votes, 0) DESC`,
     )
     .all(nominee.category_id);
   const idx = rows.findIndex((r) => r.id === nominee.id);
@@ -1132,8 +1202,10 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
   const rows = await db
     .prepare(
       `
-    SELECT n.id, n.name, n.code, n.img, n.votes FROM nominees n
-    WHERE n.category_id = ? ORDER BY n.votes DESC
+    SELECT n.id, n.name, n.code, n.img, COALESCE(n.votes, 0) AS votes
+    FROM nominees n
+    WHERE n.category_id = ?
+    ORDER BY COALESCE(n.votes, 0) DESC
   `,
     )
     .all(nominee.category_id);
@@ -1340,8 +1412,9 @@ app.post(
             nominee.category_id,
           ],
         });
+        // ✅ FIX: COALESCE guards against NULL so votes always increments.
         await t.execute({
-          sql: "UPDATE nominees SET votes = votes + 1 WHERE id = ?",
+          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + 1 WHERE id = ?",
           args: [nominee.id],
         });
 
@@ -1381,9 +1454,12 @@ app.post(
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
 
+    // ✅ FIX: broadcast the new total to the nominee's live dashboard.
     const updated = await db
-      .prepare("SELECT votes FROM nominees WHERE id = ?")
+      .prepare("SELECT COALESCE(votes, 0) AS votes FROM nominees WHERE id = ?")
       .get(nominee.id);
+    broadcastVotes(nominee.id, updated.votes);
+
     res.json({ success: true, votes: updated.votes });
   },
 );
@@ -1623,7 +1699,9 @@ app.post("/api/payhero/callback", (req, res) => {
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   const isSuper = req.admin.role === "super";
   const totalVotes = (
-    await db.prepare("SELECT COALESCE(SUM(votes),0) as t FROM nominees").get()
+    await db
+      .prepare("SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees")
+      .get()
   ).t;
   const nomineesCount = (
     await db.prepare("SELECT COUNT(*) as c FROM nominees").get()
@@ -1692,7 +1770,7 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
       `
     SELECT n.name, n.votes, c.name as category FROM nominees n
     JOIN categories c ON n.category_id = c.id
-    ORDER BY n.votes DESC LIMIT 5
+    ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5
   `,
     )
     .all();
@@ -1885,9 +1963,9 @@ async function buildLeaderboardRows() {
   return await db
     .prepare(
       `
-    SELECT n.name, n.code, c.name as category, n.votes
+    SELECT n.name, n.code, c.name as category, COALESCE(n.votes, 0) as votes
     FROM nominees n JOIN categories c ON n.category_id = c.id
-    ORDER BY c.name ASC, n.votes DESC
+    ORDER BY c.name ASC, COALESCE(n.votes, 0) DESC
   `,
     )
     .all();
@@ -1936,7 +2014,11 @@ app.get("/api/admin/export/csv", superAuth, async (req, res) => {
 app.get("/api/admin/export/pdf", superAuth, async (req, res) => {
   const stats = {
     totalVotes: (
-      await db.prepare("SELECT COALESCE(SUM(votes),0) as t FROM nominees").get()
+      await db
+        .prepare(
+          "SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees",
+        )
+        .get()
     ).t,
     gross: (
       await db
@@ -2096,7 +2178,7 @@ app.get("/sitemap.xml", async (req, res) => {
       .prepare(
         `SELECT n.code, n.name, n.img, n.created_at, c.name as category
          FROM nominees n JOIN categories c ON n.category_id = c.id
-         ORDER BY n.votes DESC`,
+         ORDER BY COALESCE(n.votes, 0) DESC`,
       )
       .all();
 
@@ -2419,6 +2501,7 @@ const server = app.listen(PORT, async () => {
   console.log(
     `  Voting:      FREE · one per device per category (fingerprint-enforced)`,
   );
+  console.log(`  Live votes:  SSE at /api/nominee/stream + 15s polling fallback`);
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
