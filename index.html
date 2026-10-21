@@ -494,6 +494,20 @@
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
+                transition: all 0.3s;
+            }
+            .cat-badge.bump {
+                animation: bump 0.4s ease;
+            }
+            @keyframes bump {
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.12);
+                    background: rgba(147, 197, 253, 0.9);
+                }
             }
             .cat-badge.voted {
                 color: #166534;
@@ -573,6 +587,39 @@
             }
             #toast.show {
                 bottom: 30px;
+            }
+
+            /* ✅ live indicator in the hero stats bar */
+            .live-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: clamp(7px, 1.2vw, 10px);
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #86efac;
+                opacity: 0.9;
+                margin-left: 6px;
+            }
+            .live-dot {
+                width: 5px;
+                height: 5px;
+                border-radius: 999px;
+                background: #22c55e;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                animation: livePulse 1.8s infinite;
+            }
+            @keyframes livePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
             }
 
             .success-card {
@@ -663,7 +710,16 @@
                             <div class="value" id="stat-cats">—</div>
                         </div>
                         <div>
-                            <div class="label">Nominees</div>
+                            <div class="label">
+                                Nominees
+                                <span
+                                    id="live-pill"
+                                    class="live-pill hidden"
+                                    title="Live vote counts"
+                                >
+                                    <span class="live-dot"></span>Live
+                                </span>
+                            </div>
                             <div class="value" id="stat-noms">—</div>
                         </div>
                         <div>
@@ -966,6 +1022,11 @@
             const MIN_NOMINEES_FOR_NO_PROMPT = 6;
             const VOTER_TOKEN_KEY = "vn_voter_token";
 
+            // ✅ FIX: live-update state
+            let liveStream = null;
+            let livePollTimer = null;
+            let sseRetries = 0;
+
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
                 if (
@@ -1180,6 +1241,9 @@
                 } catch (e) {
                     toast(e.message, false);
                 }
+                // ✅ Start live updates whether or not initial load succeeded,
+                // so the page self-heals once the server is reachable.
+                startLiveUpdates();
             }
 
             async function refreshNominees() {
@@ -1189,6 +1253,84 @@
                     deviceHash,
                 }).toString();
                 nominees = await api("/api/nominees?" + qs);
+            }
+
+            // ✅ NEW: live-update wiring
+            function startLiveUpdates() {
+                // 45s polling fallback — cheap safety net behind SSE
+                if (livePollTimer) clearInterval(livePollTimer);
+                livePollTimer = setInterval(() => {
+                    if (document.hidden) return;
+                    refreshNominees()
+                        .then(render)
+                        .catch(() => {});
+                }, 45_000);
+
+                connectLiveStream();
+            }
+
+            function connectLiveStream() {
+                if (typeof EventSource === "undefined") return;
+                if (liveStream) {
+                    try {
+                        liveStream.close();
+                    } catch {}
+                }
+                try {
+                    liveStream = new EventSource("/api/live/votes");
+                    liveStream.addEventListener("vote", (e) => {
+                        sseRetries = 0;
+                        $("live-pill").classList.remove("hidden");
+                        try {
+                            const { nomineeId, votes } = JSON.parse(e.data);
+                            applyLiveVote(nomineeId, votes);
+                        } catch {}
+                    });
+                    liveStream.onerror = () => {
+                        try {
+                            liveStream.close();
+                        } catch {}
+                        liveStream = null;
+                        $("live-pill").classList.add("hidden");
+                        sseRetries++;
+                        if (sseRetries < 4) {
+                            setTimeout(connectLiveStream, 5000);
+                        }
+                    };
+                } catch (err) {
+                    console.warn("[SSE]", err.message);
+                }
+            }
+
+            // ✅ NEW: surgical live update — just bumps a category badge
+            function applyLiveVote(nomineeId, votes) {
+                const n = nominees.find((x) => x.id === nomineeId);
+                if (!n) {
+                    // Unknown nominee (maybe admin just added one) — refresh
+                    refreshNominees().then(render).catch(() => {});
+                    return;
+                }
+                if (n.votes === votes) return; // already synced
+                n.votes = votes;
+
+                const sec = document.querySelector(
+                    `#nominees-container > div[data-cat-id="${n.category_id}"]`,
+                );
+                if (!sec) return;
+                const badge = sec.querySelector(".cat-badge");
+                if (!badge || badge.classList.contains("voted")) return;
+
+                const catList = nominees.filter(
+                    (x) => x.category_id === n.category_id,
+                );
+                const total = catList.reduce(
+                    (s, x) => s + (x.votes || 0),
+                    0,
+                );
+                badge.innerHTML = `<i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes`;
+                badge.classList.remove("bump");
+                void badge.offsetWidth; // restart animation
+                badge.classList.add("bump");
             }
 
             function maybeShowRegisterPrompt(count) {
@@ -1307,6 +1449,9 @@
 
                     const sec = document.createElement("div");
                     sec.className = "w-full";
+                    // ✅ NEW: tag sections with their category id so live
+                    // updates can find them without a full re-render.
+                    sec.setAttribute("data-cat-id", cat.id);
                     sec.innerHTML = `
       <div class="cat-header">
         <h2>${escapeHtml(cat.name)}</h2>
