@@ -918,19 +918,29 @@
                         </div>
 
                         <div class="flex-1 p-6 sm:p-8 flex flex-col">
+                            <!-- ✅ FIX: live badge + "updated at" ticker -->
                             <div class="mb-6">
                                 <p
                                     class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2"
                                 >
                                     <i class="ph-fill ph-check-circle"></i>
                                     Total Verified Votes
+                                    <span
+                                        id="live-badge"
+                                        class="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full normal-case tracking-normal"
+                                    >
+                                        <span
+                                            class="w-1.5 h-1.5 rounded-full bg-green-500 pulse-soft"
+                                        ></span>
+                                        Live
+                                    </span>
                                 </p>
                                 <div
                                     class="flex items-baseline gap-3 flex-wrap"
                                 >
                                     <span
                                         id="d-votes"
-                                        class="text-6xl sm:text-7xl font-extrabold text-gray-900 tracking-tighter"
+                                        class="text-6xl sm:text-7xl font-extrabold text-gray-900 tracking-tighter transition-transform duration-200 inline-block"
                                         >0</span
                                     >
                                     <span
@@ -938,6 +948,10 @@
                                         >votes counted</span
                                     >
                                 </div>
+                                <p
+                                    id="d-votes-updated"
+                                    class="text-[11px] text-gray-400 mt-1"
+                                ></p>
                             </div>
 
                             <div class="border-t border-gray-100 pt-6 mb-6">
@@ -1096,7 +1110,7 @@
                                     Recent Activity
                                 </h3>
                                 <button
-                                    onclick="loadDashboard()"
+                                    onclick="pollVotes()"
                                     class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
                                 >
                                     <i class="ph ph-arrow-clockwise"></i>
@@ -1558,6 +1572,12 @@
             let currentUnlockType = "once";
             let pollTimers = { change: null, unlock: null };
 
+            // ✅ FIX: live-vote tracking state
+            let votePollTimer = null;
+            let voteStream = null;
+            let lastVoteCount = null;
+            let voteEvents = [];
+
             function toast(msg, ok = true) {
                 const t = $("toast");
                 t.querySelector("i").className = ok
@@ -1713,7 +1733,6 @@
             let registering = false;
 
             async function handleRegister() {
-                // Guard against double-submit (Enter key + click both fire)
                 if (registering) return;
 
                 const name = $("reg-name").value.trim();
@@ -1766,14 +1785,12 @@
                     toast("Account created — set up your nomination");
                 } catch (e) {
                     console.error("[Register]", e);
-                    // Make the "email exists" case friendlier
                     if (e.status === 409) {
                         toast(
                             "This email is already registered — switch to Sign In",
                             false,
                         );
                         toggleAuth("login");
-                        // Pre-fill the login form with the email the user typed
                         $("login-email").value = email;
                     } else {
                         toast(e.message || "Registration failed", false);
@@ -1849,6 +1866,17 @@
             }
 
             function logout() {
+                // ✅ FIX: tear down live vote machinery on sign-out
+                if (votePollTimer) {
+                    clearInterval(votePollTimer);
+                    votePollTimer = null;
+                }
+                if (voteStream) {
+                    try {
+                        voteStream.close();
+                    } catch {}
+                    voteStream = null;
+                }
                 clearToken();
                 location.reload();
             }
@@ -1995,6 +2023,105 @@
                 }
             }
 
+            // ✅ FIX: paints the vote counter and marks when it last changed.
+            function paintVotes(n, animate = true) {
+                const el = $("d-votes");
+                if (!el) return;
+                el.innerText = Number(n || 0).toLocaleString();
+                if (animate) {
+                    el.classList.add("scale-110");
+                    setTimeout(() => el.classList.remove("scale-110"), 200);
+                }
+                const upd = $("d-votes-updated");
+                if (upd) {
+                    upd.innerText =
+                        "Updated " +
+                        new Date().toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                        });
+                }
+            }
+
+            function pushVoteEvent(delta, total) {
+                voteEvents.unshift({ at: new Date(), delta, total });
+                if (voteEvents.length > 8) voteEvents.pop();
+            }
+
+            function applyVotes(fresh, source) {
+                fresh = Number(fresh || 0);
+                const prev = lastVoteCount ?? fresh;
+                if (nominee) nominee.votes = fresh;
+
+                if (fresh > prev) {
+                    const delta = fresh - prev;
+                    toast(`+${delta} new vote${delta > 1 ? "s" : ""} 🎉`);
+                    pushVoteEvent(delta, fresh);
+                    renderActivity();
+                }
+                lastVoteCount = fresh;
+                paintVotes(fresh, fresh !== prev);
+            }
+
+            // ✅ FIX: polling fallback — safe even if SSE fails silently.
+            async function pollVotes() {
+                if (!getToken() || document.hidden) return;
+                try {
+                    const d = await api("/api/nominee/me");
+                    applyVotes(d.nominee?.votes, "poll");
+                } catch (e) {
+                    if (e.status === 401) {
+                        clearToken();
+                        showView("view-auth");
+                    }
+                }
+            }
+
+            // ✅ FIX: SSE push — instant updates when votes come in.
+            function startVoteStream() {
+                if (typeof EventSource === "undefined") return;
+                if (!getToken()) return;
+                if (voteStream) {
+                    try {
+                        voteStream.close();
+                    } catch {}
+                }
+                try {
+                    voteStream = new EventSource(
+                        "/api/nominee/stream?token=" +
+                            encodeURIComponent(getToken()),
+                    );
+                    voteStream.addEventListener("votes", (e) => {
+                        try {
+                            const { votes } = JSON.parse(e.data);
+                            applyVotes(votes, "sse");
+                        } catch {}
+                    });
+                    voteStream.onerror = () => {
+                        // Silent reconnect — polling still covers us.
+                        try {
+                            voteStream.close();
+                        } catch {}
+                        voteStream = null;
+                        setTimeout(() => {
+                            if (getToken()) startVoteStream();
+                        }, 5_000);
+                    };
+                } catch (err) {
+                    console.warn("[SSE]", err.message);
+                }
+            }
+
+            function startVoteUpdates() {
+                if (votePollTimer) clearInterval(votePollTimer);
+                votePollTimer = setInterval(pollVotes, 15_000);
+                document.addEventListener("visibilitychange", () => {
+                    if (!document.hidden) pollVotes();
+                });
+                startVoteStream();
+            }
+
             async function loadDashboard(opts = {}) {
                 const fromLogin = !!opts.fromLogin;
                 if (!getToken()) {
@@ -2015,15 +2142,20 @@
                     $("d-name").innerText = nominee.name;
                     $("d-cat").innerText = nominee.category;
                     $("d-code").innerText = nominee.code;
-                    $("d-votes").innerText = (
-                        nominee.votes || 0
-                    ).toLocaleString();
+
+                    // ✅ FIX: seed the baseline and paint the first value.
+                    lastVoteCount = Number(nominee.votes || 0);
+                    paintVotes(lastVoteCount, false);
+
                     $("d-link").value =
                         `${location.origin}/nominee/${encodeURIComponent(nominee.code)}`;
 
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
                     renderActivity();
+
+                    // ✅ FIX: begin live updates now that the dashboard is up.
+                    startVoteUpdates();
                 } catch (e) {
                     if (e.status === 401) {
                         clearToken();
@@ -2140,24 +2272,46 @@
                 }
             }
 
+            // ✅ FIX: activity feed shows live deltas plus the running total.
             function renderActivity() {
                 const list = $("activity-list");
                 if (!nominee) return;
-                if ((nominee.votes || 0) === 0) {
+                const total = Number(nominee.votes || 0);
+
+                if (!voteEvents.length && total === 0) {
                     list.innerHTML =
                         '<div class="text-center py-6 text-gray-400 text-xs"><i class="ph ph-hourglass text-2xl block mb-2 opacity-50"></i>No activity yet. Share your link or QR code to get started.</div>';
-                } else {
-                    list.innerHTML = `
-                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="ph-fill ph-check-circle"></i></div>
-                                <div>
-                                    <div class="font-semibold text-sm">${nominee.votes.toLocaleString()} votes received</div>
-                                    <div class="text-xs text-gray-500">Keep sharing to climb the leaderboard</div>
-                                </div>
-                            </div>
-                        </div>`;
+                    return;
                 }
+
+                const eventRows = voteEvents
+                    .map(
+                        (ev) => `
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><i class="ph-fill ph-arrow-up"></i></div>
+                            <div>
+                                <div class="font-semibold text-sm text-green-800">+${ev.delta} vote${ev.delta > 1 ? "s" : ""}</div>
+                                <div class="text-xs text-gray-500">${ev.at.toLocaleTimeString()}</div>
+                            </div>
+                        </div>
+                        <div class="text-xs font-mono text-gray-500">${ev.total.toLocaleString()} total</div>
+                    </div>`,
+                    )
+                    .join("");
+
+                const summary = `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i class="ph-fill ph-check-circle"></i></div>
+                            <div>
+                                <div class="font-semibold text-sm">${total.toLocaleString()} total votes</div>
+                                <div class="text-xs text-gray-500">Keep sharing to climb the leaderboard</div>
+                            </div>
+                        </div>
+                    </div>`;
+
+                list.innerHTML = eventRows + summary;
             }
 
             function copyLink() {
@@ -2402,7 +2556,7 @@
 
             document.addEventListener("keydown", (e) => {
                 if (e.key !== "Enter") return;
-                if (registering) return; // already in flight — don't double-submit
+                if (registering) return;
                 const authVisible = $("view-auth").classList.contains("active");
                 if (!authVisible) return;
                 const isRegister =
