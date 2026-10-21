@@ -5,33 +5,18 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#2563eb" />
         <meta name="color-scheme" content="light" />
-
-        <!-- ==================== SEO META TAGS ==================== -->
         <title>
             Nominee Dashboard — Voteus | Gala Awards 2026 | Mount Kenya
             University Parklands Law Campus
         </title>
         <meta
-            name="title"
-            content="Nominee Dashboard — Voteus | Gala Awards 2026 | Mount Kenya University Parklands Law Campus"
-        />
-        <meta
             name="description"
-            content="Manage your nomination for Gala Awards 2026 at MKUPLC on Voteus. Track votes, share your campaign link, unlock leaderboard insights, and connect with voters. Organized by MKUSA Council. Built by emojistudios."
-        />
-        <meta
-            name="keywords"
-            content="Voteus nominee dashboard, Gala Awards 2026, MKUPLC, Mount Kenya University Parklands Law Campus, nominee portal, track votes, campaign link, voting platform, student awards dashboard, MKUSA Council gala, Kenya university student awards, nominee voting dashboard"
+            content="Manage your nomination for Gala Awards 2026 at MKUPLC on Voteus. Track votes, share your campaign link, unlock leaderboard insights, and connect with voters."
         />
         <meta name="author" content="emojistudios" />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://gala.voteus.xyz/nominee" />
         <meta name="generator" content="Voteus v1.0" />
-        <meta name="application-name" content="Voteus Nominee Portal" />
-        <meta name="apple-mobile-web-app-title" content="Voteus Nominee" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="mobile-web-app-capable" content="yes" />
         <link
             rel="icon"
             type="image/svg+xml"
@@ -41,76 +26,6 @@
             rel="apple-touch-icon"
             href="https://gala.voteus.xyz/hero-mobile.jpeg"
         />
-
-        <!-- ==================== OPEN GRAPH (fallback for authenticated pages) ==================== -->
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://gala.voteus.xyz/nominee" />
-        <meta
-            property="og:title"
-            content="Nominee Dashboard — Voteus | Gala Awards 2026"
-        />
-        <meta
-            property="og:description"
-            content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results."
-        />
-        <meta
-            property="og:image"
-            content="https://gala.voteus.xyz/hero-mobile.jpeg"
-        />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta
-            property="og:image:alt"
-            content="Voteus Nominee Dashboard - Gala Awards 2026"
-        />
-        <meta property="og:image:type" content="image/jpeg" />
-        <meta property="og:site_name" content="Voteus" />
-        <meta property="og:locale" content="en_US" />
-
-        <!-- ==================== TWITTER CARDS ==================== -->
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:site" content="@votenet_ke" />
-        <meta name="twitter:creator" content="@emojistudios" />
-        <meta name="twitter:url" content="https://gala.voteus.xyz/nominee" />
-        <meta
-            name="twitter:title"
-            content="Nominee Dashboard — Voteus | Gala Awards 2026"
-        />
-        <meta
-            name="twitter:description"
-            content="Manage your nomination for Gala Awards 2026. Track votes, share your campaign, and see real-time results."
-        />
-        <meta
-            name="twitter:image"
-            content="https://gala.voteus.xyz/hero-mobile.jpeg"
-        />
-        <meta
-            name="twitter:image:alt"
-            content="Voteus Nominee Dashboard - Gala Awards 2026"
-        />
-
-        <!-- ==================== JSON-LD STRUCTURED DATA ==================== -->
-        <script type="application/ld+json">
-            {
-                "@context": "https://schema.org",
-                "@type": "WebApplication",
-                "name": "Voteus Nominee Dashboard",
-                "applicationCategory": "VotingApplication",
-                "operatingSystem": "Web",
-                "offers": {
-                    "@type": "Offer",
-                    "price": "0",
-                    "priceCurrency": "KES",
-                    "availability": "https://schema.org/InStock"
-                },
-                "description": "Official nominee dashboard for Gala Awards 2026 at Mount Kenya University Parklands Law Campus. Track votes, manage campaign, share voting link.",
-                "publisher": {
-                    "@type": "Organization",
-                    "name": "emojistudios"
-                }
-            }
-        </script>
-
         <script src="https://cdn.tailwindcss.com"></script>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -126,7 +41,6 @@
                 color: #1d1d1f;
                 -webkit-font-smoothing: antialiased;
             }
-
             .view {
                 display: none !important;
             }
@@ -140,7 +54,6 @@
                 display: flex !important;
                 flex-direction: column;
             }
-
             .card {
                 background: #fff;
                 border: 1px solid #eef0f3;
@@ -423,10 +336,10 @@
             .unlock-opt {
                 display: flex;
                 align-items: center;
-                gap: 14px;
-                padding: 14px;
+                gap: 10px;
+                padding: 10px 12px;
                 border: 1.5px solid #e5e7eb;
-                border-radius: 14px;
+                border-radius: 12px;
                 cursor: pointer;
                 transition: all 0.15s;
             }
@@ -910,7 +823,11 @@
                                 id="d-img"
                                 class="absolute inset-0 w-full h-full object-cover"
                                 alt=""
-                                onerror="this.onerror=null;this.src='https://placehold.co/800x800/1e293b/ffffff?text=?';"
+                                onerror="
+                                    this.onerror = null;
+                                    this.src =
+                                        'https://placehold.co/800x800/1e293b/ffffff?text=?';
+                                "
                             />
                             <div
                                 class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none"
@@ -918,7 +835,6 @@
                         </div>
 
                         <div class="flex-1 p-6 sm:p-8 flex flex-col">
-                            <!-- ✅ FIX: live badge + "updated at" ticker -->
                             <div class="mb-6">
                                 <p
                                     class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2 flex items-center gap-2"
@@ -1099,6 +1015,9 @@
                             </div>
                         </div>
 
+                        <!-- ✅ NEW: Boost card injected here -->
+                        <div id="boost-card-wrap"></div>
+
                         <div class="card p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3
@@ -1142,12 +1061,19 @@
                                     ></i>
                                     Category Leaderboard
                                 </h3>
-                                <span
-                                    id="lb-badge"
-                                    class="px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1"
-                                >
-                                    <i class="ph ph-lock text-xs"></i> Locked
-                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        id="lb-timer"
+                                        class="hidden text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md"
+                                    ></span>
+                                    <span
+                                        id="lb-badge"
+                                        class="px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1"
+                                    >
+                                        <i class="ph ph-lock text-xs"></i>
+                                        Locked
+                                    </span>
+                                </div>
                             </div>
 
                             <div
@@ -1290,13 +1216,7 @@
                     <p class="text-sm text-gray-600 mb-4">
                         Your category has been updated.
                     </p>
-                    <button
-                        onclick="
-                            closeModal('change-cat-modal');
-                            loadDashboard();
-                        "
-                        class="btn w-full"
-                    >
+                    <button onclick="verifyCategoryChange()" class="btn w-full">
                         Continue
                     </button>
                 </div>
@@ -1330,7 +1250,7 @@
             </div>
         </div>
 
-        <!-- UNLOCK MODAL -->
+        <!-- UNLOCK MODAL — 4 tiers -->
         <div id="unlock-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1348,11 +1268,11 @@
                     <h3 class="text-xl font-bold mb-1">
                         Unlock Full Leaderboard
                     </h3>
-                    <p class="text-sm text-gray-500 mb-5">
+                    <p class="text-sm text-gray-500 mb-4">
                         See your exact rank plus every competitor in your
                         category.
                     </p>
-                    <div class="space-y-3 mb-5">
+                    <div class="space-y-2 mb-4">
                         <label
                             class="unlock-opt selected"
                             id="opt-once"
@@ -1365,40 +1285,98 @@
                                 checked
                             />
                             <div
-                                class="w-10 h-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0"
+                                class="w-9 h-9 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0"
                             >
                                 <i class="ph ph-eye"></i>
                             </div>
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <div class="font-semibold text-sm">
-                                    One-time view
+                                    Quick Peek
                                 </div>
                                 <div class="text-xs text-gray-500">
-                                    Single peek at the full leaderboard
+                                    1 minute access
                                 </div>
                             </div>
-                            <div class="font-bold text-blue-600">KSH 10</div>
+                            <div class="font-bold text-blue-600 text-sm">
+                                KSH 10
+                            </div>
                         </label>
                         <label
                             class="unlock-opt"
-                            id="opt-2h"
-                            onclick="selectUnlock('2h')"
+                            id="opt-1h"
+                            onclick="selectUnlock('1h')"
                         >
-                            <input type="radio" name="unlock-type" value="2h" />
+                            <input type="radio" name="unlock-type" value="1h" />
                             <div
-                                class="w-10 h-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center shrink-0"
+                                class="w-9 h-9 rounded-lg bg-green-100 text-green-600 flex items-center justify-center shrink-0"
                             >
                                 <i class="ph ph-clock"></i>
                             </div>
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <div class="font-semibold text-sm">
-                                    2-hour access
+                                    1-Hour Access
                                 </div>
                                 <div class="text-xs text-gray-500">
-                                    Unlimited refreshes for 2 hours
+                                    Full leaderboard for 1 hour
                                 </div>
                             </div>
-                            <div class="font-bold text-blue-600">KSH 25</div>
+                            <div class="font-bold text-blue-600 text-sm">
+                                KSH 25
+                            </div>
+                        </label>
+                        <label
+                            class="unlock-opt"
+                            id="opt-12h"
+                            onclick="selectUnlock('12h')"
+                        >
+                            <input
+                                type="radio"
+                                name="unlock-type"
+                                value="12h"
+                            />
+                            <div
+                                class="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"
+                            >
+                                <i class="ph ph-sun-horizon"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold text-sm">
+                                    12-Hour Access
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    Half-day of leaderboard
+                                </div>
+                            </div>
+                            <div class="font-bold text-blue-600 text-sm">
+                                KSH 50
+                            </div>
+                        </label>
+                        <label
+                            class="unlock-opt"
+                            id="opt-24h"
+                            onclick="selectUnlock('24h')"
+                        >
+                            <input
+                                type="radio"
+                                name="unlock-type"
+                                value="24h"
+                            />
+                            <div
+                                class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"
+                            >
+                                <i class="ph ph-crown"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold text-sm">
+                                    Full Day Access
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    24-hour access to full leaderboard
+                                </div>
+                            </div>
+                            <div class="font-bold text-blue-600 text-sm">
+                                KSH 100
+                            </div>
                         </label>
                     </div>
                     <label
@@ -1492,6 +1470,248 @@
             </div>
         </div>
 
+        <!-- BOOST MODAL -->
+        <div id="boost-modal" class="modal">
+            <div
+                class="modal-panel w-full max-w-md relative overflow-hidden rounded-2xl"
+                style="
+                    background: linear-gradient(
+                        135deg,
+                        #1a1a2e 0%,
+                        #16213e 50%,
+                        #0f3460 100%
+                    );
+                    border: 1px solid rgba(255, 215, 0, 0.35);
+                "
+            >
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none"
+                    style="background: rgba(250, 204, 21, 0.15)"
+                ></div>
+                <div
+                    class="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none"
+                    style="background: rgba(249, 115, 22, 0.15)"
+                ></div>
+                <button
+                    onclick="closeModal('boost-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center z-20"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div class="relative p-6">
+                    <div id="boost-form">
+                        <div class="flex items-start gap-3 mb-5">
+                            <div
+                                class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                                style="
+                                    background: linear-gradient(
+                                        135deg,
+                                        #facc15 0%,
+                                        #f97316 100%
+                                    );
+                                    box-shadow: 0 8px 24px -8px
+                                        rgba(249, 115, 22, 0.6);
+                                "
+                            >
+                                <i
+                                    class="ph-fill ph-rocket-launch text-white text-2xl"
+                                ></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <h3
+                                        class="text-white text-xl font-extrabold tracking-tight"
+                                    >
+                                        Power Boost
+                                    </h3>
+                                    <span
+                                        class="text-[9px] font-bold bg-yellow-400/25 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider"
+                                        >One-time</span
+                                    >
+                                </div>
+                                <p
+                                    class="text-gray-300 text-xs leading-relaxed"
+                                >
+                                    Instantly add
+                                    <strong class="text-yellow-300"
+                                        >+50 verified votes</strong
+                                    >
+                                    to your campaign.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mb-5">
+                            <div
+                                class="rounded-xl p-3"
+                                style="
+                                    background: rgba(255, 255, 255, 0.06);
+                                    border: 1px solid rgba(255, 255, 255, 0.1);
+                                "
+                            >
+                                <div
+                                    class="text-2xl font-black text-white leading-none"
+                                >
+                                    +50
+                                </div>
+                                <div
+                                    class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1"
+                                >
+                                    Votes added
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-3"
+                                style="
+                                    background: rgba(255, 255, 255, 0.06);
+                                    border: 1px solid rgba(255, 255, 255, 0.1);
+                                "
+                            >
+                                <div
+                                    class="text-2xl font-black leading-none"
+                                    style="color: #facc15"
+                                >
+                                    250
+                                </div>
+                                <div
+                                    class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1"
+                                >
+                                    KES only
+                                </div>
+                            </div>
+                        </div>
+                        <label
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5"
+                            >M-Pesa Phone</label
+                        >
+                        <input
+                            type="tel"
+                            id="boost-phone"
+                            class="input mb-4"
+                            placeholder="07XX XXX XXX"
+                            style="
+                                background: rgba(255, 255, 255, 0.95);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                            "
+                        />
+                        <button
+                            id="boost-pay-btn"
+                            onclick="submitBoost()"
+                            class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all"
+                            style="
+                                background: linear-gradient(
+                                    90deg,
+                                    #facc15 0%,
+                                    #fde047 100%
+                                );
+                                box-shadow: 0 8px 24px -10px
+                                    rgba(250, 204, 21, 0.7);
+                            "
+                        >
+                            <i class="ph-fill ph-rocket-launch"></i> Activate
+                            Boost · KES 250
+                        </button>
+                        <p class="text-[10px] text-gray-500 text-center mt-3">
+                            Secure M-Pesa payment via PayHero · Limit 1 per
+                            nominee
+                        </p>
+                    </div>
+                    <div id="boost-loading" class="hidden text-center py-8">
+                        <div
+                            class="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4"
+                            style="
+                                border-color: rgba(250, 204, 21, 0.2);
+                                border-top-color: #facc15;
+                            "
+                        ></div>
+                        <p class="font-bold text-white">Check your phone</p>
+                        <p class="text-xs text-gray-400 mt-1">
+                            Enter your M-Pesa PIN to confirm.
+                        </p>
+                        <p
+                            class="text-[10px] font-mono mt-3 text-gray-500"
+                            id="boost-ref"
+                        ></p>
+                    </div>
+                    <div id="boost-success" class="hidden text-center py-4">
+                        <div
+                            class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                            style="background: rgba(34, 197, 94, 0.15)"
+                        >
+                            <i
+                                class="ph-fill ph-rocket-launch text-4xl"
+                                style="color: #4ade80"
+                            ></i>
+                        </div>
+                        <h4 class="text-xl font-bold mb-1 text-white">
+                            Boost Activated!
+                        </h4>
+                        <p class="text-sm text-gray-300 mb-4">
+                            +50 votes added to your campaign.
+                        </p>
+                        <button
+                            onclick="
+                                closeModal('boost-modal');
+                                loadDashboard();
+                            "
+                            class="w-full py-3 rounded-xl font-bold text-gray-900"
+                            style="
+                                background: linear-gradient(
+                                    90deg,
+                                    #facc15 0%,
+                                    #fde047 100%
+                                );
+                            "
+                        >
+                            View My Dashboard
+                        </button>
+                    </div>
+                    <div id="boost-failed" class="hidden text-center py-4">
+                        <div
+                            class="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4"
+                        >
+                            <i
+                                class="ph-fill ph-x-circle text-red-400 text-4xl"
+                            ></i>
+                        </div>
+                        <h4 class="text-xl font-bold mb-1 text-white">
+                            Payment failed
+                        </h4>
+                        <p class="text-sm text-gray-300 mb-4">
+                            No money has been deducted.
+                        </p>
+                        <div class="flex gap-2">
+                            <button
+                                onclick="
+                                    document
+                                        .getElementById('boost-failed')
+                                        .classList.add('hidden');
+                                    document
+                                        .getElementById('boost-form')
+                                        .classList.remove('hidden');
+                                "
+                                class="flex-1 py-3 rounded-xl font-bold text-white bg-white/10 hover:bg-white/20"
+                            >
+                                Try Again
+                            </button>
+                            <button
+                                onclick="closeModal('boost-modal')"
+                                class="flex-1 py-3 rounded-xl font-bold text-gray-900"
+                                style="
+                                    background: linear-gradient(
+                                        90deg,
+                                        #facc15 0%,
+                                        #fde047 100%
+                                    );
+                                "
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- QR MODAL -->
         <div id="qr-modal" class="modal">
             <div
@@ -1570,13 +1790,13 @@
                 selectedFile = null,
                 uploadedUrl = null;
             let currentUnlockType = "once";
-            let pollTimers = { change: null, unlock: null };
+            let pollTimers = { change: null, unlock: null, boost: null };
 
-            // ✅ FIX: live-vote tracking state
             let votePollTimer = null;
             let voteStream = null;
             let lastVoteCount = null;
             let voteEvents = [];
+            let lbTimerInterval = null;
 
             function toast(msg, ok = true) {
                 const t = $("toast");
@@ -1626,6 +1846,7 @@
                             `Request failed (${res.status})`,
                     );
                     err.status = res.status;
+                    err.code = data.code;
                     throw err;
                 }
                 return data;
@@ -1734,32 +1955,23 @@
 
             async function handleRegister() {
                 if (registering) return;
-
                 const name = $("reg-name").value.trim();
                 const email = $("reg-email").value.trim().toLowerCase();
                 const password = $("reg-pass").value;
                 const password2 = $("reg-pass2").value;
 
-                if (!name) {
-                    toast("Please enter your full name", false);
-                    return;
-                }
-                if (!email || !isValidEmail(email)) {
-                    toast("Please enter a valid email", false);
-                    return;
-                }
-                if (password.length < 8) {
-                    toast("Password must be at least 8 characters", false);
-                    return;
-                }
-                if (!/\d/.test(password)) {
-                    toast("Password must contain a number", false);
-                    return;
-                }
-                if (password !== password2) {
-                    toast("Passwords do not match", false);
-                    return;
-                }
+                if (!name) return toast("Please enter your full name", false);
+                if (!email || !isValidEmail(email))
+                    return toast("Please enter a valid email", false);
+                if (password.length < 8)
+                    return toast(
+                        "Password must be at least 8 characters",
+                        false,
+                    );
+                if (!/\d/.test(password))
+                    return toast("Password must contain a number", false);
+                if (password !== password2)
+                    return toast("Passwords do not match", false);
 
                 registering = true;
                 setBusy(
@@ -1774,17 +1986,15 @@
                         body: JSON.stringify({ name, email, password }),
                     });
                     const token = d.token || d.accessToken || d.access_token;
-                    if (!setToken(token)) {
+                    if (!setToken(token))
                         throw new Error(
                             "Server did not return a valid session token",
                         );
-                    }
                     $("ob-name").value = (d.user && d.user.name) || name;
                     await loadCategories();
                     showView("view-onboard");
                     toast("Account created — set up your nomination");
                 } catch (e) {
-                    console.error("[Register]", e);
                     if (e.status === 409) {
                         toast(
                             "This email is already registered — switch to Sign In",
@@ -1804,15 +2014,10 @@
             async function handleLogin() {
                 const email = $("login-email").value.trim();
                 const password = $("login-pass").value;
-
-                if (!email || !password) {
-                    toast("Enter email and password", false);
-                    return;
-                }
-                if (!isValidEmail(email)) {
-                    toast("Please enter a valid email", false);
-                    return;
-                }
+                if (!email || !password)
+                    return toast("Enter email and password", false);
+                if (!isValidEmail(email))
+                    return toast("Please enter a valid email", false);
 
                 setBusy(
                     "login-btn",
@@ -1831,7 +2036,6 @@
                         throw new Error(
                             "Server did not return a valid session token",
                         );
-
                     try {
                         await loadDashboard({ fromLogin: true });
                         toast("Welcome back!");
@@ -1857,7 +2061,6 @@
                         }
                     }
                 } catch (e) {
-                    console.error("[Login]", e);
                     clearToken();
                     toast(e.message || "Login failed", false);
                 } finally {
@@ -1866,7 +2069,6 @@
             }
 
             function logout() {
-                // ✅ FIX: tear down live vote machinery on sign-out
                 if (votePollTimer) {
                     clearInterval(votePollTimer);
                     votePollTimer = null;
@@ -1876,6 +2078,10 @@
                         voteStream.close();
                     } catch {}
                     voteStream = null;
+                }
+                if (lbTimerInterval) {
+                    clearInterval(lbTimerInterval);
+                    lbTimerInterval = null;
                 }
                 clearToken();
                 location.reload();
@@ -1913,14 +2119,10 @@
             function handleImage(event) {
                 const f = event.target.files[0];
                 if (!f) return;
-                if (!f.type.startsWith("image/")) {
-                    toast("Please choose an image file", false);
-                    return;
-                }
-                if (f.size > 10 * 1024 * 1024) {
-                    toast("Image must be under 10 MB", false);
-                    return;
-                }
+                if (!f.type.startsWith("image/"))
+                    return toast("Please choose an image file", false);
+                if (f.size > 10 * 1024 * 1024)
+                    return toast("Image must be under 10 MB", false);
                 selectedFile = f;
                 uploadedUrl = null;
                 const reader = new FileReader();
@@ -1969,14 +2171,7 @@
                         try {
                             const parsed = JSON.parse(xhr.responseText);
                             if (parsed && parsed.error) msg = parsed.error;
-                            if (parsed && parsed.detail)
-                                msg += " — " + parsed.detail;
                         } catch {}
-                        console.error(
-                            "[Upload] Server response:",
-                            xhr.status,
-                            xhr.responseText,
-                        );
                         reject(new Error(msg));
                     };
                     xhr.onerror = () => {
@@ -1991,10 +2186,8 @@
                 const name = $("ob-name").value.trim();
                 const categoryId = $("ob-cat").value;
                 const desc = $("ob-desc").value.trim();
-                if (!name || !categoryId) {
-                    toast("Name and category required", false);
-                    return;
-                }
+                if (!name || !categoryId)
+                    return toast("Name and category required", false);
                 const btn = $("publish-btn");
                 btn.disabled = true;
                 btn.innerHTML =
@@ -2014,7 +2207,6 @@
                     toast("Nomination published!");
                     await loadDashboard();
                 } catch (e) {
-                    console.error("[Publish]", e);
                     toast(e.message || "Publish failed", false);
                 } finally {
                     btn.disabled = false;
@@ -2023,7 +2215,6 @@
                 }
             }
 
-            // ✅ FIX: paints the vote counter and marks when it last changed.
             function paintVotes(n, animate = true) {
                 const el = $("d-votes");
                 if (!el) return;
@@ -2033,7 +2224,7 @@
                     setTimeout(() => el.classList.remove("scale-110"), 200);
                 }
                 const upd = $("d-votes-updated");
-                if (upd) {
+                if (upd)
                     upd.innerText =
                         "Updated " +
                         new Date().toLocaleTimeString([], {
@@ -2041,7 +2232,6 @@
                             minute: "2-digit",
                             second: "2-digit",
                         });
-                }
             }
 
             function pushVoteEvent(delta, total) {
@@ -2052,8 +2242,8 @@
             function applyVotes(fresh, source) {
                 fresh = Number(fresh || 0);
                 const prev = lastVoteCount ?? fresh;
+                if (fresh < prev) return; // ignore stale responses
                 if (nominee) nominee.votes = fresh;
-
                 if (fresh > prev) {
                     const delta = fresh - prev;
                     toast(`+${delta} new vote${delta > 1 ? "s" : ""} 🎉`);
@@ -2064,7 +2254,6 @@
                 paintVotes(fresh, fresh !== prev);
             }
 
-            // ✅ FIX: polling fallback — safe even if SSE fails silently.
             async function pollVotes() {
                 if (!getToken() || document.hidden) return;
                 try {
@@ -2078,7 +2267,6 @@
                 }
             }
 
-            // ✅ FIX: SSE push — instant updates when votes come in.
             function startVoteStream() {
                 if (typeof EventSource === "undefined") return;
                 if (!getToken()) return;
@@ -2098,8 +2286,29 @@
                             applyVotes(votes, "sse");
                         } catch {}
                     });
+                    voteStream.addEventListener("payment", (e) => {
+                        try {
+                            const evt = JSON.parse(e.data);
+                            if (evt.status !== "success") return;
+                            if (
+                                evt.type === "leaderboard_once" ||
+                                evt.type === "leaderboard_1h" ||
+                                evt.type === "leaderboard_12h" ||
+                                evt.type === "leaderboard_24h"
+                            ) {
+                                toast("Leaderboard unlocked ✓");
+                            } else if (evt.type === "category_change") {
+                                toast("Category updated ✓");
+                            } else if (evt.type === "boost_50") {
+                                toast("Power Boost activated · +50 votes 🚀");
+                            }
+                            closeModal("unlock-modal");
+                            closeModal("change-cat-modal");
+                            closeModal("boost-modal");
+                            setTimeout(() => loadDashboard(), 400);
+                        } catch {}
+                    });
                     voteStream.onerror = () => {
-                        // Silent reconnect — polling still covers us.
                         try {
                             voteStream.close();
                         } catch {}
@@ -2122,15 +2331,67 @@
                 startVoteStream();
             }
 
+            // ✅ Leaderboard timer
+            function startLeaderboardTimer(expiresAtIso) {
+                const el = $("lb-timer");
+                if (lbTimerInterval) {
+                    clearInterval(lbTimerInterval);
+                    lbTimerInterval = null;
+                }
+                if (!el) return;
+                if (!expiresAtIso) {
+                    el.classList.add("hidden");
+                    return;
+                }
+                const expiresMs = new Date(expiresAtIso).getTime();
+                if (!Number.isFinite(expiresMs)) {
+                    el.classList.add("hidden");
+                    return;
+                }
+                el.classList.remove("hidden");
+
+                function tick() {
+                    const left = expiresMs - Date.now();
+                    if (left <= 0) {
+                        el.innerText = "Expired";
+                        el.className =
+                            "text-[10px] font-mono font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md";
+                        clearInterval(lbTimerInterval);
+                        lbTimerInterval = null;
+                        $("lb-locked")?.classList.remove("hidden");
+                        $("rel-board")?.classList.remove("hidden");
+                        $("full-board")?.classList.add("hidden");
+                        $("unlock-btn")?.classList.remove("hidden");
+                        $("lb-badge").className =
+                            "px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1";
+                        $("lb-badge").innerHTML =
+                            '<i class="ph ph-lock text-xs"></i> Locked';
+                        return;
+                    }
+                    const h = Math.floor(left / 3_600_000);
+                    const m = Math.floor((left % 3_600_000) / 60_000);
+                    const s = Math.floor((left % 60_000) / 1000);
+                    const label =
+                        h > 0
+                            ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+                            : `${m}:${String(s).padStart(2, "0")}`;
+                    el.innerText = "Expires in " + label;
+                    el.className =
+                        left < 60_000
+                            ? "text-[10px] font-mono font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md"
+                            : "text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md";
+                }
+                tick();
+                lbTimerInterval = setInterval(tick, 1000);
+            }
+
             async function loadDashboard(opts = {}) {
                 const fromLogin = !!opts.fromLogin;
                 if (!getToken()) {
                     showView("view-auth");
                     return;
                 }
-
                 showView("view-dash");
-
                 try {
                     const d = await api("/api/nominee/me");
                     nominee = d.nominee;
@@ -2143,7 +2404,6 @@
                     $("d-cat").innerText = nominee.category;
                     $("d-code").innerText = nominee.code;
 
-                    // ✅ FIX: seed the baseline and paint the first value.
                     lastVoteCount = Number(nominee.votes || 0);
                     paintVotes(lastVoteCount, false);
 
@@ -2153,8 +2413,7 @@
                     await loadCategories();
                     renderLeaderboard(d.leaderboard, d.leaderboardAccess);
                     renderActivity();
-
-                    // ✅ FIX: begin live updates now that the dashboard is up.
+                    renderBoostCard();
                     startVoteUpdates();
                 } catch (e) {
                     if (e.status === 401) {
@@ -2175,7 +2434,6 @@
                         e.message ||
                         "Something went wrong loading your dashboard.";
                     $("dashboard-error").classList.remove("hidden");
-                    console.error("[Dashboard]", e);
                 }
             }
 
@@ -2217,20 +2475,19 @@
                     $("unlock-btn").classList.add("hidden");
 
                     const badge = $("lb-badge");
-                    badge.className =
-                        "px-2.5 py-1 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1 " +
-                        (access.type === "permanent"
-                            ? "bg-green-100 text-green-700"
-                            : access.type === "timed"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-purple-100 text-purple-700");
-                    badge.innerHTML =
-                        '<i class="ph ph-lock-open text-xs"></i> ' +
-                        (access.type === "permanent"
-                            ? "Full"
-                            : access.type === "timed"
-                              ? "2h"
-                              : "Credits");
+                    if (access.type === "permanent") {
+                        badge.className =
+                            "px-2.5 py-1 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1 bg-green-100 text-green-700";
+                        badge.innerHTML =
+                            '<i class="ph ph-lock-open text-xs"></i> Full';
+                        startLeaderboardTimer(null);
+                    } else if (access.type === "timed") {
+                        badge.className =
+                            "px-2.5 py-1 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1 bg-blue-100 text-blue-700";
+                        badge.innerHTML =
+                            '<i class="ph ph-lock-open text-xs"></i> Timed';
+                        startLeaderboardTimer(access.expiresAt);
+                    }
 
                     loadFullLeaderboard();
                 } else {
@@ -2242,6 +2499,7 @@
                         "px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-md uppercase tracking-wide flex items-center gap-1";
                     $("lb-badge").innerHTML =
                         '<i class="ph ph-lock text-xs"></i> Locked';
+                    startLeaderboardTimer(null);
                 }
             }
 
@@ -2264,26 +2522,28 @@
                     `,
                         )
                         .join("");
-                    if (d.access && d.access.type === "credits")
-                        setTimeout(() => loadDashboard(), 300);
+                    if (d.access?.type === "timed" && d.access.expiresAt) {
+                        startLeaderboardTimer(d.access.expiresAt);
+                    }
                 } catch (e) {
-                    if (e.status === 402)
-                        setTimeout(() => loadDashboard(), 200);
+                    if (e.status === 402) {
+                        $("lb-locked")?.classList.remove("hidden");
+                        $("full-board")?.classList.add("hidden");
+                        $("unlock-btn")?.classList.remove("hidden");
+                        startLeaderboardTimer(null);
+                    }
                 }
             }
 
-            // ✅ FIX: activity feed shows live deltas plus the running total.
             function renderActivity() {
                 const list = $("activity-list");
                 if (!nominee) return;
                 const total = Number(nominee.votes || 0);
-
                 if (!voteEvents.length && total === 0) {
                     list.innerHTML =
                         '<div class="text-center py-6 text-gray-400 text-xs"><i class="ph ph-hourglass text-2xl block mb-2 opacity-50"></i>No activity yet. Share your link or QR code to get started.</div>';
                     return;
                 }
-
                 const eventRows = voteEvents
                     .map(
                         (ev) => `
@@ -2299,7 +2559,6 @@
                     </div>`,
                     )
                     .join("");
-
                 const summary = `
                     <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                         <div class="flex items-center gap-3">
@@ -2310,8 +2569,114 @@
                             </div>
                         </div>
                     </div>`;
-
                 list.innerHTML = eventRows + summary;
+            }
+
+            // ✅ Boost card
+            function renderBoostCard() {
+                const wrap = $("boost-card-wrap");
+                if (!wrap || !nominee) return;
+
+                if (nominee.boosted) {
+                    const dateStr = nominee.boostPurchasedAt
+                        ? new Date(nominee.boostPurchasedAt).toLocaleDateString(
+                              "en-US",
+                              { month: "short", day: "numeric" },
+                          )
+                        : "";
+                    wrap.innerHTML = `
+                        <div class="card p-6 overflow-hidden relative"
+                             style="background: linear-gradient(135deg, #0f5132 0%, #052e16 100%); border: 1px solid rgba(34,197,94,0.4);">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                                     style="background: rgba(34,197,94,0.2);">
+                                    <i class="ph-fill ph-rocket-launch text-3xl" style="color: #4ade80;"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="text-green-300 font-extrabold text-lg tracking-tight">Power Boost Active</h3>
+                                        <span class="text-[10px] font-bold bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full uppercase tracking-wider">+50 votes</span>
+                                    </div>
+                                    <p class="text-green-400/80 text-xs">Activated${dateStr ? " on " + dateStr : ""} · Counts toward your final total.</p>
+                                </div>
+                            </div>
+                        </div>`;
+                    return;
+                }
+
+                wrap.innerHTML = `
+                    <div class="card overflow-hidden relative"
+                         style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
+                        <div class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none" style="background: rgba(250,204,21,0.15);"></div>
+                        <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style="background: rgba(249,115,22,0.15);"></div>
+                        <div class="relative p-6">
+                            <div class="flex items-start gap-4 mb-4">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                                     style="background: linear-gradient(135deg, #facc15 0%, #f97316 100%); box-shadow: 0 8px 24px -8px rgba(249,115,22,0.6);">
+                                    <i class="ph-fill ph-rocket-launch text-white text-2xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="text-white text-xl font-extrabold tracking-tight">Power Boost</h3>
+                                        <span class="text-[10px] font-bold bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider">One-time</span>
+                                    </div>
+                                    <p class="text-gray-300 text-sm leading-relaxed">Instantly add <strong class="text-yellow-300">+50 verified votes</strong> to your campaign.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 mb-5">
+                                <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
+                                    <div class="text-2xl font-black text-white leading-none">+50</div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Votes added</div>
+                                </div>
+                                <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
+                                    <div class="text-2xl font-black leading-none" style="color:#facc15;">250</div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">KES only</div>
+                                </div>
+                            </div>
+                            <ul class="text-xs text-gray-300 space-y-1.5 mb-5">
+                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Applied instantly after payment</li>
+                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Counts toward your final ranking</li>
+                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Limit: 1 per nominee</li>
+                            </ul>
+                            <button onclick="openBoost()"
+                                    class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all"
+                                    style="background: linear-gradient(90deg, #facc15 0%, #fde047 100%); box-shadow: 0 8px 24px -10px rgba(250,204,21,0.7);">
+                                <i class="ph-fill ph-rocket-launch"></i> Activate Boost · KES 250
+                            </button>
+                            <p class="text-[10px] text-gray-500 text-center mt-3">M-Pesa payment · Secure via PayHero</p>
+                        </div>
+                    </div>`;
+            }
+
+            function openBoost() {
+                if (!nominee) return;
+                if (nominee.boosted)
+                    return toast("Boost already active", false);
+                $("boost-phone").value = "";
+                $("boost-form").classList.remove("hidden");
+                $("boost-loading").classList.add("hidden");
+                $("boost-success").classList.add("hidden");
+                $("boost-failed").classList.add("hidden");
+                $("boost-modal").classList.add("show");
+            }
+
+            async function submitBoost() {
+                const phone = $("boost-phone").value.trim();
+                if (!phone) return toast("Enter M-Pesa number", false);
+                $("boost-form").classList.add("hidden");
+                $("boost-loading").classList.remove("hidden");
+                try {
+                    const d = await api("/api/nominee/boost", {
+                        method: "POST",
+                        body: JSON.stringify({ phone }),
+                    });
+                    $("boost-ref").innerText = d.reference;
+                    pollPayment(d.reference, "boost");
+                } catch (e) {
+                    $("boost-loading").classList.add("hidden");
+                    $("boost-failed").classList.remove("hidden");
+                    $("boost-failed").querySelector("p").innerText = e.message;
+                }
             }
 
             function copyLink() {
@@ -2380,7 +2745,7 @@
                     a.remove();
                     URL.revokeObjectURL(url);
                     toast("QR code saved");
-                } catch (e) {
+                } catch {
                     toast("Download failed", false);
                 }
             }
@@ -2412,14 +2777,8 @@
             async function submitChangeCategory() {
                 const newCategoryId = $("new-cat-select").value;
                 const phone = $("change-phone").value.trim();
-                if (!newCategoryId) {
-                    toast("Select a category", false);
-                    return;
-                }
-                if (!phone) {
-                    toast("Enter M-Pesa number", false);
-                    return;
-                }
+                if (!newCategoryId) return toast("Select a category", false);
+                if (!phone) return toast("Enter M-Pesa number", false);
                 $("cc-form").classList.add("hidden");
                 $("cc-loading").classList.remove("hidden");
                 try {
@@ -2436,6 +2795,11 @@
                 }
             }
 
+            async function verifyCategoryChange() {
+                closeModal("change-cat-modal");
+                await loadDashboard();
+            }
+
             function openUnlock() {
                 $("unlock-phone").value = "";
                 selectUnlock("once");
@@ -2447,8 +2811,10 @@
             }
             function selectUnlock(type) {
                 currentUnlockType = type;
-                $("opt-once").classList.toggle("selected", type === "once");
-                $("opt-2h").classList.toggle("selected", type === "2h");
+                ["once", "1h", "12h", "24h"].forEach((t) => {
+                    const el = $(`opt-${t}`);
+                    if (el) el.classList.toggle("selected", t === type);
+                });
                 const radio = document.querySelector(
                     `input[name="unlock-type"][value="${type}"]`,
                 );
@@ -2460,10 +2826,7 @@
             }
             async function submitUnlock() {
                 const phone = $("unlock-phone").value.trim();
-                if (!phone) {
-                    toast("Enter M-Pesa number", false);
-                    return;
-                }
+                if (!phone) return toast("Enter M-Pesa number", false);
                 $("unlock-form").classList.add("hidden");
                 $("unlock-loading").classList.remove("hidden");
                 try {
@@ -2487,68 +2850,73 @@
                 if (pollTimers[kind]) clearInterval(pollTimers[kind]);
                 const startedAt = Date.now();
                 const timeoutMs = 3 * 60 * 1000;
+                let pollCount = 0;
+                let lastLiveCheck = 0;
+
+                const loadingId =
+                    kind === "change"
+                        ? "cc-loading"
+                        : kind === "boost"
+                          ? "boost-loading"
+                          : "unlock-loading";
+                const successId =
+                    kind === "change"
+                        ? "cc-success"
+                        : kind === "boost"
+                          ? "boost-success"
+                          : "unlock-success";
+                const failedId =
+                    kind === "change"
+                        ? "cc-failed"
+                        : kind === "boost"
+                          ? "boost-failed"
+                          : "unlock-failed";
+
                 pollTimers[kind] = setInterval(async () => {
+                    pollCount++;
                     if (Date.now() - startedAt > timeoutMs) {
                         clearInterval(pollTimers[kind]);
                         pollTimers[kind] = null;
-                        const lId =
-                            kind === "change" ? "cc-loading" : "unlock-loading";
-                        const fId =
-                            kind === "change" ? "cc-failed" : "unlock-failed";
-                        $(lId).classList.add("hidden");
-                        $(fId).classList.remove("hidden");
-                        $(fId).querySelector("p").innerText =
-                            "Still processing. If you confirmed payment, refresh the page in a moment.";
+                        $(loadingId).classList.add("hidden");
+                        $(failedId).classList.remove("hidden");
+                        const p = $(failedId).querySelector("p");
+                        if (p)
+                            p.innerText =
+                                "Still processing. If you confirmed payment, refresh the page in a moment.";
                         return;
                     }
                     try {
+                        const now = Date.now();
+                        const useLive =
+                            pollCount > 2 && now - lastLiveCheck > 10_000;
+                        if (useLive) lastLiveCheck = now;
+
                         const s = await api(
-                            "/api/transactions/status/" + reference,
+                            (useLive
+                                ? "/api/transactions/check/"
+                                : "/api/transactions/status/") + reference,
                         );
+
                         if (s.status === "success") {
                             clearInterval(pollTimers[kind]);
                             pollTimers[kind] = null;
-                            const lId =
-                                kind === "change"
-                                    ? "cc-loading"
-                                    : "unlock-loading";
-                            const sId =
-                                kind === "change"
-                                    ? "cc-success"
-                                    : "unlock-success";
-                            $(lId).classList.add("hidden");
-                            $(sId).classList.remove("hidden");
+                            $(loadingId).classList.add("hidden");
+                            $(successId).classList.remove("hidden");
                         } else if (
                             s.status === "failed" ||
                             s.status === "abandoned"
                         ) {
                             clearInterval(pollTimers[kind]);
                             pollTimers[kind] = null;
-                            const lId =
-                                kind === "change"
-                                    ? "cc-loading"
-                                    : "unlock-loading";
-                            const fId =
-                                kind === "change"
-                                    ? "cc-failed"
-                                    : "unlock-failed";
-                            $(lId).classList.add("hidden");
-                            $(fId).classList.remove("hidden");
+                            $(loadingId).classList.add("hidden");
+                            $(failedId).classList.remove("hidden");
                         }
                     } catch (e) {
                         if (e.status === 404) {
                             clearInterval(pollTimers[kind]);
                             pollTimers[kind] = null;
-                            const lId =
-                                kind === "change"
-                                    ? "cc-loading"
-                                    : "unlock-loading";
-                            const fId =
-                                kind === "change"
-                                    ? "cc-failed"
-                                    : "unlock-failed";
-                            $(lId).classList.add("hidden");
-                            $(fId).classList.remove("hidden");
+                            $(loadingId).classList.add("hidden");
+                            $(failedId).classList.remove("hidden");
                         }
                     }
                 }, 2000);

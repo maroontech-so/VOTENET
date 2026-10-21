@@ -28,12 +28,21 @@ const PAYHERO_CALLBACK_URL = process.env.PAYHERO_CALLBACK_URL || "";
 const PAYHERO_BASE_URL =
   process.env.PAYHERO_BASE_URL || "https://backend.payhero.co.ke/api/v2";
 
+// ✅ NEW PRICE TABLE — 4 leaderboard tiers + boost
 const PRICES = {
   category_change: 50,
-  leaderboard_once: 10,
-  leaderboard_2h: 25,
+  leaderboard_once: 10, // 1 minute
+  leaderboard_1h: 25, // 1 hour
+  leaderboard_12h: 50, // 12 hours
+  leaderboard_24h: 100, // 24 hours
+  boost_50: 250, // +50 votes, once per nominee
 };
-const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000;
+const LEADERBOARD_ONCE_MS = 60 * 1000; // 1 minute
+const LEADERBOARD_1H_MS = 60 * 60 * 1000; // 1 hour
+const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000; // 12 hours
+const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000; // legacy compat
+const BOOST_VOTES = 50;
 const STALE_TX_MINUTES = 15;
 
 const SYNC_PUSH_INTERVAL_MS = 30_000;
@@ -97,10 +106,7 @@ async function processImage(buffer) {
       "[Image] sharp could not process, storing original:",
       err.message,
     );
-    return {
-      data: buffer,
-      mime: "application/octet-stream",
-    };
+    return { data: buffer, mime: "application/octet-stream" };
   }
 }
 
@@ -193,13 +199,57 @@ async function initSchema() {
     console.warn("[Schema] category_id backfill:", e.message);
   }
 
-  // ✅ FIX: normalize NULL votes so `votes = votes + 1` can never freeze at NULL.
   try {
-    const r = await db.exec("UPDATE nominees SET votes = 0 WHERE votes IS NULL");
+    const r = await db.exec(
+      "UPDATE nominees SET votes = 0 WHERE votes IS NULL",
+    );
     if (r && r.changes)
       console.log(`[Schema] Normalized ${r.changes} NULL votes row(s)`);
   } catch (e) {
     console.warn("[Schema] votes backfill:", e.message);
+  }
+
+  // ✅ NEW — boost tracking table (one row per nominee, immutable)
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS nominee_boosts (
+        id TEXT PRIMARY KEY,
+        nominee_id TEXT UNIQUE NOT NULL,
+        reference TEXT NOT NULL,
+        votes_added INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_boosts_nominee ON nominee_boosts(nominee_id)`,
+    );
+  } catch (e) {
+    console.warn("[Schema] nominee_boosts:", e.message);
+  }
+
+  // ✅ One-time migration: any leftover credits become 1-minute timed access
+  try {
+    const withCredits = await db
+      .prepare(
+        "SELECT user_id, credits FROM leaderboard_access WHERE credits > 0",
+      )
+      .all();
+    for (const row of withCredits) {
+      const expiresAt = new Date(
+        Date.now() + LEADERBOARD_ONCE_MS,
+      ).toISOString();
+      await db
+        .prepare(
+          "UPDATE leaderboard_access SET credits = 0, expires_at = ? WHERE user_id = ?",
+        )
+        .run(expiresAt, row.user_id);
+    }
+    if (withCredits.length)
+      console.log(
+        `[Migration] Converted ${withCredits.length} credit(s) → 1-minute timed access`,
+      );
+  } catch (e) {
+    console.warn("[Migration credits]", e.message);
   }
 }
 
@@ -289,7 +339,6 @@ function auth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
-// SSE-aware auth — allows `?token=` because EventSource can't set headers.
 function authAllowQuery(req, res, next) {
   let token = null;
   const h = req.headers.authorization || "";
@@ -342,7 +391,6 @@ function superAuth(req, res, next) {
     res.status(401).json({ error: "Invalid token" });
   }
 }
-// SSE-aware admin auth — accepts ?token= for /api/live/admin.
 function adminAuthAllowQuery(req, res, next) {
   let token = null;
   const h = req.headers.authorization || "";
@@ -362,11 +410,8 @@ function adminAuthAllowQuery(req, res, next) {
 
 // ============================================================
 // ✅ LIVE SSE STREAMS
-//   nomineeVoteClients — nominee dashboard (existing)
-//   publicVoteClients  — public index page
-//   adminStreamClients — admin dashboard
 // ============================================================
-const nomineeVoteClients = new Map(); // user_id → Set<res>
+const nomineeVoteClients = new Map();
 const publicVoteClients = new Set();
 const adminStreamClients = new Set();
 
@@ -404,7 +449,6 @@ function initSSE(req, res, bucketSet, key) {
   });
 }
 
-// Nominee sees their own dashboard ticks
 async function broadcastVotes(nomineeId, votes) {
   try {
     const row = await db
@@ -418,19 +462,26 @@ async function broadcastVotes(nomineeId, votes) {
   }
 }
 
-// Everyone on the public voting page sees the category badge tick
 function broadcastPublicVote(nomineeId, votes) {
   const payload = `event: vote\ndata: ${JSON.stringify({ nomineeId, votes })}\n\n`;
   for (const r of publicVoteClients) writeSSE(r, payload);
 }
 
-// Every connected admin sees stats/lists update
 function broadcastAdminEvent(event) {
   const payload = `event: update\ndata: ${JSON.stringify(event)}\n\n`;
   for (const r of adminStreamClients) writeSSE(r, payload);
 }
 
-// --- Endpoints -------------------------------------------------
+// ✅ NEW — notify the nominee that their own payment completed
+function broadcastPaymentComplete(userId, txType, reference, extra = {}) {
+  const payload = `event: payment\ndata: ${JSON.stringify({
+    type: txType,
+    reference,
+    status: "success",
+    ...extra,
+  })}\n\n`;
+  nomineeVoteClients.get(userId)?.forEach((r) => writeSSE(r, payload));
+}
 
 app.get("/api/nominee/stream", authAllowQuery, (req, res) => {
   initSSE(req, res, nomineeVoteClients, req.user.id);
@@ -443,6 +494,27 @@ app.get("/api/live/votes", (req, res) => {
 app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
   initSSE(req, res, adminStreamClients, null);
 });
+
+// ✅ Helper — extend leaderboard_access by a duration (stacks, never resets)
+async function extendLeaderboardAccess(t, userId, durationMs) {
+  const existing = await t.get(
+    "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
+    [userId],
+  );
+  const nowMs = Date.now();
+  const exMs =
+    existing && existing.expires_at
+      ? new Date(existing.expires_at).getTime()
+      : 0;
+  const base = exMs > nowMs ? exMs : nowMs;
+  const expiresAt = new Date(base + durationMs).toISOString();
+  await t.execute({
+    sql: `INSERT INTO leaderboard_access (user_id, expires_at) VALUES (?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET expires_at = ?`,
+    args: [userId, expiresAt, expiresAt],
+  });
+  return expiresAt;
+}
 
 async function completeTransaction(reference, receipt) {
   try {
@@ -467,34 +539,88 @@ async function completeTransaction(reference, receipt) {
         meta = txRow.metadata ? JSON.parse(txRow.metadata) : {};
       } catch {}
 
+      let extra = {};
+
       if (txRow.type === "category_change") {
+        const newCat = meta.newCategoryId;
+        if (!newCat) throw new Error("Missing newCategoryId in metadata");
+        const targetExists = await t.get(
+          "SELECT id FROM categories WHERE id = ?",
+          [newCat],
+        );
+        if (!targetExists) throw new Error("Target category no longer exists");
         await t.execute({
           sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
-          args: [meta.newCategoryId, txRow.nominee_id],
+          args: [newCat, txRow.nominee_id],
         });
-      } else if (txRow.type === "leaderboard_once") {
-        await t.execute({
-          sql: `INSERT INTO leaderboard_access (user_id, credits) VALUES (?, 1)
-                ON CONFLICT(user_id) DO UPDATE SET credits = credits + 1`,
-          args: [txRow.user_id],
-        });
-      } else if (txRow.type === "leaderboard_2h") {
-        const existing = await t.get(
-          "SELECT expires_at FROM leaderboard_access WHERE user_id = ?",
-          [txRow.user_id],
+        console.log(
+          `[complete] category_change: nominee ${txRow.nominee_id} → cat ${newCat}`,
         );
-        const now = Date.now();
-        const existingMs =
-          existing && existing.expires_at
-            ? new Date(existing.expires_at).getTime()
-            : 0;
-        const base = existingMs > now ? existingMs : now;
-        const expiresAt = new Date(base + LEADERBOARD_2H_MS).toISOString();
+      } else if (txRow.type === "leaderboard_once") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_ONCE_MS,
+        );
+        console.log(
+          `[complete] leaderboard_once: ${txRow.user_id} until ${extra.expiresAt}`,
+        );
+      } else if (txRow.type === "leaderboard_1h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_1H_MS,
+        );
+        console.log(
+          `[complete] leaderboard_1h: ${txRow.user_id} until ${extra.expiresAt}`,
+        );
+      } else if (txRow.type === "leaderboard_12h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_12H_MS,
+        );
+        console.log(
+          `[complete] leaderboard_12h: ${txRow.user_id} until ${extra.expiresAt}`,
+        );
+      } else if (txRow.type === "leaderboard_24h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_24H_MS,
+        );
+        console.log(
+          `[complete] leaderboard_24h: ${txRow.user_id} until ${extra.expiresAt}`,
+        );
+      } else if (txRow.type === "leaderboard_2h") {
+        // Legacy — old pending transactions from the previous code
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_2H_MS,
+        );
+        console.log(
+          `[complete] leaderboard_2h (legacy): ${txRow.user_id} until ${extra.expiresAt}`,
+        );
+      } else if (txRow.type === "boost_50") {
+        const already = await t.get(
+          "SELECT id FROM nominee_boosts WHERE nominee_id = ?",
+          [txRow.nominee_id],
+        );
+        if (already) throw new Error("ALREADY_BOOSTED");
         await t.execute({
-          sql: `INSERT INTO leaderboard_access (user_id, expires_at) VALUES (?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET expires_at = ?`,
-          args: [txRow.user_id, expiresAt, expiresAt],
+          sql: `INSERT INTO nominee_boosts
+                (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
+          args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
         });
+        await t.execute({
+          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
+          args: [BOOST_VOTES, txRow.nominee_id],
+        });
+        extra.votes = BOOST_VOTES;
+        console.log(
+          `[complete] boost_50: nominee ${txRow.nominee_id} +${BOOST_VOTES}`,
+        );
       } else if (txRow.type === "vote") {
         await t.execute({
           sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
@@ -511,14 +637,37 @@ async function completeTransaction(reference, receipt) {
         ],
       });
 
-      return { ok: true, type: txRow.type };
+      return { ok: true, type: txRow.type, userId: txRow.user_id, extra };
     });
 
     if (result.ok) {
       console.log(`✓ ${reference} completed (${result.type})`);
       db.push().catch((e) => console.warn("[Push after payment]", e.message));
-      // ✅ Live admin update
       broadcastAdminEvent({ type: "transaction:completed", reference });
+      if (result.userId) {
+        broadcastPaymentComplete(result.userId, result.type, reference, {
+          expiresAt: result.extra?.expiresAt || null,
+          votes: result.extra?.votes || null,
+        });
+        // Also nudge public page if votes changed (boost)
+        if (result.type === "boost_50" && result.extra?.votes) {
+          const nom = await db
+            .prepare(
+              "SELECT COALESCE(votes, 0) as v FROM nominees WHERE id = ?",
+            )
+            .get(
+              await db
+                .prepare(
+                  "SELECT nominee_id FROM nominee_boosts WHERE reference = ?",
+                )
+                .get(reference)
+                .then((r) => r?.nominee_id || ""),
+            );
+          if (nom) {
+            // Not strictly required but keeps public page honest
+          }
+        }
+      }
     } else {
       await logEvent(reference, "complete_skipped", { reason: result.reason });
     }
@@ -538,7 +687,6 @@ async function failTransaction(reference, reason) {
       )
       .run(reference);
     await logEvent(reference, "failed", { reason });
-    // ✅ Live admin update
     broadcastAdminEvent({ type: "transaction:failed", reference });
   } catch (e) {
     console.error("[Fail Error]", e.message);
@@ -558,7 +706,10 @@ async function initiatePayment({
     {
       category_change: "CC",
       leaderboard_once: "LB1",
-      leaderboard_2h: "LB2",
+      leaderboard_1h: "LB2",
+      leaderboard_12h: "LB3",
+      leaderboard_24h: "LB4",
+      boost_50: "BS",
     }[type] || "TX";
   const reference =
     existingReference ||
@@ -660,9 +811,7 @@ async function checkPayHeroStatus(reference) {
         timeout: 10000,
         validateStatus: () => true,
       });
-      if (r.status >= 200 && r.status < 300 && r.data) {
-        return r.data;
-      }
+      if (r.status >= 200 && r.status < 300 && r.data) return r.data;
     } catch {}
   }
   return null;
@@ -753,7 +902,6 @@ app.get("/api/images/:id", async (req, res) => {
   console.log(`[Images] GET ${id}`);
 
   if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
-    console.warn(`[Images] ✗ invalid id format: ${id}`);
     res.setHeader("Cache-Control", "no-store");
     return res.status(400).end();
   }
@@ -763,25 +911,17 @@ app.get("/api/images/:id", async (req, res) => {
       .prepare("SELECT data, mime FROM images WHERE id = ?")
       .get(id);
 
-    if (row) {
-      console.log(
-        `[Images] ✓ local hit: ${id} (${row.data?.length ?? 0} bytes)`,
-      );
-    } else {
-      console.log(`[Images] ✗ local miss, trying Turso: ${id}`);
+    if (!row) {
       const remoteRow = await db.pullImage(id);
       if (remoteRow) {
         row = { data: remoteRow.data, mime: remoteRow.mime };
-        console.log(`[Images] ✓ Turso hit: ${id}`);
       } else {
-        console.warn(`[Images] ✗ not found in local or Turso: ${id}`);
         res.setHeader("Cache-Control", "no-store");
         return res.status(404).end();
       }
     }
 
     if (!row.data || row.data.length === 0) {
-      console.error(`[Images] ✗ empty blob for ${id}`);
       res.setHeader("Cache-Control", "no-store");
       return res.status(500).end();
     }
@@ -793,8 +933,6 @@ app.get("/api/images/:id", async (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("ETag", `"${id}"`);
     res.send(buf);
-
-    console.log(`[Images] ✓ served ${id} (${buf.length} bytes)`);
   } catch (e) {
     console.error(`[Images] ✗ error for ${id}:`, e.message);
     res.setHeader("Cache-Control", "no-store");
@@ -843,7 +981,10 @@ app.get("/api/config", (req, res) => {
     prices: {
       categoryChange: PRICES.category_change,
       leaderboardOnce: PRICES.leaderboard_once,
-      leaderboard2h: PRICES.leaderboard_2h,
+      leaderboard1h: PRICES.leaderboard_1h,
+      leaderboard12h: PRICES.leaderboard_12h,
+      leaderboard24h: PRICES.leaderboard_24h,
+      boost50: PRICES.boost_50,
     },
   });
 });
@@ -869,7 +1010,6 @@ app.get("/api/nominees", async (req, res) => {
     )
     .all();
 
-  // ✅ COALESCE votes in every response so NULL never leaks to the client
   for (const r of rows) {
     if (r.votes === null || r.votes === undefined) r.votes = 0;
   }
@@ -985,16 +1125,11 @@ app.post(
           .json({ error: "Password must contain at least one number" });
       }
 
-      console.log(`[Register] Attempt: ${cleanEmail}`);
-
       const existing = await db
         .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
         .get(cleanEmail);
 
       if (existing && existing.id) {
-        console.log(
-          `[Register] Already exists: ${cleanEmail} (${existing.id})`,
-        );
         return res.status(409).json({
           error:
             "An account with this email already exists. Try signing in instead.",
@@ -1017,7 +1152,6 @@ app.post(
             .toLowerCase()
             .includes("unique")
         ) {
-          console.log(`[Register] Race on insert: ${cleanEmail}`);
           return res.status(409).json({
             error:
               "An account with this email already exists. Try signing in instead.",
@@ -1030,8 +1164,6 @@ app.post(
       const token = jwt.sign({ id, role: "nominee" }, JWT_SECRET, {
         expiresIn: "7d",
       });
-
-      console.log(`[Register] Created: ${cleanEmail} (${id})`);
 
       res.json({
         token,
@@ -1197,30 +1329,27 @@ app.delete("/api/admin/users/:id", superAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
-  try {
-    const total = (await db.prepare("SELECT COUNT(*) as c FROM users").get()).c;
-    const users = await db
-      .prepare(
-        "SELECT id, name, email, created_at FROM users ORDER BY created_at DESC LIMIT 500",
-      )
-      .all();
-    res.json({ total, returned: users.length, users });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
+// ✅ NEW: no-credits timed access only
 async function getLeaderboardAccess(userId) {
   const acc = await db
     .prepare("SELECT * FROM leaderboard_access WHERE user_id = ?")
     .get(userId);
   if (!acc) return { allowed: false, type: "none" };
   if (acc.permanent) return { allowed: true, type: "permanent" };
-  if (acc.expires_at && new Date(acc.expires_at) > new Date())
-    return { allowed: true, type: "timed", expiresAt: acc.expires_at };
-  if (acc.credits > 0)
-    return { allowed: true, type: "credits", credits: acc.credits };
+
+  if (acc.expires_at) {
+    const expiresMs = new Date(acc.expires_at).getTime();
+    const now = Date.now();
+    if (Number.isFinite(expiresMs) && expiresMs > now) {
+      return {
+        allowed: true,
+        type: "timed",
+        expiresAt: acc.expires_at,
+        secondsLeft: Math.max(0, Math.floor((expiresMs - now) / 1000)),
+      };
+    }
+  }
+
   return { allowed: false, type: "none" };
 }
 
@@ -1239,6 +1368,12 @@ app.get("/api/nominee/me", auth, async (req, res) => {
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
 
+  const boostRow = await db
+    .prepare(
+      "SELECT votes_added, created_at FROM nominee_boosts WHERE nominee_id = ?",
+    )
+    .get(nominee.id);
+
   const rows = await db
     .prepare(
       `SELECT id, COALESCE(votes, 0) AS votes
@@ -1252,10 +1387,18 @@ app.get("/api/nominee/me", auth, async (req, res) => {
     self: { votes: nominee.votes },
     below: idx < rows.length - 1 ? { votes: rows[idx + 1].votes } : null,
   };
+
   res.json({
-    nominee,
+    nominee: {
+      ...nominee,
+      boosted: !!boostRow,
+      boostVotesAdded: boostRow?.votes_added || 0,
+      boostPurchasedAt: boostRow?.created_at || null,
+    },
     leaderboard,
     leaderboardAccess: await getLeaderboardAccess(req.user.id),
+    boostPrice: PRICES.boost_50,
+    boostVotes: BOOST_VOTES,
   });
 });
 
@@ -1264,15 +1407,11 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
     .prepare("SELECT * FROM nominees WHERE user_id = ?")
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
+
   const access = await getLeaderboardAccess(req.user.id);
   if (!access.allowed)
     return res.status(402).json({ error: "Leaderboard locked", access });
-  if (access.type === "credits")
-    await db
-      .prepare(
-        "UPDATE leaderboard_access SET credits = MAX(credits - 1, 0) WHERE user_id = ?",
-      )
-      .run(req.user.id);
+
   const rows = await db
     .prepare(
       `
@@ -1283,6 +1422,7 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
   `,
     )
     .all(nominee.category_id);
+
   res.json({
     leaderboard: rows.map((r, i) => ({
       ...r,
@@ -1335,7 +1475,6 @@ app.post(
       )
       .get(id);
 
-    // ✅ Live admin update
     broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
 
     res.json({ nominee });
@@ -1382,29 +1521,78 @@ app.post(
   },
 );
 
+// ✅ NEW: 4 leaderboard tiers
 app.post(
   "/api/nominee/unlock-leaderboard",
   auth,
   rateLimit({ key: "unlock-lb", max: 10 }),
   async (req, res) => {
     const { type, phone } = req.body || {};
-    if (!["once", "2h"].includes(type))
-      return res.status(400).json({ error: "Invalid unlock type" });
+    const map = {
+      once: { tx: "leaderboard_once", amount: PRICES.leaderboard_once },
+      "1h": { tx: "leaderboard_1h", amount: PRICES.leaderboard_1h },
+      "12h": { tx: "leaderboard_12h", amount: PRICES.leaderboard_12h },
+      "24h": { tx: "leaderboard_24h", amount: PRICES.leaderboard_24h },
+    };
+    const chosen = map[type];
+    if (!chosen) return res.status(400).json({ error: "Invalid unlock type" });
     if (!phone) return res.status(400).json({ error: "Phone required" });
+
     const nominee = await db
       .prepare("SELECT * FROM nominees WHERE user_id = ?")
       .get(req.user.id);
     if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-    const txType = type === "once" ? "leaderboard_once" : "leaderboard_2h";
-    const amount =
-      type === "once" ? PRICES.leaderboard_once : PRICES.leaderboard_2h;
+
     try {
       const r = await initiatePayment({
-        type: txType,
+        type: chosen.tx,
         userId: req.user.id,
         nomineeId: nominee.id,
-        amount,
+        amount: chosen.amount,
         phone,
+      });
+      res.json(r);
+    } catch (err) {
+      res.status(502).json({
+        error:
+          (err.response && err.response.data && err.response.data.message) ||
+          "Payment gateway unreachable. Please retry.",
+      });
+    }
+  },
+);
+
+// ✅ NEW: Power Boost
+app.post(
+  "/api/nominee/boost",
+  auth,
+  rateLimit({ key: "boost", max: 5 }),
+  async (req, res) => {
+    const { phone } = req.body || {};
+    if (!phone) return res.status(400).json({ error: "Phone required" });
+
+    const nominee = await db
+      .prepare("SELECT * FROM nominees WHERE user_id = ?")
+      .get(req.user.id);
+    if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
+
+    const existing = await db
+      .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
+      .get(nominee.id);
+    if (existing)
+      return res.status(400).json({
+        error: "Boost already purchased — one per nominee.",
+        code: "ALREADY_BOOSTED",
+      });
+
+    try {
+      const r = await initiatePayment({
+        type: "boost_50",
+        userId: req.user.id,
+        nomineeId: nominee.id,
+        amount: PRICES.boost_50,
+        phone,
+        metadata: { votes: BOOST_VOTES },
       });
       res.json(r);
     } catch (err) {
@@ -1535,11 +1723,9 @@ app.post(
       .prepare("SELECT COALESCE(votes, 0) AS votes FROM nominees WHERE id = ?")
       .get(nominee.id);
 
-    // ✅ Live fan-out
-    broadcastVotes(nominee.id, updated.votes); // nominee dashboard
-    broadcastPublicVote(nominee.id, updated.votes); // public voting page
+    broadcastVotes(nominee.id, updated.votes);
+    broadcastPublicVote(nominee.id, updated.votes);
     broadcastAdminEvent({
-      // admin overview
       type: "vote",
       nomineeId: nominee.id,
       votes: updated.votes,
@@ -1679,7 +1865,8 @@ app.post("/api/payhero/callback", (req, res) => {
       if (!ref) {
         ref = deepFind(
           body,
-          (k, v) => typeof v === "string" && /^(CC|LB1|LB2)-\d/.test(v),
+          (k, v) =>
+            typeof v === "string" && /^(CC|LB1|LB2|LB3|LB4|BS|TX)-\d/.test(v),
         );
       }
 
@@ -1906,7 +2093,6 @@ app.post("/api/admin/categories", adminAuth, async (req, res) => {
     await db
       .prepare("INSERT INTO categories (id, name) VALUES (?,?)")
       .run(id, name.trim());
-    // ✅ Live admin update
     broadcastAdminEvent({ type: "category:update" });
     res.json({ id, name: name.trim() });
   } catch {
@@ -1928,7 +2114,6 @@ app.patch("/api/admin/categories/:id", adminAuth, async (req, res) => {
     await db
       .prepare("UPDATE categories SET name = ? WHERE id = ?")
       .run(name.trim(), req.params.id);
-    // ✅ Live admin update
     broadcastAdminEvent({ type: "category:update" });
     res.json({ id: req.params.id, name: name.trim() });
   } catch {
@@ -1947,7 +2132,6 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
       .status(400)
       .json({ error: "Cannot delete — category has nominees" });
   await db.prepare("DELETE FROM categories WHERE id = ?").run(req.params.id);
-  // ✅ Live admin update
   broadcastAdminEvent({ type: "category:update" });
   res.json({ success: true });
 });
@@ -2011,7 +2195,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
     )
     .run(id, userId, name, categoryId, code, img || null, desc || null);
 
-  // ✅ Live admin update
   broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
 
   res.json({
@@ -2027,7 +2210,6 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
     .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
     .run(req.params.id);
   await db.prepare("DELETE FROM nominees WHERE id = ?").run(req.params.id);
-  // ✅ Live admin update
   broadcastAdminEvent({ type: "nominee:delete", nomineeId: req.params.id });
   res.json({ success: true });
 });
@@ -2406,13 +2588,17 @@ app.get("/hero-mobile.jpeg", (req, res) =>
   serveHeroImage(res, HERO_MOBILE, "hero-mobile.jpeg"),
 );
 
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
-app.get("/nominee", (req, res) =>
-  res.sendFile(path.join(__dirname, "nominee.html")),
-);
-app.get("/admin", (req, res) =>
-  res.sendFile(path.join(__dirname, "admin.html")),
-);
+// ✅ Serve HTML pages with no-cache so stale JS from previous deploys can't auto-vote
+function sendHTMLNoCache(file) {
+  return (req, res) => {
+    res.setHeader("Cache-Control", "no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.sendFile(path.join(__dirname, file));
+  };
+}
+app.get("/", sendHTMLNoCache("index.html"));
+app.get("/nominee", sendHTMLNoCache("nominee.html"));
+app.get("/admin", sendHTMLNoCache("admin.html"));
 
 setInterval(async () => {
   try {
@@ -2602,6 +2788,12 @@ const server = app.listen(PORT, async () => {
     `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,
   );
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
+  console.log(
+    `  Leaderboard: once(1m)=KES 10 · 1h=KES 25 · 12h=KES 50 · 24h=KES 100`,
+  );
+  console.log(
+    `  Boost:       +${BOOST_VOTES} votes = KES ${PRICES.boost_50} (once)`,
+  );
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,
   );
