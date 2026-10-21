@@ -1521,13 +1521,11 @@ app.post(
         console.log(
           `[Register] Already exists: ${cleanEmail} (${existing.id})`,
         );
-        return res
-          .status(409)
-          .json({
-            error:
-              "An account with this email already exists. Try signing in instead.",
-            code: "EMAIL_EXISTS",
-          });
+        return res.status(409).json({
+          error:
+            "An account with this email already exists. Try signing in instead.",
+          code: "EMAIL_EXISTS",
+        });
       }
       const hash = await bcrypt.hash(cleanPassword, 10);
       const id = uuidv4();
@@ -1544,13 +1542,11 @@ app.post(
             .includes("unique")
         ) {
           console.log(`[Register] Race on insert: ${cleanEmail}`);
-          return res
-            .status(409)
-            .json({
-              error:
-                "An account with this email already exists. Try signing in instead.",
-              code: "EMAIL_EXISTS",
-            });
+          return res.status(409).json({
+            error:
+              "An account with this email already exists. Try signing in instead.",
+            code: "EMAIL_EXISTS",
+          });
         }
         throw insErr;
       }
@@ -1883,13 +1879,11 @@ app.post(
       });
       res.json(r);
     } catch (err) {
-      res
-        .status(502)
-        .json({
-          error:
-            (err.response && err.response.data && err.response.data.message) ||
-            "Payment gateway unreachable. Please retry.",
-        });
+      res.status(502).json({
+        error:
+          (err.response && err.response.data && err.response.data.message) ||
+          "Payment gateway unreachable. Please retry.",
+      });
     }
   },
 );
@@ -1923,13 +1917,11 @@ app.post(
       });
       res.json(r);
     } catch (err) {
-      res
-        .status(502)
-        .json({
-          error:
-            (err.response && err.response.data && err.response.data.message) ||
-            "Payment gateway unreachable. Please retry.",
-        });
+      res.status(502).json({
+        error:
+          (err.response && err.response.data && err.response.data.message) ||
+          "Payment gateway unreachable. Please retry.",
+      });
     }
   },
 );
@@ -1949,12 +1941,10 @@ app.post(
       .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
       .get(nominee.id);
     if (existing)
-      return res
-        .status(400)
-        .json({
-          error: "Boost already purchased — one per nominee.",
-          code: "ALREADY_BOOSTED",
-        });
+      return res.status(400).json({
+        error: "Boost already purchased — one per nominee.",
+        code: "ALREADY_BOOSTED",
+      });
     try {
       const r = await initiatePayment({
         type: "boost_50",
@@ -1966,13 +1956,11 @@ app.post(
       });
       res.json(r);
     } catch (err) {
-      res
-        .status(502)
-        .json({
-          error:
-            (err.response && err.response.data && err.response.data.message) ||
-            "Payment gateway unreachable. Please retry.",
-        });
+      res.status(502).json({
+        error:
+          (err.response && err.response.data && err.response.data.message) ||
+          "Payment gateway unreachable. Please retry.",
+      });
     }
   },
 );
@@ -1992,12 +1980,9 @@ app.post(
       fingerprintDetails,
     } = req.body || {};
     if (!nomineeCode || !voterToken || !deviceHash)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Nominee code, voter token, and device fingerprint are required",
-        });
+      return res.status(400).json({
+        error: "Nominee code, voter token, and device fingerprint are required",
+      });
     if (
       typeof deviceHash !== "string" ||
       deviceHash.length < 8 ||
@@ -2127,12 +2112,10 @@ app.post(
           .toLowerCase()
           .includes("unique")
       )
-        return res
-          .status(409)
-          .json({
-            error: "This device has already voted in this category.",
-            code: "DEVICE_ALREADY_VOTED",
-          });
+        return res.status(409).json({
+          error: "This device has already voted in this category.",
+          code: "DEVICE_ALREADY_VOTED",
+        });
       return res.status(500).json({ error: "Vote failed. Please try again." });
     }
 
@@ -2403,11 +2386,9 @@ app.post(
         fingerprintDetails,
       } = req.body || {};
       if (!description || String(description).trim().length < 10)
-        return res
-          .status(400)
-          .json({
-            error: "Please describe what happened (at least 10 characters)",
-          });
+        return res.status(400).json({
+          error: "Please describe what happened (at least 10 characters)",
+        });
       const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
       const ua = String(req.headers["user-agent"] || "").slice(0, 500);
       const currentDevice = parseUA(ua);
@@ -2688,11 +2669,9 @@ app.post(
           .status(400)
           .json({ error: "reportCode, categoryId, and reason are required" });
       if (String(reason).trim().length < 20)
-        return res
-          .status(400)
-          .json({
-            error: "Please explain in at least 20 characters why you disagree",
-          });
+        return res.status(400).json({
+          error: "Please explain in at least 20 characters why you disagree",
+        });
       const code = String(reportCode).trim().toUpperCase();
       const report = await db
         .prepare("SELECT * FROM vote_reports WHERE report_code = ?")
@@ -2708,12 +2687,10 @@ app.post(
         )
         .get(code, categoryId);
       if (existing)
-        return res
-          .status(409)
-          .json({
-            error: "You already filed an appeal for this category",
-            appealCode: existing.appeal_code,
-          });
+        return res.status(409).json({
+          error: "You already filed an appeal for this category",
+          appealCode: existing.appeal_code,
+        });
       const appealCode = `APL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
       const id = uuidv4();
       await db
@@ -2886,6 +2863,7 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       return res
         .status(400)
         .json({ error: "decision must be 'approve' or 'reject'" });
+
     const code = String(req.params.code || "")
       .trim()
       .toUpperCase();
@@ -2893,42 +2871,66 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       .prepare("SELECT * FROM vote_appeals WHERE appeal_code = ?")
       .get(code);
     if (!appeal) return res.status(404).json({ error: "Appeal not found" });
+
     if (appeal.status !== "pending")
       return res
         .status(400)
         .json({
           error: `Appeal already ${appeal.status} — cannot decide again`,
         });
+
+    let allowancesCreated = 0;
+    let allowancesSkipped = 0;
+    let blockedCategories = [];
+
     if (decision === "approve") {
-      const existing = await db
+      // ✅ NEW: find EVERY category where this device/voter has already voted
+      //    — that's the set of categories they're actually blocked from.
+      blockedCategories = await db
         .prepare(
-          "SELECT * FROM vote_allowances WHERE device_hash = ? AND category_id = ?",
+          `SELECT DISTINCT category_id FROM free_votes
+         WHERE (device_hash = ? OR voter_token = ?)
+           AND category_id IS NOT NULL`,
         )
-        .get(appeal.device_hash, appeal.category_id);
-      if (existing)
-        return res.status(409).json({
+        .all(appeal.device_hash, appeal.voter_token);
+
+      if (!blockedCategories.length) {
+        return res.status(400).json({
           error:
-            "A re-vote allowance for this device and category already exists.",
-          existingAllowance: {
-            appealCode: existing.appeal_code,
-            status: existing.status,
-            usedAt: toISOUTC(existing.used_at),
-          },
+            "This device has no recorded votes to re-cast. Nothing to approve.",
         });
-      const allowanceId = uuidv4();
-      await db
-        .prepare(
-          `INSERT INTO vote_allowances (id, appeal_code, device_hash, voter_token, category_id, status)
-         VALUES (?,?,?,?,?,'active')`,
-        )
-        .run(
-          allowanceId,
-          appeal.appeal_code,
-          appeal.device_hash,
-          appeal.voter_token,
-          appeal.category_id,
-        );
+      }
+
+      // Create one allowance per blocked category. Skip if one already exists
+      // (e.g. admin approving a second appeal from the same device).
+      for (const { category_id } of blockedCategories) {
+        const existing = await db
+          .prepare(
+            "SELECT id FROM vote_allowances WHERE device_hash = ? AND category_id = ?",
+          )
+          .get(appeal.device_hash, category_id);
+        if (existing) {
+          allowancesSkipped++;
+          continue;
+        }
+
+        await db
+          .prepare(
+            `INSERT INTO vote_allowances
+           (id, appeal_code, device_hash, voter_token, category_id, status)
+           VALUES (?,?,?,?,?,'active')`,
+          )
+          .run(
+            uuidv4(),
+            appeal.appeal_code,
+            appeal.device_hash,
+            appeal.voter_token,
+            category_id,
+          );
+        allowancesCreated++;
+      }
     }
+
     await db
       .prepare(
         `UPDATE vote_appeals SET status = ?, decided_at = CURRENT_TIMESTAMP,
@@ -2940,17 +2942,26 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
         (note || "").slice(0, 1000),
         code,
       );
+
     console.log(
-      `[Appeal] ${code} ${decision === "approve" ? "APPROVED" : "REJECTED"} by ${req.admin.username}`,
+      `[Appeal] ${code} ${decision === "approve" ? "APPROVED" : "REJECTED"} by ${req.admin.username}` +
+        (decision === "approve"
+          ? ` — ${allowancesCreated} new allowance(s), ${allowancesSkipped} skipped across ${blockedCategories.length} categor${blockedCategories.length === 1 ? "y" : "ies"}`
+          : ""),
     );
     broadcastAdminEvent({ type: "appeal:decided", appealCode: code, decision });
+
+    const totalCovered = allowancesCreated + allowancesSkipped;
     res.json({
       success: true,
       appealCode: code,
       decision: decision === "approve" ? "approved" : "rejected",
+      allowancesCreated,
+      allowancesSkipped,
+      blockedCategoriesCount: blockedCategories.length,
       message:
         decision === "approve"
-          ? "Allowance created. User can now vote once more in this category."
+          ? `Approved. User can now vote once more in ${totalCovered} categor${totalCovered === 1 ? "y" : "ies"} where they were blocked (${allowancesCreated} new, ${allowancesSkipped} already covered).`
           : "Appeal rejected.",
     });
   } catch (e) {

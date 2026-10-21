@@ -930,11 +930,7 @@
                     )
                 )
                     return;
-                if (
-                    decision === "approve" &&
-                    !confirm(
-                        "Approve? This creates a ONE-TIME re-vote allowance for this device in this category.",
-                    )
+                               if (decision === "approve" && !confirm("Approve? This creates a ONE-TIME re-vote allowance for this device in EVERY category they were blocked from.")) return;
                 )
                     return;
 
@@ -946,7 +942,9 @@
                             body: JSON.stringify({ decision, note }),
                         },
                     );
-                    alert(res.message);
+                    alert(res.message + (res.allowancesCreated != null
+                        ? `\n\nCategories covered: ${res.allowancesCreated + res.allowancesSkipped}`
+                        : ""));
                     await loadAppeals();
                     hideAppealDetail();
                 } catch (e) {
