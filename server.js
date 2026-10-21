@@ -108,7 +108,6 @@ async function processImage(buffer) {
   }
 }
 
-// ✅ NEW: normalize SQLite UTC timestamps to proper ISO 8601 with Z
 function toISOUTC(dbTimestamp) {
   if (!dbTimestamp) return null;
   const str = String(dbTimestamp);
@@ -126,11 +125,9 @@ function toISOUTC(dbTimestamp) {
   }
 }
 
-// ✅ NEW: parse User-Agent into human-readable device/os/browser
 function parseUA(ua) {
   if (!ua) return { device: "Unknown", os: "Unknown", browser: "Unknown" };
   ua = String(ua);
-
   let device = "Unknown device";
   let os = "Unknown OS";
   let browser = "Unknown browser";
@@ -174,44 +171,35 @@ function parseUA(ua) {
     device = "Linux PC";
   }
 
-  if (/Edg\/(\d+)/.test(ua)) {
-    browser = "Edge " + ua.match(/Edg\/(\d+)/)[1];
-  } else if (/OPR\/(\d+)/.test(ua)) {
+  if (/Edg\/(\d+)/.test(ua)) browser = "Edge " + ua.match(/Edg\/(\d+)/)[1];
+  else if (/OPR\/(\d+)/.test(ua))
     browser = "Opera " + ua.match(/OPR\/(\d+)/)[1];
-  } else if (/Chrome\/(\d+)/.test(ua) && !/Chromium/.test(ua)) {
+  else if (/Chrome\/(\d+)/.test(ua) && !/Chromium/.test(ua))
     browser = "Chrome " + ua.match(/Chrome\/(\d+)/)[1];
-  } else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) {
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) {
     const m = ua.match(/Version\/(\d+)/);
     browser = "Safari " + (m ? m[1] : "?");
-  } else if (/Firefox\/(\d+)/.test(ua)) {
+  } else if (/Firefox\/(\d+)/.test(ua))
     browser = "Firefox " + ua.match(/Firefox\/(\d+)/)[1];
-  } else if (/MSIE |Trident\//.test(ua)) {
-    browser = "Internet Explorer";
-  }
+  else if (/MSIE |Trident\//.test(ua)) browser = "Internet Explorer";
 
   return { device, os, browser };
 }
 
-// ✅ NEW: parse stored fingerprint JSON into human-readable display
 function parseFingerprint(fpJson) {
   if (!fpJson) return null;
   try {
     const fp = typeof fpJson === "string" ? JSON.parse(fpJson) : fpJson;
     if (!fp) return null;
-
     const out = {};
-
     if (fp.screen) out.screen = fp.screen;
     else if (fp.screenWidth && fp.screenHeight)
       out.screen = `${fp.screenWidth}×${fp.screenHeight}`;
-
     if (fp.viewport) out.viewport = fp.viewport;
     else if (fp.viewportWidth && fp.viewportHeight)
       out.viewport = `${fp.viewportWidth}×${fp.viewportHeight}`;
-
     if (fp.language) out.language = fp.language;
     if (fp.timezone) out.timezone = fp.timezone;
-
     if (typeof fp.timezoneOffset === "number") {
       const off = fp.timezoneOffset;
       const sign = off <= 0 ? "+" : "-";
@@ -219,18 +207,13 @@ function parseFingerprint(fpJson) {
       const mins = Math.abs(off) % 60;
       out.timezoneDisplay = `UTC${sign}${hours}${mins ? ":" + mins.toString().padStart(2, "0") : ""}`;
     }
-
     if (fp.hardwareConcurrency) out.cpuCores = fp.hardwareConcurrency;
     if (fp.deviceMemory) out.memory = fp.deviceMemory;
     if (fp.maxTouchPoints != null) out.touchPoints = fp.maxTouchPoints;
-
     if (fp.cookieEnabled != null) out.cookieEnabled = fp.cookieEnabled;
     if (fp.doNotTrack) out.doNotTrack = fp.doNotTrack;
-
     if (Array.isArray(fp.plugins)) out.pluginCount = fp.plugins.length;
-
     if (fp.userAgent) out.userAgent = fp.userAgent;
-
     return out;
   } catch {
     return null;
@@ -301,7 +284,6 @@ async function initSchema() {
     } catch {}
   }
 
-  // ✅ NEW columns on free_votes: raw UA + fingerprint + appeal flag
   for (const col of [
     "user_agent TEXT",
     "fingerprint_json TEXT",
@@ -410,7 +392,6 @@ async function initSchema() {
     console.warn("[Schema] ip_lookup_cache:", e.message);
   }
 
-  // ✅ NEW: appeals + re-vote allowances
   try {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS vote_appeals (
@@ -574,7 +555,6 @@ function cleanIP(ip) {
   if (ip === "::1") return "127.0.0.1";
   return ip;
 }
-
 function isPrivateIP(ip) {
   return (
     ip === "unknown" ||
@@ -598,7 +578,6 @@ async function lookupIP(rawIp) {
       asn: "",
     };
   }
-
   try {
     const cached = await db
       .prepare("SELECT * FROM ip_lookup_cache WHERE ip = ?")
@@ -608,7 +587,6 @@ async function lookupIP(rawIp) {
       if (ageMs < 30 * 24 * 3600 * 1000) return cached;
     }
   } catch {}
-
   try {
     const r = await axios.get(`https://ipwho.is/${encodeURIComponent(ip)}`, {
       timeout: 6000,
@@ -630,8 +608,8 @@ async function lookupIP(rawIp) {
         await db
           .prepare(
             `INSERT OR REPLACE INTO ip_lookup_cache
-             (ip, country, region, city, isp, org, asn, fetched_at)
-             VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
+           (ip, country, region, city, isp, org, asn, fetched_at)
+           VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
           )
           .run(
             row.ip,
@@ -648,7 +626,6 @@ async function lookupIP(rawIp) {
   } catch (e) {
     console.warn("[GeoIP]", ip, e.message);
   }
-
   return {
     ip,
     country: "Lookup failed",
@@ -759,14 +736,10 @@ function initSSE(req, res, bucketSet, key) {
   });
   res.flushHeaders();
   res.write(": connected\n\n");
-
   if (bucketSet instanceof Map) {
     if (!bucketSet.has(key)) bucketSet.set(key, new Set());
     bucketSet.get(key).add(res);
-  } else {
-    bucketSet.add(res);
-  }
-
+  } else bucketSet.add(res);
   const hb = setInterval(() => writeSSE(res, ": ping\n\n"), 25_000);
   req.on("close", () => {
     clearInterval(hb);
@@ -854,14 +827,12 @@ function formatDateTime(iso) {
     timeZoneName: "short",
   });
 }
-
 function csvEscape(v) {
   const s = String(v == null ? "" : v);
   if (s.includes(",") || s.includes('"') || s.includes("\n"))
     return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
-
 function shareBar(percent, width = 20) {
   const filled = Math.max(
     0,
@@ -869,7 +840,6 @@ function shareBar(percent, width = 20) {
   );
   return "\u2588".repeat(filled) + "\u2591".repeat(width - filled);
 }
-
 function escapeAttr(s) {
   return String(s == null ? "" : s).replace(
     /[&<>"']/g,
@@ -894,11 +864,10 @@ async function loadReportData(req) {
   const categories = await db
     .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
     .all();
-
   const nominees = await db
     .prepare(
       `SELECT id, name, code, category_id, COALESCE(votes, 0) as votes
-       FROM nominees ORDER BY category_id, COALESCE(votes, 0) DESC`,
+     FROM nominees ORDER BY category_id, COALESCE(votes, 0) DESC`,
     )
     .all();
 
@@ -1049,8 +1018,7 @@ async function completeTransaction(reference, receipt) {
         );
         if (already) throw new Error("ALREADY_BOOSTED");
         await t.execute({
-          sql: `INSERT INTO nominee_boosts
-                (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
+          sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
           args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
         });
         await t.execute({
@@ -1139,7 +1107,7 @@ async function initiatePayment({
     await db
       .prepare(
         `INSERT INTO transactions (id, reference, type, user_id, nominee_id, amount, phone, metadata)
-         VALUES (?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?)`,
       )
       .run(
         id,
@@ -1368,7 +1336,6 @@ app.get("/verify", (req, res) => {
   const { r, s, v, c, n, t } = req.query;
   const missing = !r || !s;
   let valid = false;
-
   if (!missing) {
     const expected = signReportTotals({
       reportId: String(r),
@@ -1379,7 +1346,6 @@ app.get("/verify", (req, res) => {
     });
     valid = String(s).toUpperCase() === expected;
   }
-
   const bg = valid ? "from-emerald-50 to-green-100" : "from-red-50 to-rose-100";
   const bubble = valid
     ? "bg-emerald-100 text-emerald-600"
@@ -1391,7 +1357,6 @@ app.get("/verify", (req, res) => {
     : missing
       ? "This verification link is incomplete."
       : "The signature does not match.";
-
   const details = missing
     ? ""
     : `
@@ -1403,29 +1368,7 @@ app.get("/verify", (req, res) => {
       <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Generated</span><span class="text-xs font-mono text-gray-700">${t ? new Date(parseInt(t)).toLocaleString() : "—"}</span></div>
       <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Status</span><span class="text-sm font-bold ${valid ? "text-emerald-600" : "text-red-600"}">${valid ? "✓ VALID" : "✗ INVALID"}</span></div>
     </div>`;
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Report Verification · Voteus</title>
-  <meta name="robots" content="noindex, nofollow" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <style>* { font-family: 'Inter', sans-serif; }</style>
-</head>
-<body class="min-h-screen bg-gradient-to-br ${bg} flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-8 text-center">
-    <div class="w-20 h-20 rounded-full ${bubble} flex items-center justify-center mx-auto mb-5 text-4xl font-black">${icon}</div>
-    <h1 class="text-2xl font-extrabold text-gray-900 mb-2">${title}</h1>
-    <p class="text-gray-500 mb-6">${subtitle}</p>
-    ${details}
-    <div class="text-xs text-gray-400 mt-6">Verified by <strong>Voteus.io</strong></div>
-  </div>
-</body>
-</html>`;
-
+  const html = `<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Report Verification · Voteus</title><meta name="robots" content="noindex, nofollow" /><script src="https://cdn.tailwindcss.com"><\/script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" /><style>* { font-family: 'Inter', sans-serif; }</style></head><body class="min-h-screen bg-gradient-to-br ${bg} flex items-center justify-center p-4"><div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-8 text-center"><div class="w-20 h-20 rounded-full ${bubble} flex items-center justify-center mx-auto mb-5 text-4xl font-black">${icon}</div><h1 class="text-2xl font-extrabold text-gray-900 mb-2">${title}</h1><p class="text-gray-500 mb-6">${subtitle}</p>${details}<div class="text-xs text-gray-400 mt-6">Verified by <strong>Voteus.io</strong></div></div></body></html>`;
   res.type("html").send(html);
 });
 
@@ -1435,6 +1378,7 @@ app.get("/api/categories", async (req, res) => {
   );
 });
 
+// ✅ FIX A: /api/nominees exposes appealAllowed per category
 app.get("/api/nominees", async (req, res) => {
   const voterToken =
     typeof req.query.voterToken === "string" ? req.query.voterToken : null;
@@ -1444,7 +1388,7 @@ app.get("/api/nominees", async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT n.*, c.name as category FROM nominees n
-       JOIN categories c ON n.category_id = c.id ORDER BY n.created_at ASC`,
+     JOIN categories c ON n.category_id = c.id ORDER BY n.created_at ASC`,
     )
     .all();
 
@@ -1463,12 +1407,15 @@ app.get("/api/nominees", async (req, res) => {
         conditions.push("fv.device_hash = ?");
         params.push(deviceHash);
       }
+
       const voterVotes = await db
         .prepare(
-          `SELECT fv.nominee_id, n2.category_id, n2.name, n2.code
-           FROM free_votes fv
-           JOIN nominees n2 ON fv.nominee_id = n2.id
-           WHERE ${conditions.join(" OR ")}`,
+          `SELECT fv.nominee_id, n2.category_id, n2.name, n2.code,
+                fv.is_appeal, fv.created_at
+         FROM free_votes fv
+         JOIN nominees n2 ON fv.nominee_id = n2.id
+         WHERE ${conditions.join(" OR ")}
+         ORDER BY fv.is_appeal DESC, fv.created_at DESC`,
         )
         .all(...params);
 
@@ -1476,20 +1423,59 @@ app.get("/api/nominees", async (req, res) => {
       const votedByCategory = {};
       for (const v of voterVotes) {
         votedByNominee.add(v.nominee_id);
-        if (!votedByCategory[v.category_id])
+        if (!votedByCategory[v.category_id]) {
           votedByCategory[v.category_id] = {
             nomineeId: v.nominee_id,
             name: v.name,
             code: v.code,
           };
+        }
       }
+
+      const allowanceConditions = [];
+      const allowanceParams = [];
+      if (deviceHash) {
+        allowanceConditions.push("device_hash = ?");
+        allowanceParams.push(deviceHash);
+      }
+      if (voterToken) {
+        allowanceConditions.push("voter_token = ?");
+        allowanceParams.push(voterToken);
+      }
+
+      let allowanceCategories = new Set();
+      if (allowanceConditions.length) {
+        try {
+          const activeAllowances = await db
+            .prepare(
+              `SELECT category_id FROM vote_allowances
+             WHERE (${allowanceConditions.join(" OR ")}) AND status = 'active'`,
+            )
+            .all(...allowanceParams);
+          allowanceCategories = new Set(
+            activeAllowances.map((a) => a.category_id),
+          );
+        } catch (ae) {
+          console.warn("[Nominees allowances]", ae.message);
+        }
+      }
+
       for (const r of rows) {
-        r.voted = votedByNominee.has(r.id);
-        r.categoryVoted = Object.prototype.hasOwnProperty.call(
-          votedByCategory,
-          r.category_id,
-        );
-        r.categoryVoteFor = votedByCategory[r.category_id] || null;
+        const hasAllowance = allowanceCategories.has(r.category_id);
+        if (hasAllowance) {
+          r.voted = false;
+          r.categoryVoted = false;
+          r.categoryVoteFor = null;
+          r.appealAllowed = true;
+        } else {
+          r.voted = votedByNominee.has(r.id);
+          r.categoryVoted = Object.prototype.hasOwnProperty.call(
+            votedByCategory,
+            r.category_id,
+          );
+          r.categoryVoteFor = votedByCategory[r.category_id] || null;
+          r.appealAllowed = false;
+        }
       }
     } catch (e) {
       console.warn("[Nominees vote-status]", e.message);
@@ -1497,6 +1483,7 @@ app.get("/api/nominees", async (req, res) => {
         r.voted = false;
         r.categoryVoted = false;
         r.categoryVoteFor = null;
+        r.appealAllowed = false;
       }
     }
   }
@@ -1508,7 +1495,7 @@ app.get("/api/nominees/:code", async (req, res) => {
   const n = await db
     .prepare(
       `SELECT n.*, c.name as category FROM nominees n
-       JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
+     JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
     )
     .get(req.params.code);
   if (!n) return res.status(404).json({ error: "Not found" });
@@ -1547,10 +1534,12 @@ app.post(
         .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
         .get(cleanEmail);
       if (existing && existing.id)
-        return res.status(409).json({
-          error: "An account with this email already exists.",
-          code: "EMAIL_EXISTS",
-        });
+        return res
+          .status(409)
+          .json({
+            error: "An account with this email already exists.",
+            code: "EMAIL_EXISTS",
+          });
 
       const hash = await bcrypt.hash(cleanPassword, 10);
       const id = uuidv4();
@@ -1566,10 +1555,12 @@ app.post(
             .toLowerCase()
             .includes("unique")
         )
-          return res.status(409).json({
-            error: "An account with this email already exists.",
-            code: "EMAIL_EXISTS",
-          });
+          return res
+            .status(409)
+            .json({
+              error: "An account with this email already exists.",
+              code: "EMAIL_EXISTS",
+            });
         throw insErr;
       }
 
@@ -1626,7 +1617,6 @@ app.post(
     const { username, password } = req.body || {};
     if (!username || !password)
       return res.status(400).json({ error: "Username and password required" });
-
     if (
       username === SUPER_ADMIN_USERNAME &&
       password === SUPER_ADMIN_PASSWORD
@@ -1641,14 +1631,12 @@ app.post(
         user: { username, role: "super", displayName: "Super Administrator" },
       });
     }
-
     const admin = await db
       .prepare("SELECT * FROM admins WHERE username = ? AND revoked = 0")
       .get(username);
     if (!admin) return res.status(401).json({ error: "Invalid credentials" });
     const ok = await bcrypt.compare(password, admin.password_hash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-
     const token = jwt.sign(
       {
         role: "admin",
@@ -1674,8 +1662,8 @@ app.get("/api/admin/users", superAuth, async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT id, username, display_name, role, created_by, created_at,
-              revoked, revoked_at, revoked_by
-       FROM admins ORDER BY created_at DESC`,
+            revoked, revoked_at, revoked_by
+     FROM admins ORDER BY created_at DESC`,
     )
     .all();
   res.json({ admins: rows, super: { username: SUPER_ADMIN_USERNAME } });
@@ -1699,13 +1687,12 @@ app.post("/api/admin/users", superAuth, async (req, res) => {
     await db.prepare("SELECT id FROM admins WHERE username = ?").get(username)
   )
     return res.status(409).json({ error: "Username already taken" });
-
   const hash = await bcrypt.hash(password, 10);
   const id = uuidv4();
   await db
     .prepare(
       `INSERT INTO admins (id, username, password_hash, display_name, role, created_by)
-       VALUES (?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?)`,
     )
     .run(
       id,
@@ -1757,25 +1744,21 @@ app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
       `SELECT n.id, n.user_id, n.name, n.category_id, n.code, n.img, n.desc,
-              COALESCE(n.votes, 0) AS votes, n.created_at,
-              c.name as category
-       FROM nominees n
-       JOIN categories c ON n.category_id = c.id
-       WHERE n.user_id = ?`,
+            COALESCE(n.votes, 0) AS votes, n.created_at, c.name as category
+     FROM nominees n JOIN categories c ON n.category_id = c.id
+     WHERE n.user_id = ?`,
     )
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-
   const boostRow = await db
     .prepare(
       "SELECT votes_added, created_at FROM nominee_boosts WHERE nominee_id = ?",
     )
     .get(nominee.id);
-
   const rows = await db
     .prepare(
       `SELECT id, COALESCE(votes, 0) AS votes FROM nominees
-       WHERE category_id = ? ORDER BY COALESCE(votes, 0) DESC`,
+     WHERE category_id = ? ORDER BY COALESCE(votes, 0) DESC`,
     )
     .all(nominee.category_id);
   const idx = rows.findIndex((r) => r.id === nominee.id);
@@ -1784,7 +1767,6 @@ app.get("/api/nominee/me", auth, async (req, res) => {
     self: { votes: nominee.votes },
     below: idx < rows.length - 1 ? { votes: rows[idx + 1].votes } : null,
   };
-
   res.json({
     nominee: {
       ...nominee,
@@ -1807,16 +1789,13 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
   const access = await getLeaderboardAccess(req.user.id);
   if (!access.allowed)
     return res.status(402).json({ error: "Leaderboard locked", access });
-
   const rows = await db
     .prepare(
       `SELECT n.id, n.name, n.code, n.img, COALESCE(n.votes, 0) AS votes
-       FROM nominees n
-       WHERE n.category_id = ?
-       ORDER BY COALESCE(n.votes, 0) DESC`,
+     FROM nominees n WHERE n.category_id = ?
+     ORDER BY COALESCE(n.votes, 0) DESC`,
     )
     .all(nominee.category_id);
-
   res.json({
     leaderboard: rows.map((r, i) => ({
       ...r,
@@ -1847,7 +1826,6 @@ app.post(
         .get(categoryId))
     )
       return res.status(400).json({ error: "Invalid category" });
-
     let code;
     do {
       code = generateCode(name);
@@ -1863,7 +1841,7 @@ app.post(
     const nominee = await db
       .prepare(
         `SELECT n.*, c.name as category FROM nominees n
-         JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
+     JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
       )
       .get(id);
     broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
@@ -1964,10 +1942,9 @@ app.post(
       .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
       .get(nominee.id);
     if (existing)
-      return res.status(400).json({
-        error: "Boost already purchased.",
-        code: "ALREADY_BOOSTED",
-      });
+      return res
+        .status(400)
+        .json({ error: "Boost already purchased.", code: "ALREADY_BOOSTED" });
     try {
       const r = await initiatePayment({
         type: "boost_50",
@@ -1988,9 +1965,8 @@ app.post(
   },
 );
 
-// ============================================================
-// VOTES — now checks for re-vote allowance before rejecting
-// ============================================================
+// ✅ FIX B + C: match allowance on voter_token OR device_hash;
+//              use modified voter_token for appeal vote to bypass UNIQUE
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -2039,25 +2015,25 @@ app.post(
     let result;
     try {
       result = await db.tx(async (t) => {
-        // Is there already a vote from this token or device in this category?
         const existing = await t.get(
           `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code,
-                  fv.voter_token, fv.device_hash
-           FROM free_votes fv
-           JOIN nominees n2 ON fv.nominee_id = n2.id
-           WHERE n2.category_id = ?
-             AND (fv.voter_token = ? OR fv.device_hash = ?)
-           LIMIT 1`,
+                fv.voter_token, fv.device_hash
+         FROM free_votes fv
+         JOIN nominees n2 ON fv.nominee_id = n2.id
+         WHERE n2.category_id = ?
+           AND (fv.voter_token = ? OR fv.device_hash = ?)
+         LIMIT 1`,
           [nominee.category_id, voterToken, deviceHash],
         );
 
         if (existing) {
-          // ✅ NEW: is there an active allowance for this device + category?
+          // Match allowance on EITHER voter_token or device_hash
           const allowance = await t.get(
             `SELECT * FROM vote_allowances
-             WHERE device_hash = ? AND category_id = ? AND status = 'active'
-             LIMIT 1`,
-            [deviceHash, nominee.category_id],
+           WHERE (device_hash = ? OR voter_token = ?)
+             AND category_id = ? AND status = 'active'
+           LIMIT 1`,
+            [deviceHash, voterToken, nominee.category_id],
           );
 
           if (!allowance) {
@@ -2070,16 +2046,19 @@ app.post(
             };
           }
 
-          // Insert the re-vote, marked as appeal
+          // Use a modified voter_token for the appeal vote to avoid
+          // UNIQUE(voter_token, nominee_id) collision on the same nominee.
           const voteId = uuidv4();
+          const appealVoterToken = `${voterToken}_apl_${Date.now()}`;
+
           await t.execute({
             sql: `INSERT INTO free_votes
-                  (id, voter_token, nominee_id, device_hash, ip, category_id,
-                   user_agent, fingerprint_json, is_appeal)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+                (id, voter_token, nominee_id, device_hash, ip, category_id,
+                 user_agent, fingerprint_json, is_appeal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
             args: [
               voteId,
-              voterToken,
+              appealVoterToken,
               nominee.id,
               deviceHash,
               ip,
@@ -2094,19 +2073,21 @@ app.post(
           });
           await t.execute({
             sql: `UPDATE vote_allowances
-                  SET status = 'used', used_at = CURRENT_TIMESTAMP, used_vote_id = ?
-                  WHERE id = ?`,
+                SET status = 'used', used_at = CURRENT_TIMESTAMP, used_vote_id = ?
+                WHERE id = ?`,
             args: [voteId, allowance.id],
           });
           await t.execute({
             sql: `INSERT INTO payment_logs (reference, event, details)
-                  VALUES (?, 'appeal_vote_used', ?)`,
+                VALUES (?, 'appeal_vote_used', ?)`,
             args: [
               allowance.appeal_code,
               JSON.stringify({
                 nominee_id: nominee.id,
                 category_id: nominee.category_id,
                 vote_id: voteId,
+                device_hash_at_vote: deviceHash,
+                voter_token_at_vote: voterToken,
               }),
             ],
           });
@@ -2118,12 +2099,12 @@ app.post(
           };
         }
 
-        // Normal vote — no existing record
+        // Normal vote
         await t.execute({
           sql: `INSERT INTO free_votes
-                (id, voter_token, nominee_id, device_hash, ip, category_id,
-                 user_agent, fingerprint_json, is_appeal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+              (id, voter_token, nominee_id, device_hash, ip, category_id,
+               user_agent, fingerprint_json, is_appeal)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
           args: [
             uuidv4(),
             voterToken,
@@ -2201,14 +2182,14 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
     const rows = await db
       .prepare(
         `SELECT fv.nominee_id, fv.created_at,
-                n.code, n.name, n.category_id, c.name AS category
-         FROM free_votes fv
-         JOIN nominees n ON fv.nominee_id = n.id
-         JOIN categories c ON n.category_id = c.id
-         WHERE fv.voter_token = ?
-         ORDER BY fv.created_at DESC`,
+              n.code, n.name, n.category_id, c.name AS category
+       FROM free_votes fv
+       JOIN nominees n ON fv.nominee_id = n.id
+       JOIN categories c ON n.category_id = c.id
+       WHERE fv.voter_token = ? OR fv.voter_token LIKE ?
+       ORDER BY fv.created_at DESC`,
       )
-      .all(token);
+      .all(token, token + "_apl_%");
     res.json(rows);
   } catch {
     res.json([]);
@@ -2329,7 +2310,7 @@ app.post("/api/payhero/callback", (req, res) => {
         const pending = await db
           .prepare(
             `SELECT reference FROM transactions
-             WHERE status='pending' ORDER BY created_at DESC LIMIT 50`,
+           WHERE status='pending' ORDER BY created_at DESC LIMIT 50`,
           )
           .all();
         for (const tx of pending)
@@ -2383,9 +2364,7 @@ app.post("/api/payhero/callback", (req, res) => {
       const success = !failure && receiptClean !== null;
 
       console.log(
-        `[PayHero CB] ref=${ref} status="${statusRaw}" receipt="${receiptClean}" → ${
-          success ? "SUCCESS" : failure ? "FAILURE" : "AWAITING_RECEIPT"
-        }`,
+        `[PayHero CB] ref=${ref} status="${statusRaw}" receipt="${receiptClean}" → ${success ? "SUCCESS" : failure ? "FAILURE" : "AWAITING_RECEIPT"}`,
       );
 
       await logEvent(ref, "callback_received", {
@@ -2407,9 +2386,6 @@ app.post("/api/payhero/callback", (req, res) => {
   })();
 });
 
-// ============================================================
-// FORENSIC REPORT — now includes fingerprint display + appeals
-// ============================================================
 const VERDICT_MESSAGES = {
   NO_RECORD_FOUND:
     "No votes exist on record for your browser, your device fingerprint, or your network. If you saw an 'already voted' message, it was NOT because of a recorded vote — it was a frontend/UI bug or a transient loading state.",
@@ -2435,11 +2411,12 @@ app.post(
         fingerprintDetails,
       } = req.body || {};
 
-      if (!description || String(description).trim().length < 10) {
-        return res.status(400).json({
-          error: "Please describe what happened (at least 10 characters)",
-        });
-      }
+      if (!description || String(description).trim().length < 10)
+        return res
+          .status(400)
+          .json({
+            error: "Please describe what happened (at least 10 characters)",
+          });
 
       const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
       const ua = String(req.headers["user-agent"] || "").slice(0, 500);
@@ -2479,20 +2456,20 @@ app.post(
       };
 
       const selectCols = `fv.created_at, fv.ip, fv.device_hash, fv.voter_token,
-                          fv.user_agent, fv.fingerprint_json, fv.is_appeal,
-                          n.code AS nominee_code, n.name AS nominee_name,
-                          c.name AS category`;
+                        fv.user_agent, fv.fingerprint_json, fv.is_appeal,
+                        n.code AS nominee_code, n.name AS nominee_name,
+                        c.name AS category`;
 
       if (voterToken && typeof voterToken === "string") {
         try {
           const ownRows = await db
             .prepare(
               `SELECT ${selectCols}
-               FROM free_votes fv
-               JOIN nominees n ON n.id = fv.nominee_id
-               JOIN categories c ON c.id = fv.category_id
-               WHERE fv.voter_token = ?
-               ORDER BY fv.created_at ASC`,
+           FROM free_votes fv
+           JOIN nominees n ON n.id = fv.nominee_id
+           JOIN categories c ON c.id = fv.category_id
+           WHERE fv.voter_token = ?
+           ORDER BY fv.created_at ASC`,
             )
             .all(voterToken);
           ownRows.forEach((v) =>
@@ -2513,11 +2490,11 @@ app.post(
           const hashRows = await db
             .prepare(
               `SELECT ${selectCols}
-               FROM free_votes fv
-               JOIN nominees n ON n.id = fv.nominee_id
-               JOIN categories c ON c.id = fv.category_id
-               WHERE fv.device_hash = ?
-               ORDER BY fv.created_at ASC`,
+           FROM free_votes fv
+           JOIN nominees n ON n.id = fv.nominee_id
+           JOIN categories c ON c.id = fv.category_id
+           WHERE fv.device_hash = ?
+           ORDER BY fv.created_at ASC`,
             )
             .all(deviceHash);
           hashRows.forEach((v) => {
@@ -2543,12 +2520,11 @@ app.post(
           const ipRows = await db
             .prepare(
               `SELECT ${selectCols}
-               FROM free_votes fv
-               JOIN nominees n ON n.id = fv.nominee_id
-               JOIN categories c ON c.id = fv.category_id
-               WHERE fv.ip = ?
-               ORDER BY fv.created_at ASC
-               LIMIT 50`,
+           FROM free_votes fv
+           JOIN nominees n ON n.id = fv.nominee_id
+           JOIN categories c ON c.id = fv.category_id
+           WHERE fv.ip = ?
+           ORDER BY fv.created_at ASC LIMIT 50`,
             )
             .all(ip);
           ipRows.forEach((v) => {
@@ -2578,28 +2554,23 @@ app.post(
         ...new Set(matches.map((m) => m.ip_at_vote)),
       ].filter((v) => v && v !== "unknown" && !isPrivateIP(v));
       const geosByIp = {};
-      for (const vip of uniqueVotingIps.slice(0, 10)) {
+      for (const vip of uniqueVotingIps.slice(0, 10))
         geosByIp[vip] = await lookupIP(vip);
-      }
       for (const m of matches) {
-        if (m.ip_at_vote && geosByIp[m.ip_at_vote]) {
+        if (m.ip_at_vote && geosByIp[m.ip_at_vote])
           m.ip_geo = geosByIp[m.ip_at_vote];
-        }
       }
 
-      const reportCode = `RPT-${Date.now().toString(36).toUpperCase()}-${crypto
-        .randomBytes(3)
-        .toString("hex")
-        .toUpperCase()}`;
+      const reportCode = `RPT-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
       const id = uuidv4();
 
       await db
         .prepare(
           `INSERT INTO vote_reports (
-             id, report_code, ip, user_agent, voter_token, device_hash,
-             fingerprint_details, report_description, reporter_name, reporter_contact,
-             verdict, matched_votes, geo_info
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         id, report_code, ip, user_agent, voter_token, device_hash,
+         fingerprint_details, report_description, reporter_name, reporter_contact,
+         verdict, matched_votes, geo_info
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           id,
@@ -2672,9 +2643,8 @@ app.get("/api/report/:code", async (req, res) => {
   const code = String(req.params.code || "")
     .trim()
     .toUpperCase();
-  if (!/^RPT-[A-Z0-9]+-[A-Z0-9]+$/.test(code)) {
+  if (!/^RPT-[A-Z0-9]+-[A-Z0-9]+$/.test(code))
     return res.status(400).json({ error: "Invalid report code" });
-  }
   const row = await db
     .prepare("SELECT * FROM vote_reports WHERE report_code = ?")
     .get(code);
@@ -2693,18 +2663,17 @@ app.get("/api/report/:code", async (req, res) => {
     fp = row.fingerprint_details ? JSON.parse(row.fingerprint_details) : {};
   } catch {}
 
-  // Get appeals for this report
   const appealRows = await db
     .prepare(
       `SELECT va.*,
-              (SELECT status FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_status,
-              (SELECT used_at FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_used_at,
-              (SELECT n.name FROM free_votes fv
-                 JOIN nominees n ON n.id = fv.nominee_id
-                 WHERE fv.id = (SELECT used_vote_id FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1)) AS used_for_nominee
-       FROM vote_appeals va
-       WHERE va.report_code = ?
-       ORDER BY va.created_at ASC`,
+            (SELECT status FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_status,
+            (SELECT used_at FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_used_at,
+            (SELECT n.name FROM free_votes fv
+               JOIN nominees n ON n.id = fv.nominee_id
+               WHERE fv.id = (SELECT used_vote_id FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1)) AS used_for_nominee
+     FROM vote_appeals va
+     WHERE va.report_code = ?
+     ORDER BY va.created_at ASC`,
     )
     .all(code);
 
@@ -2738,25 +2707,22 @@ app.get("/api/report/:code", async (req, res) => {
   });
 });
 
-// ============================================================
-// APPEALS — user submits "Not satisfied"
-// ============================================================
 app.post(
   "/api/report-appeal",
   rateLimit({ key: "report-appeal", max: 5 }),
   async (req, res) => {
     try {
       const { reportCode, categoryId, reason } = req.body || {};
-
       if (!reportCode || !categoryId || !reason)
-        return res.status(400).json({
-          error: "reportCode, categoryId, and reason are required",
-        });
-
+        return res
+          .status(400)
+          .json({ error: "reportCode, categoryId, and reason are required" });
       if (String(reason).trim().length < 20)
-        return res.status(400).json({
-          error: "Please explain in at least 20 characters why you disagree",
-        });
+        return res
+          .status(400)
+          .json({
+            error: "Please explain in at least 20 characters why you disagree",
+          });
 
       const code = String(reportCode).trim().toUpperCase();
       const report = await db
@@ -2769,7 +2735,6 @@ app.post(
         .get(categoryId);
       if (!category) return res.status(400).json({ error: "Invalid category" });
 
-      // One appeal per (report, category)
       const existing = await db
         .prepare(
           "SELECT appeal_code FROM vote_appeals WHERE report_code = ? AND category_id = ?",
@@ -2781,18 +2746,15 @@ app.post(
           appealCode: existing.appeal_code,
         });
 
-      const appealCode = `APL-${Date.now().toString(36).toUpperCase()}-${crypto
-        .randomBytes(2)
-        .toString("hex")
-        .toUpperCase()}`;
+      const appealCode = `APL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
       const id = uuidv4();
 
       await db
         .prepare(
           `INSERT INTO vote_appeals (
-             id, appeal_code, report_code, device_hash, voter_token,
-             category_id, category_name, reason, status
-           ) VALUES (?,?,?,?,?,?,?,?,'pending')`,
+         id, appeal_code, report_code, device_hash, voter_token,
+         category_id, category_name, reason, status
+       ) VALUES (?,?,?,?,?,?,?,?,'pending')`,
         )
         .run(
           id,
@@ -2820,7 +2782,7 @@ app.post(
         appealCode,
         status: "pending",
         message:
-          "Your appeal has been sent to the admin. You will be able to vote once more in this category once it is approved. Please check back in a few minutes.",
+          "Your appeal has been sent to the admin. You will be able to vote once more in this category once it is approved.",
       });
     } catch (e) {
       console.error("[Appeal] Fatal:", e);
@@ -2833,9 +2795,8 @@ app.get("/api/appeal/:code", async (req, res) => {
   const code = String(req.params.code || "")
     .trim()
     .toUpperCase();
-  if (!/^APL-[A-Z0-9]+-[A-Z0-9]+$/.test(code)) {
+  if (!/^APL-[A-Z0-9]+-[A-Z0-9]+$/.test(code))
     return res.status(400).json({ error: "Invalid appeal code" });
-  }
   const appeal = await db
     .prepare("SELECT * FROM vote_appeals WHERE appeal_code = ?")
     .get(code);
@@ -2850,8 +2811,8 @@ app.get("/api/appeal/:code", async (req, res) => {
     const v = await db
       .prepare(
         `SELECT n.name FROM free_votes fv
-         JOIN nominees n ON n.id = fv.nominee_id
-         WHERE fv.id = ?`,
+       JOIN nominees n ON n.id = fv.nominee_id
+       WHERE fv.id = ?`,
       )
       .get(allowance.used_vote_id);
     usedForNominee = v?.name || null;
@@ -2872,20 +2833,16 @@ app.get("/api/appeal/:code", async (req, res) => {
   });
 });
 
-// ============================================================
-// ADMIN — reports list now includes fingerprint parsing
-// ============================================================
 app.get("/api/admin/reports", superAuth, async (req, res) => {
   const verdict = req.query.verdict ? String(req.query.verdict) : null;
   const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
-
   const where = verdict ? "WHERE verdict = ?" : "";
   const params = verdict ? [verdict, limit] : [limit];
 
   const rows = await db
     .prepare(
       `SELECT * FROM vote_reports ${where}
-       ORDER BY reported_at DESC LIMIT ?`,
+     ORDER BY reported_at DESC LIMIT ?`,
     )
     .all(...params);
 
@@ -2929,9 +2886,6 @@ app.get("/api/admin/reports", superAuth, async (req, res) => {
   res.json({ reports: enriched, counts, total: enriched.length });
 });
 
-// ============================================================
-// ADMIN — appeals list + decide
-// ============================================================
 app.get("/api/admin/appeals", superAuth, async (req, res) => {
   const status = req.query.status ? String(req.query.status) : null;
   const where = status ? "WHERE status = ?" : "";
@@ -2940,15 +2894,15 @@ app.get("/api/admin/appeals", superAuth, async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT va.*,
-              (SELECT status FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_status,
-              (SELECT used_at FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_used_at,
-              (SELECT n.name FROM free_votes fv
-                 JOIN nominees n ON n.id = fv.nominee_id
-                 WHERE fv.id = (SELECT used_vote_id FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1)) AS used_for_nominee
-       FROM vote_appeals va
-       ${where}
-       ORDER BY va.created_at DESC
-       LIMIT 500`,
+            (SELECT status FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_status,
+            (SELECT used_at FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1) AS allowance_used_at,
+            (SELECT n.name FROM free_votes fv
+               JOIN nominees n ON n.id = fv.nominee_id
+               WHERE fv.id = (SELECT used_vote_id FROM vote_allowances WHERE appeal_code = va.appeal_code LIMIT 1)) AS used_for_nominee
+     FROM vote_appeals va
+     ${where}
+     ORDER BY va.created_at DESC
+     LIMIT 500`,
     )
     .all(...params);
 
@@ -2992,7 +2946,6 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       });
 
     if (decision === "approve") {
-      // Check no allowance already exists for this device+category
       const existing = await db
         .prepare(
           "SELECT * FROM vote_allowances WHERE device_hash = ? AND category_id = ?",
@@ -3001,7 +2954,7 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       if (existing)
         return res.status(409).json({
           error:
-            "A re-vote allowance for this device and category already exists. Cannot approve another.",
+            "A re-vote allowance for this device and category already exists.",
           existingAllowance: {
             appealCode: existing.appeal_code,
             status: existing.status,
@@ -3013,8 +2966,8 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       await db
         .prepare(
           `INSERT INTO vote_allowances
-           (id, appeal_code, device_hash, voter_token, category_id, status)
-           VALUES (?,?,?,?,?,'active')`,
+         (id, appeal_code, device_hash, voter_token, category_id, status)
+         VALUES (?,?,?,?,?,'active')`,
         )
         .run(
           allowanceId,
@@ -3028,9 +2981,9 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
     await db
       .prepare(
         `UPDATE vote_appeals
-         SET status = ?, decided_at = CURRENT_TIMESTAMP,
-             decided_by = ?, decision_note = ?
-         WHERE appeal_code = ?`,
+       SET status = ?, decided_at = CURRENT_TIMESTAMP,
+           decided_by = ?, decision_note = ?
+       WHERE appeal_code = ?`,
       )
       .run(
         decision === "approve" ? "approved" : "rejected",
@@ -3042,11 +2995,7 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
     console.log(
       `[Appeal] ${code} ${decision === "approve" ? "APPROVED" : "REJECTED"} by ${req.admin.username}`,
     );
-    broadcastAdminEvent({
-      type: "appeal:decided",
-      appealCode: code,
-      decision,
-    });
+    broadcastAdminEvent({ type: "appeal:decided", appealCode: code, decision });
 
     res.json({
       success: true,
@@ -3063,13 +3012,9 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
   }
 });
 
-// ============================================================
-// ADMIN: stats / charts / categories / nominees / transactions
-// ============================================================
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
     const isSuper = req.admin.role === "super";
-
     const totalVotes = (
       await db
         .prepare(
@@ -3095,7 +3040,6 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
         )
         .get()
     ).c;
-
     const base = {
       totalVotes,
       nomineesCount,
@@ -3104,9 +3048,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
       uniqueDevices,
       avgVotesPerNominee: nomineesCount > 0 ? totalVotes / nomineesCount : 0,
     };
-
     if (!isSuper) return res.json(base);
-
     const grossRevenue = (
       await db
         .prepare(
@@ -3135,7 +3077,6 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
         )
         .get()
     ).c;
-
     res.json({
       ...base,
       grossRevenue,
@@ -3154,29 +3095,25 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
       `SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category
-       FROM nominees n JOIN categories c ON n.category_id = c.id
-       ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5`,
+     FROM nominees n JOIN categories c ON n.category_id = c.id
+     ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5`,
     )
     .all();
-
   const categoryDistribution = await db
     .prepare(
       `SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes
-       FROM categories c
-       LEFT JOIN nominees n ON n.category_id = c.id
-       GROUP BY c.id ORDER BY c.created_at ASC`,
+     FROM categories c
+     LEFT JOIN nominees n ON n.category_id = c.id
+     GROUP BY c.id ORDER BY c.created_at ASC`,
     )
     .all();
-
   const dailyRows = await db
     .prepare(
       `SELECT date(created_at) as day, COUNT(*) as votes
-       FROM free_votes
-       WHERE created_at >= datetime('now', '-7 days')
-       GROUP BY day ORDER BY day ASC`,
+     FROM free_votes WHERE created_at >= datetime('now', '-7 days')
+     GROUP BY day ORDER BY day ASC`,
     )
     .all();
-
   const days = [];
   const byDay = Object.fromEntries(dailyRows.map((r) => [r.day, r.votes]));
   for (let i = 6; i >= 0; i--) {
@@ -3188,20 +3125,15 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
       votes: byDay[key] || 0,
     });
   }
-
   const allCategories = await db
     .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
     .all();
-
   const allNominees = await db
     .prepare(
-      `SELECT n.id, n.name, n.code, n.img, n.category_id,
-              COALESCE(n.votes, 0) as votes
-       FROM nominees n
-       ORDER BY n.category_id, COALESCE(n.votes, 0) DESC`,
+      `SELECT n.id, n.name, n.code, n.img, n.category_id, COALESCE(n.votes, 0) as votes
+     FROM nominees n ORDER BY n.category_id, COALESCE(n.votes, 0) DESC`,
     )
     .all();
-
   const perCategory = allCategories.map((cat) => {
     const list = allNominees.filter((n) => n.category_id === cat.id);
     const total = list.reduce((s, n) => s + (n.votes || 0), 0);
@@ -3220,26 +3152,21 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
       })),
     };
   });
-
   const dailyCatRows = await db
     .prepare(
       `SELECT date(fv.created_at) as day, c.name as category, COUNT(*) as votes
-       FROM free_votes fv
-       JOIN nominees n ON fv.nominee_id = n.id
-       JOIN categories c ON n.category_id = c.id
-       WHERE fv.created_at >= datetime('now', '-7 days')
-       GROUP BY day, category
-       ORDER BY day ASC`,
+     FROM free_votes fv JOIN nominees n ON fv.nominee_id = n.id
+     JOIN categories c ON n.category_id = c.id
+     WHERE fv.created_at >= datetime('now', '-7 days')
+     GROUP BY day, category ORDER BY day ASC`,
     )
     .all();
-
   const categories = categoryDistribution.map((c) => c.name);
   const catByDay = {};
   for (const r of dailyCatRows) {
     if (!catByDay[r.day]) catByDay[r.day] = {};
     catByDay[r.day][r.category] = r.votes;
   }
-
   const dailyByCategory = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -3250,7 +3177,6 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     for (const catName of categories) entry[catName] = cats[catName] || 0;
     dailyByCategory.push(entry);
   }
-
   res.json({
     topNominees,
     categoryDistribution,
@@ -3333,7 +3259,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
       .get(cleanEmail)
   )
     return res.status(409).json({ error: "Email already registered" });
-
   const emailPrefix = cleanEmail.split("@")[0].replace(/[^a-z0-9._-]/g, "");
   const finalPassword =
     password && String(password).trim().length >= 6
@@ -3343,7 +3268,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
     return res
       .status(400)
       .json({ error: "Password must be at least 6 characters" });
-
   const hash = await bcrypt.hash(finalPassword, 10);
   const userId = uuidv4();
   await db
@@ -3351,23 +3275,19 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
       "INSERT INTO users (id, name, email, password_hash) VALUES (?,?,?,?)",
     )
     .run(userId, name, cleanEmail, hash);
-
   let code;
   do {
     code = generateCode(name);
   } while (
     await db.prepare("SELECT id FROM nominees WHERE code = ?").get(code)
   );
-
   const id = uuidv4();
   await db
     .prepare(
       "INSERT INTO nominees (id, user_id, name, category_id, code, img, desc) VALUES (?,?,?,?,?,?,?)",
     )
     .run(id, userId, name, categoryId, code, img || null, desc || null);
-
   broadcastAdminEvent({ type: "nominee:new", nomineeId: id, name });
-
   res.json({
     id,
     code,
@@ -3390,8 +3310,8 @@ app.get("/api/admin/transactions", superAuth, async (req, res) => {
     await db
       .prepare(
         `SELECT t.*, n.name as nominee_name, n.code as nominee_code
-         FROM transactions t LEFT JOIN nominees n ON t.nominee_id = n.id
-         ORDER BY t.created_at DESC LIMIT 200`,
+     FROM transactions t LEFT JOIN nominees n ON t.nominee_id = n.id
+     ORDER BY t.created_at DESC LIMIT 200`,
       )
       .all(),
   );
@@ -3413,7 +3333,6 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     const lines = [];
     const add = (...a) => lines.push(a.join(""));
     const bar = "\u2550".repeat(60);
-
     add("VOTEUS \u2014 OFFICIAL RESULTS EXPORT");
     add(bar);
     add("");
@@ -3430,13 +3349,9 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     add(`Total Votes,${r.totalVotes.toLocaleString()}`);
     add(`Categories,${r.categories.length}`);
     add(`Participants,${r.nominees.length}`);
-    add(
-      `Avg Votes per Participant,${(r.nominees.length > 0 ? r.totalVotes / r.nominees.length : 0).toFixed(2)}`,
-    );
     add(`Unique Voters,${r.uniqueVoters.toLocaleString()}`);
     add(`Unique Devices,${r.uniqueDevices.toLocaleString()}`);
     add("");
-
     for (const cat of r.perCategory) {
       add(bar);
       add(`CATEGORY: ${csvEscape(cat.name)}`);
@@ -3444,12 +3359,12 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
       add(bar);
       add("");
       if (!cat.nominees.length) {
-        add("No participants in this category.");
+        add("No participants.");
         add("");
         continue;
       }
       add("Rank,Name,Code,Votes,Share %,Share Bar");
-      for (const n of cat.nominees) {
+      for (const n of cat.nominees)
         add(
           [
             n.rank,
@@ -3460,10 +3375,8 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
             `"${shareBar(n.percent)}"`,
           ].join(","),
         );
-      }
       add("");
     }
-
     add(bar);
     add("SYSTEM SIGNATURE");
     add(bar);
@@ -3472,9 +3385,6 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     add(`Signature: ${r.signature}`);
     add(`Generated: ${formatDateTime(r.generatedAt)}`);
     add(`Verified: VALID`);
-    add("");
-    add("Signed: Voteus.io Automated Reporting System");
-
     const filename = `votenet-report-${r.reportId}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -3490,16 +3400,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
 app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
-
-    const verifyUrl =
-      `https://gala.voteus.xyz/verify?` +
-      `r=${encodeURIComponent(r.reportId)}` +
-      `&s=${r.signature}` +
-      `&v=${r.totalVotes}` +
-      `&c=${r.categories.length}` +
-      `&n=${r.nominees.length}` +
-      `&t=${Date.parse(r.generatedAt)}`;
-
+    const verifyUrl = `https://gala.voteus.xyz/verify?r=${encodeURIComponent(r.reportId)}&s=${r.signature}&v=${r.totalVotes}&c=${r.categories.length}&n=${r.nominees.length}&t=${Date.parse(r.generatedAt)}`;
     let qrBuf = null;
     if (QRCode) {
       try {
@@ -3510,71 +3411,34 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           color: { dark: "#1d1d1f", light: "#ffffff" },
         });
       } catch (e) {
-        console.warn("[PDF] QR generation failed:", e.message);
+        console.warn("[PDF] QR failed:", e.message);
       }
     }
-
     const filename = `votenet-report-${r.reportId}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("X-Report-Id", r.reportId);
     res.setHeader("X-Report-Signature", r.signature);
-
     const doc = new PDFDocument({ size: "A4", margin: 44 });
     doc.pipe(res);
-
-    const INDIGO = "#3F51B5";
-    const INDIGO_LT = "#E8EAF6";
-    const GREEN = "#16A34A";
-    const GRAY = "#6b7280";
-    const DARK = "#1d1d1f";
-    const BORDER = "#e5e7eb";
-    const PAGE_W = 507;
-    const LEFT = 44;
-    const RIGHT = 551;
-    const BOTTOM = 780;
-
+    const INDIGO = "#3F51B5",
+      GRAY = "#6b7280",
+      DARK = "#1d1d1f",
+      BORDER = "#e5e7eb";
+    const PAGE_W = 507,
+      LEFT = 44,
+      RIGHT = 551;
     const footer = () => {
-      const y = doc.page.height - 26;
       doc
         .fontSize(6.5)
         .fillColor(GRAY)
         .text(
-          `Voteus.io  ·  Report ${r.reportId}  ·  Sig ${r.signature.slice(0, 14)}…`,
+          `Voteus.io · Report ${r.reportId} · Sig ${r.signature.slice(0, 14)}…`,
           LEFT,
-          y,
+          doc.page.height - 26,
           { width: PAGE_W, align: "left", lineBreak: false },
         );
     };
-
-    const ensureSpace = (needed) => {
-      if (doc.y + needed > BOTTOM - 20) {
-        footer();
-        doc.addPage();
-        return true;
-      }
-      return false;
-    };
-
-    const drawColHeaders = () => {
-      const hy = doc.y;
-      doc.fillColor(GRAY).fontSize(7).font("Helvetica-Bold");
-      doc.text("RANK", LEFT + 4, hy, { width: 36 });
-      doc.text("PARTICIPANT", LEFT + 44, hy, { width: 170 });
-      doc.text("CODE", LEFT + 218, hy, { width: 100 });
-      doc.text("VOTES", LEFT + 320, hy, { width: 60, align: "right" });
-      doc.text("SHARE", LEFT + 384, hy, { width: 55, align: "right" });
-      doc.text("DISTRIBUTION", LEFT + 445, hy, { width: 62 });
-      doc.y = hy + 10;
-      doc
-        .strokeColor(BORDER)
-        .lineWidth(0.5)
-        .moveTo(LEFT, doc.y)
-        .lineTo(RIGHT, doc.y)
-        .stroke();
-      doc.y += 3;
-    };
-
     doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
     doc.moveDown(1.2);
     doc
@@ -3582,12 +3446,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .fontSize(10)
       .font("Helvetica-Bold")
       .text("VOTEUS.IO", { align: "center", characterSpacing: 5 });
-    doc.moveDown(0.2);
-    doc
-      .fillColor(GRAY)
-      .fontSize(8)
-      .font("Helvetica")
-      .text("Official Event Voting Platform", { align: "center" });
     doc.moveDown(1);
     doc
       .fillColor(DARK)
@@ -3599,46 +3457,26 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .fillColor(INDIGO)
       .fontSize(12)
       .font("Helvetica")
-      .text("Gala Awards 2026  ·  MKUPLC", { align: "center" });
-
+      .text("Gala Awards 2026 · MKUPLC", { align: "center" });
     doc.moveDown(1);
-    const metaBoxY = doc.y;
-    const metaBoxH = 108;
+    const mY = doc.y;
     doc
-      .roundedRect(LEFT + 50, metaBoxY, PAGE_W - 100, metaBoxH, 10)
+      .roundedRect(LEFT + 50, mY, PAGE_W - 100, 108, 10)
       .lineWidth(1)
       .strokeColor(BORDER)
       .stroke();
-    doc
-      .fillColor(INDIGO_LT)
-      .roundedRect(LEFT + 50, metaBoxY, PAGE_W - 100, 24, 10)
-      .fill();
-    doc
-      .fillColor(INDIGO)
-      .fontSize(8)
-      .font("Helvetica-Bold")
-      .text("REPORT METADATA", LEFT + 50, metaBoxY + 8, {
-        width: PAGE_W - 100,
-        align: "center",
-        characterSpacing: 2,
-      });
-
-    const meta = [
+    let my = mY + 20;
+    for (const [k, v] of [
       ["Report ID", r.reportId],
       ["Generated", formatDateTime(r.generatedAt)],
       ["Prepared By", `${r.generatedBy} (${r.generatedByRole})`],
       ["Signature", r.signature],
-    ];
-    let my = metaBoxY + 32;
-    for (const [k, v] of meta) {
+    ]) {
       doc
         .fillColor(GRAY)
         .fontSize(7)
         .font("Helvetica")
-        .text(k.toUpperCase(), LEFT + 66, my, {
-          width: 78,
-          characterSpacing: 0.5,
-        });
+        .text(k.toUpperCase(), LEFT + 66, my, { width: 78 });
       doc
         .fillColor(DARK)
         .fontSize(9)
@@ -3647,240 +3485,107 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           width: PAGE_W - 218,
           ellipsis: true,
         });
-      my += 18;
+      my += 20;
     }
-    doc.y = metaBoxY + metaBoxH + 14;
-
+    doc.y = mY + 128;
     doc
       .fillColor(INDIGO)
       .fontSize(14)
       .font("Helvetica-Bold")
       .text("Executive Summary");
-    doc.moveDown(0.2);
-    doc
-      .strokeColor(INDIGO)
-      .lineWidth(2)
-      .moveTo(LEFT, doc.y)
-      .lineTo(LEFT + 50, doc.y)
-      .stroke();
-    doc.moveDown(0.7);
-
-    const summaryItems = [
+    doc.moveDown(0.5);
+    const items = [
       ["Total Votes", r.totalVotes.toLocaleString()],
       ["Categories", String(r.categories.length)],
       ["Participants", String(r.nominees.length)],
-      [
-        "Avg Votes / Participant",
-        r.nominees.length > 0
-          ? (r.totalVotes / r.nominees.length).toFixed(1)
-          : "0",
-      ],
       ["Unique Voters", r.uniqueVoters.toLocaleString()],
       ["Unique Devices", r.uniqueDevices.toLocaleString()],
     ];
-    const cardW = (PAGE_W - 12) / 2;
-    const cardH = 52;
-    const gridStartY = doc.y;
-    for (let i = 0; i < summaryItems.length; i++) {
-      const [label, value] = summaryItems[i];
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = LEFT + col * (cardW + 12);
-      const y = gridStartY + row * (cardH + 8);
-      doc
-        .roundedRect(x, y, cardW, cardH, 8)
-        .lineWidth(1)
-        .strokeColor(BORDER)
-        .stroke();
+    for (const [k, v] of items) {
       doc
         .fillColor(GRAY)
-        .fontSize(7)
+        .fontSize(9)
         .font("Helvetica")
-        .text(label.toUpperCase(), x + 12, y + 9, {
-          width: cardW - 24,
-          characterSpacing: 0.5,
-        });
+        .text(k, LEFT + 6, doc.y);
       doc
         .fillColor(DARK)
-        .fontSize(17)
+        .fontSize(11)
         .font("Helvetica-Bold")
-        .text(String(value), x + 12, y + 22, { width: cardW - 24 });
+        .text(v, LEFT, doc.y - 12, { width: PAGE_W - 12, align: "right" });
+      doc.moveDown(0.4);
     }
-    doc.y = gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
     footer();
-
     doc.addPage();
     doc
       .fillColor(INDIGO)
       .fontSize(14)
       .font("Helvetica-Bold")
       .text("Results by Category");
-    doc.moveDown(0.2);
-    doc
-      .strokeColor(INDIGO)
-      .lineWidth(2)
-      .moveTo(LEFT, doc.y)
-      .lineTo(LEFT + 50, doc.y)
-      .stroke();
     doc.moveDown(0.7);
-
     for (const cat of r.perCategory) {
-      ensureSpace(110);
-      const headY = doc.y;
-      doc.roundedRect(LEFT, headY, PAGE_W, 28, 5).fill(INDIGO_LT);
-      doc
-        .fillColor(INDIGO)
-        .fontSize(12)
-        .font("Helvetica-Bold")
-        .text(cat.name, LEFT + 10, headY + 8, { width: PAGE_W - 130 });
-      doc
-        .fillColor(INDIGO)
-        .fontSize(8)
-        .font("Helvetica")
-        .text(`${cat.totalVotes.toLocaleString()} votes`, LEFT, headY + 10, {
-          width: PAGE_W - 10,
-          align: "right",
-        });
-      doc.y = headY + 36;
-
-      if (!cat.nominees.length) {
-        doc
-          .fillColor(GRAY)
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("No participants in this category.", LEFT + 6, doc.y);
-        doc.moveDown(0.7);
-        continue;
+      if (doc.y > 720) {
+        footer();
+        doc.addPage();
       }
-
-      drawColHeaders();
-
-      for (const n of cat.nominees) {
-        if (ensureSpace(24)) drawColHeaders();
-        const yy = doc.y;
-        const rankColor =
-          n.rank === 1
-            ? "#FEF3C7"
-            : n.rank === 2
-              ? "#E5E7EB"
-              : n.rank === 3
-                ? "#FED7AA"
-                : "#F3F4F6";
-        const rankText =
-          n.rank === 1
-            ? "#92400E"
-            : n.rank === 2
-              ? "#374151"
-              : n.rank === 3
-                ? "#9A3412"
-                : "#9CA3AF";
-
-        doc.circle(LEFT + 11, yy + 5, 8).fill(rankColor);
-        doc
-          .fillColor(rankText)
-          .fontSize(7)
-          .font("Helvetica-Bold")
-          .text(String(n.rank), LEFT + 3, yy + 2, {
-            width: 16,
-            align: "center",
-          });
-        doc
-          .fillColor(DARK)
-          .fontSize(9)
-          .font("Helvetica-Bold")
-          .text(n.name, LEFT + 44, yy, { width: 170, ellipsis: true });
-        doc
-          .fillColor(GRAY)
-          .fontSize(7)
-          .font("Helvetica")
-          .text(n.code, LEFT + 218, yy + 1, { width: 100 });
-        doc
-          .fillColor(DARK)
-          .fontSize(9)
-          .font("Helvetica-Bold")
-          .text(n.votes.toLocaleString(), LEFT + 320, yy, {
-            width: 60,
-            align: "right",
-          });
-        doc
-          .fillColor(INDIGO)
-          .fontSize(9)
-          .font("Helvetica-Bold")
-          .text(n.percent.toFixed(1) + "%", LEFT + 384, yy, {
-            width: 55,
-            align: "right",
-          });
-
-        const barX = LEFT + 445;
-        const barW = 62;
-        const barY = yy + 4;
-        doc.roundedRect(barX, barY, barW, 4, 2).fill("#F3F4F6");
-        const fillW = Math.max(2, (Math.max(n.percent, 0.5) / 100) * barW);
-        doc.roundedRect(barX, barY, fillW, 4, 2).fill(INDIGO);
-        doc.y = yy + 18;
-      }
-
+      doc.fillColor(INDIGO).fontSize(12).font("Helvetica-Bold").text(cat.name);
       doc.moveDown(0.3);
-      doc
-        .strokeColor(BORDER)
-        .lineWidth(0.5)
-        .moveTo(LEFT, doc.y)
-        .lineTo(RIGHT, doc.y)
-        .stroke();
-      doc.moveDown(0.8);
+      for (const n of cat.nominees) {
+        if (doc.y > 760) {
+          footer();
+          doc.addPage();
+        }
+        doc
+          .fillColor(DARK)
+          .fontSize(9)
+          .font("Helvetica-Bold")
+          .text(`${n.rank}. ${n.name}`, LEFT + 6, doc.y, { width: 250 });
+        doc
+          .fillColor(GRAY)
+          .fontSize(8)
+          .font("Helvetica")
+          .text(
+            `${n.code}  ·  ${n.votes.toLocaleString()} votes  ·  ${n.percent.toFixed(1)}%`,
+            LEFT + 260,
+            doc.y,
+            { width: PAGE_W - 260, align: "right" },
+          );
+        doc.moveDown(0.4);
+      }
+      doc.moveDown(0.6);
     }
     footer();
-
     doc.addPage();
     doc
       .fillColor(INDIGO)
       .fontSize(18)
       .font("Helvetica-Bold")
       .text("Verification & Signature", { align: "center" });
-    doc.moveDown(0.3);
-    doc
-      .fillColor(GRAY)
-      .fontSize(9)
-      .font("Helvetica")
-      .text("Scan the QR code to verify this report online.", {
-        align: "center",
-      });
     doc.moveDown(1);
-
     if (qrBuf) {
-      const qrSize = 190;
-      const qrX = (doc.page.width - qrSize) / 2;
-      const qrY = doc.y;
+      const qs = 190,
+        qx = (doc.page.width - qs) / 2,
+        qy = doc.y;
       doc
-        .roundedRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 10)
+        .roundedRect(qx - 10, qy - 10, qs + 20, qs + 20, 10)
         .lineWidth(2)
         .strokeColor(INDIGO)
         .stroke();
-      doc.image(qrBuf, qrX, qrY, { width: qrSize, height: qrSize });
-      doc.y = qrY + qrSize + 20;
-      doc
-        .fillColor(INDIGO)
-        .fontSize(9)
-        .font("Helvetica-Bold")
-        .text("Scan to verify", { align: "center" });
-      doc.moveDown(1);
+      doc.image(qrBuf, qx, qy, { width: qs, height: qs });
+      doc.y = qy + qs + 20;
     }
-
     doc
       .fillColor(GRAY)
       .fontSize(8)
       .font("Helvetica")
-      .text(`Report ID: ${r.reportId}`, { align: "center" });
-    doc.text(`Signature: ${r.signature}`, { align: "center" });
-    doc.text(formatDateTime(r.generatedAt), { align: "center" });
-
+      .text(`Report ID: ${r.reportId}`, { align: "center" })
+      .text(`Signature: ${r.signature}`, { align: "center" })
+      .text(formatDateTime(r.generatedAt), { align: "center" });
     footer();
     doc.end();
   } catch (e) {
     console.error("[Export PDF]", e);
-    if (!res.headersSent) {
+    if (!res.headersSent)
       res.status(500).json({ error: "Export failed: " + e.message });
-    }
   }
 });
 
@@ -3904,30 +3609,22 @@ app.get("/sitemap.xml", async (req, res) => {
   try {
     const nominees = await db
       .prepare(
-        `SELECT n.code, n.name, n.img, n.created_at, c.name as category
-         FROM nominees n JOIN categories c ON n.category_id = c.id
-         ORDER BY COALESCE(n.votes, 0) DESC`,
+        `SELECT n.code, n.name, n.created_at FROM nominees n
+       ORDER BY COALESCE(n.votes, 0) DESC`,
       )
       .all();
     const baseUrl = "https://gala.voteus.xyz";
     const now = new Date().toISOString().split("T")[0];
-    const absImg = (p) => {
-      if (!p) return `${baseUrl}/hero-mobile.jpeg`;
-      if (p.startsWith("http://") || p.startsWith("https://")) return p;
-      return baseUrl + (p.startsWith("/") ? p : "/" + p);
-    };
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${baseUrl}/</loc><lastmod>${now}</lastmod><priority>1.0</priority></url>`;
     for (const n of nominees) {
-      const nomineeUrl = `${baseUrl}/nominee/${encodeURIComponent(n.code)}`;
-      const lastmod = n.created_at ? String(n.created_at).split("T")[0] : now;
-      xml += `\n  <url><loc>${nomineeUrl}</loc><lastmod>${lastmod}</lastmod><priority>0.8</priority></url>`;
+      const url = `${baseUrl}/nominee/${encodeURIComponent(n.code)}`;
+      const lm = n.created_at ? String(n.created_at).split("T")[0] : now;
+      xml += `\n  <url><loc>${url}</loc><lastmod>${lm}</lastmod><priority>0.8</priority></url>`;
     }
     xml += `\n</urlset>`;
-    res.type("application/xml");
-    res.send(xml);
+    res.type("application/xml").send(xml);
   } catch (e) {
     res
       .status(500)
@@ -3989,7 +3686,7 @@ setInterval(async () => {
     const r = await db
       .prepare(
         `UPDATE transactions SET status = 'abandoned'
-         WHERE status = 'pending' AND created_at < ?`,
+       WHERE status = 'pending' AND created_at < ?`,
       )
       .run(cutoff);
     if (r.changes > 0)
@@ -4015,11 +3712,11 @@ setInterval(async () => {
     await db
       .prepare(
         `DELETE FROM images
-         WHERE created_at < ?
-           AND id NOT IN (
-             SELECT REPLACE(img, '/api/images/', '') FROM nominees
-             WHERE img LIKE '/api/images/%'
-           )`,
+       WHERE created_at < ?
+         AND id NOT IN (
+           SELECT REPLACE(img, '/api/images/', '') FROM nominees
+           WHERE img LIKE '/api/images/%'
+         )`,
       )
       .run(cutoff);
   } catch (e) {}
@@ -4031,8 +3728,8 @@ setInterval(async () => {
     const pending = await db
       .prepare(
         `SELECT reference FROM transactions
-         WHERE status = 'pending' AND created_at < ?
-         ORDER BY created_at ASC LIMIT 10`,
+       WHERE status = 'pending' AND created_at < ?
+       ORDER BY created_at ASC LIMIT 10`,
       )
       .all(cutoff);
     if (!pending.length) return;
@@ -4125,4 +3822,5 @@ const server = app.listen(PORT, async () => {
     `  Forensics:   /report · /api/report-auto-vote · /admin/reports`,
   );
   console.log(`  Appeals:     /api/report-appeal · /api/admin/appeals`);
+  console.log(`  Re-vote fix: allowance matched on voter_token OR device_hash`);
 });

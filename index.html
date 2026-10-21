@@ -433,6 +433,14 @@
                 background: rgba(107, 114, 128, 0.35);
                 border-color: rgba(107, 114, 128, 0.5);
             }
+            .card .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.4);
+                border-color: rgba(16, 185, 129, 0.6);
+            }
+            .card:hover .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.7);
+                border-color: rgba(16, 185, 129, 0.9);
+            }
             .card:hover .cta.category-voted {
                 background: rgba(107, 114, 128, 0.55);
                 border-color: rgba(107, 114, 128, 0.7);
@@ -1055,10 +1063,8 @@
 
             async function getDeviceFingerprint() {
                 if (window.__voteus_fp) return window.__voteus_fp;
-
                 const parts = [];
                 try {
-                    // --- Basic browser info ---
                     parts.push(navigator.userAgent || "");
                     parts.push(navigator.language || "");
                     parts.push((navigator.languages || []).join(","));
@@ -1070,7 +1076,6 @@
                     parts.push(String(navigator.hardwareConcurrency || 0));
                     parts.push(String(navigator.deviceMemory || 0));
                     parts.push(String(navigator.maxTouchPoints || 0));
-                    // --- Additional entropy ---
                     parts.push(String(screen.availWidth || 0));
                     parts.push(String(screen.availHeight || 0));
                     parts.push(String(window.innerWidth));
@@ -1079,7 +1084,6 @@
                     parts.push(String(navigator.doNotTrack));
                     parts.push(String(navigator.plugins.length));
 
-                    // --- Canvas fingerprint ---
                     try {
                         const canvas = document.createElement("canvas");
                         canvas.width = 240;
@@ -1098,7 +1102,6 @@
                         }
                     } catch {}
 
-                    // --- WebGL fingerprint ---
                     try {
                         const canvas = document.createElement("canvas");
                         const gl =
@@ -1129,7 +1132,6 @@
                 } catch {}
 
                 const raw = parts.join("||");
-
                 let hash;
                 try {
                     const buf = await crypto.subtle.digest(
@@ -1141,21 +1143,18 @@
                         .join("");
                 } catch {
                     let h = 0;
-                    for (let i = 0; i < raw.length; i++) {
+                    for (let i = 0; i < raw.length; i++)
                         h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
-                    }
                     hash =
                         "fp_" +
                         Math.abs(h).toString(16).padStart(8, "0") +
                         "_" +
                         raw.length.toString(16);
                 }
-
                 window.__voteus_fp = hash;
                 return hash;
             }
 
-            // ✅ NEW: capture human-readable fingerprint details for forensics
             function captureExtendedFingerprint() {
                 const details = {
                     userAgent: navigator.userAgent,
@@ -1264,7 +1263,6 @@
                         voterToken: getVoterToken(),
                         deviceHash,
                     }).toString();
-
                     const [cfg, cats, noms] = await Promise.all([
                         api("/api/config"),
                         api("/api/categories"),
@@ -1334,9 +1332,7 @@
                         liveStream = null;
                         $("live-pill").classList.add("hidden");
                         sseRetries++;
-                        if (sseRetries < 4) {
-                            setTimeout(connectLiveStream, 5000);
-                        }
+                        if (sseRetries < 4) setTimeout(connectLiveStream, 5000);
                     };
                 } catch (err) {
                     console.warn("[SSE]", err.message);
@@ -1470,9 +1466,12 @@
                     const total = list.reduce((s, n) => s + (n.votes || 0), 0);
                     const categoryVoted = list.some((n) => n.categoryVoted);
                     const votedNominee = list.find((n) => n.voted);
+                    const appealAllowed = list.some((n) => n.appealAllowed);
 
                     let badge;
-                    if (votedNominee) {
+                    if (appealAllowed) {
+                        badge = `<div class="cat-badge" style="background:rgba(16,185,129,0.15);color:#065f46;border-color:rgba(16,185,129,0.4);"><i class="ph-fill ph-arrow-clockwise"></i> Appeal approved — vote again</div>`;
+                    } else if (votedNominee) {
                         badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(votedNominee.name)}</div>`;
                     } else if (categoryVoted) {
                         const votedFor =
@@ -1487,12 +1486,12 @@
                     sec.className = "w-full";
                     sec.setAttribute("data-cat-id", cat.id);
                     sec.innerHTML = `
-      <div class="cat-header">
-        <h2>${escapeHtml(cat.name)}</h2>
-        ${badge}
-        <div class="rule"></div>
-      </div>
-      <div class="grid-tiles"></div>`;
+                        <div class="cat-header">
+                            <h2>${escapeHtml(cat.name)}</h2>
+                            ${badge}
+                            <div class="rule"></div>
+                        </div>
+                        <div class="grid-tiles"></div>`;
                     const grid = sec.querySelector(".grid-tiles");
                     list.forEach((n) => {
                         const eager = cardIndex < EAGER_COUNT;
@@ -1501,11 +1500,16 @@
                         const fallbackSrc = escapeHtml(placeholderImg(n.name));
                         const isVoted = !!n.voted;
                         const isCategoryVoted = !isVoted && !!n.categoryVoted;
+                        const appealRow = !!n.appealAllowed;
 
                         let ctaClass = "",
                             ctaIcon = "ph-check-circle",
                             ctaText = "Cast Vote";
-                        if (isVoted) {
+                        if (appealRow) {
+                            ctaClass = "appeal-allowed";
+                            ctaIcon = "ph-arrow-clockwise";
+                            ctaText = "Vote Again";
+                        } else if (isVoted) {
                             ctaClass = "voted";
                             ctaIcon = "ph-check";
                             ctaText = "Voted";
@@ -1518,18 +1522,18 @@
                         const el = document.createElement("div");
                         el.className = "card";
                         el.innerHTML = `
-        <img src="${escapeHtml(src)}" alt="${escapeHtml(n.name)}" width="700" height="700"
-             loading="${eager ? "eager" : "lazy"}" decoding="async"
-             ${eager ? 'fetchpriority="high"' : ""}
-             onerror="this.onerror=null;this.src='${fallbackSrc}';">
-        <div class="overlay">
-          <span class="code">${escapeHtml(n.code)}</span>
-          <h3 class="name">${escapeHtml(n.name)}</h3>
-          <button class="cta ${ctaClass}">
-            <i class="ph-fill ${ctaIcon}"></i>
-            ${ctaText}
-          </button>
-        </div>`;
+                            <img src="${escapeHtml(src)}" alt="${escapeHtml(n.name)}" width="700" height="700"
+                                 loading="${eager ? "eager" : "lazy"}" decoding="async"
+                                 ${eager ? 'fetchpriority="high"' : ""}
+                                 onerror="this.onerror=null;this.src='${fallbackSrc}';">
+                            <div class="overlay">
+                                <span class="code">${escapeHtml(n.code)}</span>
+                                <h3 class="name">${escapeHtml(n.name)}</h3>
+                                <button class="cta ${ctaClass}">
+                                    <i class="ph-fill ${ctaIcon}"></i>
+                                    ${ctaText}
+                                </button>
+                            </div>`;
                         const img = el.querySelector("img");
                         if (img.complete) img.classList.add("loaded");
                         else
@@ -1556,7 +1560,11 @@
                 const btn = $("profile-vote-btn");
                 btn.classList.remove("voted");
 
-                if (n.voted) {
+                if (n.appealAllowed) {
+                    btn.innerHTML =
+                        '<i class="ph-fill ph-arrow-clockwise"></i> Vote Again (Appeal Approved)';
+                    btn.disabled = false;
+                } else if (n.voted) {
                     btn.innerHTML =
                         '<i class="ph-fill ph-check"></i> You\'ve Voted for This Nominee';
                     btn.disabled = true;
@@ -1603,11 +1611,12 @@
 
             function proceedToVote() {
                 if (!currentNom) return;
-                if (currentNom.voted) {
+                if (currentNom.appealAllowed) {
+                    // Allow re-vote — bypass "already voted" checks
+                } else if (currentNom.voted) {
                     toast("You've already voted for " + currentNom.name, false);
                     return;
-                }
-                if (currentNom.categoryVoted) {
+                } else if (currentNom.categoryVoted) {
                     const votedFor =
                         currentNom.categoryVoteFor?.name || "another nominee";
                     toast(
@@ -1627,17 +1636,17 @@
                 $("vote-modal").classList.add("show");
             }
 
-            // ✅ UPDATED: sends userAgent + fingerprintDetails with the vote
-            //    so the server can store them for forensic reports.
             async function castVote() {
                 if (!currentNom) return;
-                if (currentNom.voted) {
-                    toast("You've already voted for this nominee", false);
-                    return;
-                }
-                if (currentNom.categoryVoted) {
-                    toast("You've already voted in this category", false);
-                    return;
+                if (!currentNom.appealAllowed) {
+                    if (currentNom.voted) {
+                        toast("You've already voted for this nominee", false);
+                        return;
+                    }
+                    if (currentNom.categoryVoted) {
+                        toast("You've already voted in this category", false);
+                        return;
+                    }
                 }
 
                 showVoteState("vote-loading");
@@ -1658,9 +1667,7 @@
                     showVoteState("vote-success");
                     fireConfetti();
 
-                    if (r.appealVote) {
-                        toast(`Appeal vote recorded ✓`);
-                    }
+                    if (r.appealVote) toast("Appeal vote recorded ✓");
 
                     try {
                         await refreshNominees();
