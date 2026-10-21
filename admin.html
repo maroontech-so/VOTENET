@@ -823,10 +823,10 @@
                                     Every export is cryptographically signed
                                     with a unique
                                     <strong>Report ID</strong> and a SHA-256
-                                    <strong>Signature</strong>. Financial data
-                                    is only included for Super Administrators.
-                                    Verify any report's authenticity with the
-                                    signature on its cover.
+                                    <strong>Signature</strong>. Reports contain
+                                    voting data only. Scan the QR code on the
+                                    signature page to verify authenticity
+                                    online.
                                 </div>
                             </div>
                             <div
@@ -1362,7 +1362,7 @@
                 $(id).classList.remove("show");
             }
 
-            /* ---------- LIVE UPDATES ---------- */
+            /* ---------- LIVE ---------- */
             function setLiveStatus(connected) {
                 const dot = $("live-dot");
                 const label = $("live-status");
@@ -1415,7 +1415,8 @@
                         liveStream = null;
                         setLiveStatus(false);
                         sseRetries++;
-                        if (sseRetries < 4) setTimeout(connectLiveStream, 5000);
+                        if (sseRetries < 4)
+                            setTimeout(connectLiveStream, 5000);
                     };
                 } catch (err) {
                     console.warn("[SSE]", err.message);
@@ -1436,8 +1437,9 @@
                 if (refreshing) return;
                 refreshing = true;
                 try {
-                    const activeTab =
-                        document.querySelector(".nav-item.active")?.dataset.tab;
+                    const activeTab = document.querySelector(
+                        ".nav-item.active",
+                    )?.dataset.tab;
                     if (!activeTab) return;
                     if (activeTab === "overview") await loadOverview();
                     else if (activeTab === "categories") await loadCategories();
@@ -1530,7 +1532,7 @@
                 $("sidebar-overlay").classList.add("hidden");
             }
 
-            /* ---------- DASHBOARD INIT ---------- */
+            /* ---------- INIT ---------- */
             async function showDashboard() {
                 const user = getAdmin();
                 if (!user) {
@@ -1611,7 +1613,9 @@
                             Number(stats.grossRevenue || 0).toLocaleString();
                         $("s-plat").innerText =
                             "KES " +
-                            Number(stats.platformRevenue || 0).toLocaleString();
+                            Number(
+                                stats.platformRevenue || 0,
+                            ).toLocaleString();
                         $("s-pending").innerText = Number(
                             stats.pendingPayments || 0,
                         ).toLocaleString();
@@ -1698,7 +1702,9 @@
 
                 const doEl = $("doughnutChart");
                 if (doEl) {
-                    const labels = data.categoryDistribution.map((c) => c.name);
+                    const labels = data.categoryDistribution.map(
+                        (c) => c.name,
+                    );
                     const values = data.categoryDistribution.map(
                         (c) => c.votes || 0,
                     );
@@ -2010,7 +2016,7 @@
                 }
             }
 
-            /* ---------- NOMINEES (sorted by votes DESC) ---------- */
+            /* ---------- NOMINEES ---------- */
             async function loadNominees() {
                 await refreshBase();
                 renderNomineeList();
@@ -2321,19 +2327,15 @@
                                 <div>
                                     <div class="font-semibold">${escapeHtml(a.display_name || a.username)} <span class="text-gray-400 text-xs font-normal">@${escapeHtml(a.username)}</span></div>
                                     <div class="text-xs text-gray-500">
-                                        ${
-                                            a.revoked
-                                                ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
-                                                : `Created ${new Date(a.created_at).toLocaleDateString()}`
-                                        }
+                                        ${a.revoked
+                                            ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
+                                            : `Created ${new Date(a.created_at).toLocaleDateString()}`}
                                     </div>
                                 </div>
                             </div>
-                            ${
-                                a.revoked
-                                    ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
-                                    : `<button onclick="revokeAdmin('${a.id}','${escapeHtml(a.username)}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`
-                            }
+                            ${a.revoked
+                                ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
+                                : `<button onclick="revokeAdmin('${a.id}','${escapeHtml(a.username)}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`}
                         </div>`);
                     }
                     list.innerHTML = rows.join("");
@@ -2426,7 +2428,7 @@
                 }
             }
 
-            /* ---------- EXPORT (available to all admins) ---------- */
+            /* ---------- EXPORT ---------- */
             async function downloadExport(kind) {
                 try {
                     const res = await fetch(`/api/admin/export/${kind}`, {

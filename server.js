@@ -12,6 +12,15 @@ const PDFDocument = require("pdfkit");
 const { v4: uuidv4 } = require("uuid");
 const db = require("./db");
 
+let QRCode = null;
+try {
+  QRCode = require("qrcode");
+} catch {
+  console.warn(
+    "[PDF] qrcode not installed — QR codes will be skipped. Run: npm install qrcode",
+  );
+}
+
 const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -41,7 +50,7 @@ const LEADERBOARD_ONCE_MS = 60 * 1000;
 const LEADERBOARD_1H_MS = 60 * 60 * 1000;
 const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000;
 const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000;
-const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000; // legacy compat
+const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000;
 const BOOST_VOTES = 50;
 const STALE_TX_MINUTES = 15;
 
@@ -192,9 +201,7 @@ async function initSchema() {
   }
 
   try {
-    const r = await db.exec(
-      "UPDATE nominees SET votes = 0 WHERE votes IS NULL",
-    );
+    const r = await db.exec("UPDATE nominees SET votes = 0 WHERE votes IS NULL");
     if (r && r.changes)
       console.log(`[Schema] Normalized ${r.changes} NULL votes row(s)`);
   } catch (e) {
@@ -477,7 +484,7 @@ app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
 });
 
 // ============================================================
-// REPORT HELPERS (used by /api/admin/export/*)
+// REPORT HELPERS
 // ============================================================
 function buildReportId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -485,9 +492,20 @@ function buildReportId() {
   return `EXP-${d}-${r}`;
 }
 
-function signReport(payload) {
-  const sortedKeys = Object.keys(payload).sort();
-  const canonical = sortedKeys.map((k) => `${k}=${payload[k]}`).join("&");
+function signReportTotals({
+  reportId,
+  generatedAtMs,
+  totalVotes,
+  categoryCount,
+  nomineeCount,
+}) {
+  const canonical = [
+    reportId,
+    generatedAtMs,
+    totalVotes,
+    categoryCount,
+    nomineeCount,
+  ].join("|");
   return crypto
     .createHash("sha256")
     .update(canonical + "|" + REPORT_SECRET)
@@ -523,6 +541,19 @@ function shareBar(percent, width = 20) {
   return "\u2588".repeat(filled) + "\u2591".repeat(width - filled);
 }
 
+function escapeAttr(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[c],
+  );
+}
+
+// ✅ Report data — NO financial fields. Only voting data + signature.
 async function loadReportData(req) {
   const isSuper = req.admin.role === "super";
   const reportId = buildReportId();
@@ -555,59 +586,13 @@ async function loadReportData(req) {
       .get()
   ).c;
 
-  const signedData = {
+  const signature = signReportTotals({
     reportId,
-    generatedAt,
-    generatedBy,
+    generatedAtMs: Date.parse(generatedAt),
     totalVotes,
     categoryCount: categories.length,
     nomineeCount: nominees.length,
-    uniqueVoters,
-    uniqueDevices,
-  };
-
-  let finance = null;
-  if (isSuper) {
-    const grossRevenue = (
-      await db
-        .prepare(
-          `SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE status='success'`,
-        )
-        .get()
-    ).t;
-    const successful = (
-      await db
-        .prepare(
-          `SELECT COUNT(*) as c FROM transactions WHERE status='success'`,
-        )
-        .get()
-    ).c;
-    const pending = (
-      await db
-        .prepare(
-          `SELECT COUNT(*) as c FROM transactions WHERE status='pending'`,
-        )
-        .get()
-    ).c;
-    const abandoned = (
-      await db
-        .prepare(
-          `SELECT COUNT(*) as c FROM transactions WHERE status='abandoned'`,
-        )
-        .get()
-    ).c;
-
-    finance = {
-      grossRevenue,
-      platformRevenue: grossRevenue * 0.1,
-      successful,
-      pending,
-      abandoned,
-    };
-    signedData.grossRevenue = grossRevenue;
-  }
-
-  const signature = signReport(signedData);
+  });
 
   const perCategory = categories.map((cat) => {
     const list = nominees.filter((n) => n.category_id === cat.id);
@@ -629,7 +614,6 @@ async function loadReportData(req) {
   });
 
   return {
-    isSuper,
     reportId,
     generatedAt,
     generatedBy,
@@ -639,14 +623,13 @@ async function loadReportData(req) {
     totalVotes,
     uniqueVoters,
     uniqueDevices,
-    finance,
     signature,
     perCategory,
   };
 }
 
 // ============================================================
-// PAYMENT / TRANSACTION ENGINE
+// PAYMENT ENGINE
 // ============================================================
 async function extendLeaderboardAccess(t, userId, durationMs) {
   const existing = await t.get(
@@ -677,9 +660,9 @@ async function completeTransaction(reference, receipt) {
               WHERE reference=? AND status='pending'`,
         args: [receipt, reference],
       });
-      if (Number(claimed.rowsAffected || 0) === 0) {
+      if (Number(claimed.rowsAffected || 0) === 0)
         return { ok: false, reason: "already_processed_or_not_pending" };
-      }
+
       const txRow = await t.get(
         "SELECT * FROM transactions WHERE reference = ?",
         [reference],
@@ -694,9 +677,10 @@ async function completeTransaction(reference, receipt) {
       if (txRow.type === "category_change") {
         const newCat = meta.newCategoryId;
         if (!newCat) throw new Error("Missing newCategoryId");
-        const target = await t.get("SELECT id FROM categories WHERE id = ?", [
-          newCat,
-        ]);
+        const target = await t.get(
+          "SELECT id FROM categories WHERE id = ?",
+          [newCat],
+        );
         if (!target) throw new Error("Target category no longer exists");
         await t.execute({
           sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
@@ -953,7 +937,7 @@ function interpretPayHeroStatus(payload) {
 }
 
 // ============================================================
-// IMAGE UPLOAD / SERVING
+// UPLOAD / IMAGES
 // ============================================================
 app.post(
   "/api/upload",
@@ -1015,7 +999,7 @@ app.get("/api/images/:id", async (req, res) => {
 });
 
 // ============================================================
-// PUBLIC INFO / HEALTH / CONFIG
+// HEALTH / CONFIG / PUBLIC DATA
 // ============================================================
 app.get("/api/health", async (req, res) => {
   let dbOk = true;
@@ -1058,6 +1042,76 @@ app.get("/api/config", (req, res) => {
       boost50: PRICES.boost_50,
     },
   });
+});
+
+app.get("/verify", (req, res) => {
+  const { r, s, v, c, n, t } = req.query;
+  const missing = !r || !s;
+  let valid = false;
+
+  if (!missing) {
+    const expected = signReportTotals({
+      reportId: String(r),
+      generatedAtMs: parseInt(t) || 0,
+      totalVotes: parseInt(v) || 0,
+      categoryCount: parseInt(c) || 0,
+      nomineeCount: parseInt(n) || 0,
+    });
+    valid = String(s).toUpperCase() === expected;
+  }
+
+  const bg = valid
+    ? "from-emerald-50 to-green-100"
+    : "from-red-50 to-rose-100";
+  const bubble = valid
+    ? "bg-emerald-100 text-emerald-600"
+    : "bg-red-100 text-red-600";
+  const icon = valid ? "✓" : "✗";
+  const title = valid ? "Report Verified" : "Verification Failed";
+  const subtitle = valid
+    ? "This report is authentic and matches our signing records."
+    : missing
+      ? "This verification link is incomplete."
+      : "The signature does not match. This report may have been tampered with.";
+
+  const details = missing
+    ? ""
+    : `
+    <div class="bg-gray-50 rounded-xl p-4 text-left space-y-2 mb-6">
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Report ID</span><span class="text-sm font-mono font-bold text-gray-900">${escapeAttr(r)}</span></div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Total Votes</span><span class="text-sm font-bold text-gray-900">${(parseInt(v) || 0).toLocaleString()}</span></div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Categories</span><span class="text-sm font-bold text-gray-900">${parseInt(c) || 0}</span></div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Participants</span><span class="text-sm font-bold text-gray-900">${parseInt(n) || 0}</span></div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Generated</span><span class="text-xs font-mono text-gray-700">${t ? new Date(parseInt(t)).toLocaleString() : "—"}</span></div>
+      <div class="flex justify-between"><span class="text-xs font-bold text-gray-500 uppercase">Status</span><span class="text-sm font-bold ${valid ? "text-emerald-600" : "text-red-600"}">${valid ? "✓ VALID" : "✗ INVALID"}</span></div>
+    </div>`;
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Verification · Voteus</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>* { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br ${bg} flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-8 text-center">
+    <div class="w-20 h-20 rounded-full ${bubble} flex items-center justify-center mx-auto mb-5 text-4xl font-black">${icon}</div>
+    <h1 class="text-2xl font-extrabold text-gray-900 mb-2">${title}</h1>
+    <p class="text-gray-500 mb-6">${subtitle}</p>
+    ${details}
+    <div class="text-xs text-gray-400 mt-6">
+      Verified by <strong>Voteus.io</strong>
+      · <a href="/" class="text-indigo-600 hover:underline">Back to site</a>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  res.type("html").send(html);
 });
 
 app.get("/api/categories", async (req, res) => {
@@ -1148,7 +1202,7 @@ app.get("/api/nominees/:code", async (req, res) => {
 });
 
 // ============================================================
-// AUTH: REGISTER / LOGIN
+// AUTH
 // ============================================================
 app.post(
   "/api/auth/register",
@@ -1198,11 +1252,7 @@ app.post(
           )
           .run(id, cleanName, cleanEmail, hash);
       } catch (insErr) {
-        if (
-          String(insErr.message || "")
-            .toLowerCase()
-            .includes("unique")
-        )
+        if (String(insErr.message || "").toLowerCase().includes("unique"))
           return res.status(409).json({
             error:
               "An account with this email already exists. Try signing in instead.",
@@ -1605,12 +1655,10 @@ app.post(
       .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
       .get(nominee.id);
     if (existing)
-      return res
-        .status(400)
-        .json({
-          error: "Boost already purchased — one per nominee.",
-          code: "ALREADY_BOOSTED",
-        });
+      return res.status(400).json({
+        error: "Boost already purchased — one per nominee.",
+        code: "ALREADY_BOOSTED",
+      });
     try {
       const r = await initiatePayment({
         type: "boost_50",
@@ -1643,12 +1691,10 @@ app.post(
 
     const { nomineeCode, voterToken, deviceHash } = req.body || {};
     if (!nomineeCode || !voterToken || !deviceHash)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Nominee code, voter token, and device fingerprint are required",
-        });
+      return res.status(400).json({
+        error:
+          "Nominee code, voter token, and device fingerprint are required",
+      });
     if (
       typeof deviceHash !== "string" ||
       deviceHash.length < 8 ||
@@ -1711,11 +1757,7 @@ app.post(
       });
     } catch (e) {
       console.error("[Vote]", e.message);
-      if (
-        String(e.message || "")
-          .toLowerCase()
-          .includes("unique")
-      )
+      if (String(e.message || "").toLowerCase().includes("unique"))
         return res.status(409).json({
           error: "This device has already voted in this category.",
           code: "DEVICE_ALREADY_VOTED",
@@ -1777,7 +1819,7 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
 });
 
 // ============================================================
-// TRANSACTION STATUS
+// TRANSACTIONS
 // ============================================================
 app.get("/api/transactions/status/:reference", async (req, res) => {
   const tx = await db
@@ -1975,7 +2017,7 @@ app.post("/api/payhero/callback", (req, res) => {
 });
 
 // ============================================================
-// ADMIN: STATS (works for all admins, super gets finance)
+// ADMIN: STATS (dashboard — still shows revenue to super)
 // ============================================================
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
@@ -2027,9 +2069,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
     ).t;
     const pending = (
       await db
-        .prepare(
-          `SELECT COUNT(*) as c FROM transactions WHERE status='pending'`,
-        )
+        .prepare(`SELECT COUNT(*) as c FROM transactions WHERE status='pending'`)
         .get()
     ).c;
     const successful = (
@@ -2062,7 +2102,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: CHARTS (perCategory + dailyByCategory)
+// ADMIN: CHARTS
 // ============================================================
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
@@ -2176,7 +2216,7 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: CATEGORIES CRUD
+// ADMIN: CATEGORIES
 // ============================================================
 app.post("/api/admin/categories", adminAuth, async (req, res) => {
   const { name } = req.body || {};
@@ -2231,7 +2271,7 @@ app.delete("/api/admin/categories/:id", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: NOMINEES CRUD
+// ADMIN: NOMINEES
 // ============================================================
 app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   const { name, categoryId, img, desc, email, password } = req.body || {};
@@ -2306,7 +2346,7 @@ app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: TRANSACTIONS / LOGS
+// ADMIN: TRANSACTIONS / LOGS (super only)
 // ============================================================
 app.get("/api/admin/transactions", superAuth, async (req, res) => {
   res.json(
@@ -2331,7 +2371,7 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
 });
 
 // ============================================================
-// ADMIN: SIGNED EXPORTS (available to BOTH admin and super)
+// ADMIN: SIGNED EXPORTS — NO FINANCIAL DATA
 // ============================================================
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
@@ -2357,9 +2397,9 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     add("Metric,Value");
     add(`Total Votes,${r.totalVotes.toLocaleString()}`);
     add(`Categories,${r.categories.length}`);
-    add(`Nominees,${r.nominees.length}`);
+    add(`Participants,${r.nominees.length}`);
     add(
-      `Avg Votes per Nominee,${(r.nominees.length > 0 ? r.totalVotes / r.nominees.length : 0).toFixed(2)}`,
+      `Avg Votes per Participant,${(r.nominees.length > 0 ? r.totalVotes / r.nominees.length : 0).toFixed(2)}`,
     );
     add(`Unique Voters,${r.uniqueVoters.toLocaleString()}`);
     add(`Unique Devices,${r.uniqueDevices.toLocaleString()}`);
@@ -2372,7 +2412,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
       add(bar);
       add("");
       if (!cat.nominees.length) {
-        add("No nominees in this category.");
+        add("No participants in this category.");
         add("");
         continue;
       }
@@ -2389,20 +2429,6 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
           ].join(","),
         );
       }
-      add("");
-    }
-
-    if (r.isSuper && r.finance) {
-      add(bar);
-      add("FINANCIAL SUMMARY (Super Admin only)");
-      add(bar);
-      add("");
-      add("Metric,Value");
-      add(`Gross Revenue (KES),${r.finance.grossRevenue.toFixed(2)}`);
-      add(`Platform Revenue 10% (KES),${r.finance.platformRevenue.toFixed(2)}`);
-      add(`Successful Payments,${r.finance.successful}`);
-      add(`Pending Payments,${r.finance.pending}`);
-      add(`Abandoned Transactions,${r.finance.abandoned}`);
       add("");
     }
 
@@ -2436,6 +2462,30 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
 app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
+
+    const verifyUrl =
+      `https://gala.voteus.xyz/verify?` +
+      `r=${encodeURIComponent(r.reportId)}` +
+      `&s=${r.signature}` +
+      `&v=${r.totalVotes}` +
+      `&c=${r.categories.length}` +
+      `&n=${r.nominees.length}` +
+      `&t=${Date.parse(r.generatedAt)}`;
+
+    let qrBuf = null;
+    if (QRCode) {
+      try {
+        qrBuf = await QRCode.toBuffer(verifyUrl, {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 240,
+          color: { dark: "#1d1d1f", light: "#ffffff" },
+        });
+      } catch (e) {
+        console.warn("[PDF] QR generation failed:", e.message);
+      }
+    }
+
     const filename = `votenet-report-${r.reportId}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -2454,72 +2504,98 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     const PAGE_W = 507;
     const LEFT = 44;
     const RIGHT = 551;
+    const BOTTOM = 780;
 
     const footer = () => {
-      const y = doc.page.height - 30;
+      const y = doc.page.height - 26;
       doc
-        .fontSize(7)
+        .fontSize(6.5)
         .fillColor(GRAY)
         .text(
-          `Voteus.io  |  Report ${r.reportId}  |  Signature ${r.signature.slice(0, 16)}\u2026`,
+          `Voteus.io  ·  Report ${r.reportId}  ·  Sig ${r.signature.slice(0, 14)}…`,
           LEFT,
           y,
           { width: PAGE_W, align: "left", lineBreak: false },
         );
-      doc
-        .fontSize(7)
-        .fillColor(GRAY)
-        .text(`Generated ${formatDateTime(r.generatedAt)}`, LEFT, y, {
-          width: PAGE_W,
-          align: "right",
-          lineBreak: false,
-        });
     };
 
-    // ─── COVER ───
+    const ensureSpace = (needed) => {
+      if (doc.y + needed > BOTTOM - 20) {
+        footer();
+        doc.addPage();
+        return true;
+      }
+      return false;
+    };
+
+    const drawColHeaders = () => {
+      const hy = doc.y;
+      doc.fillColor(GRAY).fontSize(7).font("Helvetica-Bold");
+      doc.text("RANK", LEFT + 4, hy, { width: 36 });
+      doc.text("PARTICIPANT", LEFT + 44, hy, { width: 170 });
+      doc.text("CODE", LEFT + 218, hy, { width: 100 });
+      doc.text("VOTES", LEFT + 320, hy, { width: 60, align: "right" });
+      doc.text("SHARE", LEFT + 384, hy, { width: 55, align: "right" });
+      doc.text("DISTRIBUTION", LEFT + 445, hy, { width: 62 });
+      doc.y = hy + 10;
+      doc
+        .strokeColor(BORDER)
+        .lineWidth(0.5)
+        .moveTo(LEFT, doc.y)
+        .lineTo(RIGHT, doc.y)
+        .stroke();
+      doc.y += 3;
+    };
+
+    // ============================================================
+    // PAGE 1 — Cover + Executive Summary (no finance)
+    // ============================================================
     doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
-    doc.moveDown(2);
+
+    doc.moveDown(1.2);
     doc
       .fillColor(INDIGO)
-      .fontSize(11)
+      .fontSize(10)
       .font("Helvetica-Bold")
-      .text("VOTEUS.IO", { align: "center", characterSpacing: 4 });
-    doc.moveDown(0.3);
+      .text("VOTEUS.IO", { align: "center", characterSpacing: 5 });
+    doc.moveDown(0.2);
     doc
       .fillColor(GRAY)
-      .fontSize(9)
+      .fontSize(8)
       .font("Helvetica")
       .text("Official Event Voting Platform", { align: "center" });
-    doc.moveDown(3);
+
+    doc.moveDown(1);
     doc
       .fillColor(DARK)
-      .fontSize(30)
+      .fontSize(26)
       .font("Helvetica-Bold")
-      .text("Official Results Report", { align: "center", lineGap: -4 });
-    doc.moveDown(0.4);
+      .text("Official Results Report", { align: "center", lineGap: -2 });
+    doc.moveDown(0.2);
     doc
       .fillColor(INDIGO)
-      .fontSize(13)
+      .fontSize(12)
       .font("Helvetica")
-      .text("Gala Awards 2026 \u2014 MKUPLC", { align: "center" });
-    doc.moveDown(2);
+      .text("Gala Awards 2026  ·  MKUPLC", { align: "center" });
 
-    const boxY = doc.y;
+    doc.moveDown(1);
+    const metaBoxY = doc.y;
+    const metaBoxH = 108;
     doc
-      .roundedRect(LEFT + 60, boxY, PAGE_W - 120, 132, 12)
+      .roundedRect(LEFT + 50, metaBoxY, PAGE_W - 100, metaBoxH, 10)
       .lineWidth(1)
       .strokeColor(BORDER)
       .stroke();
     doc
       .fillColor(INDIGO_LT)
-      .roundedRect(LEFT + 60, boxY, PAGE_W - 120, 30, 12)
+      .roundedRect(LEFT + 50, metaBoxY, PAGE_W - 100, 24, 10)
       .fill();
     doc
       .fillColor(INDIGO)
-      .fontSize(9)
+      .fontSize(8)
       .font("Helvetica-Bold")
-      .text("REPORT METADATA", LEFT + 60, boxY + 10, {
-        width: PAGE_W - 120,
+      .text("REPORT METADATA", LEFT + 50, metaBoxY + 8, {
+        width: PAGE_W - 100,
         align: "center",
         characterSpacing: 2,
       });
@@ -2527,72 +2603,51 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     const meta = [
       ["Report ID", r.reportId],
       ["Generated", formatDateTime(r.generatedAt)],
-      ["Generated By", `${r.generatedBy} (${r.generatedByRole})`],
+      ["Prepared By", `${r.generatedBy} (${r.generatedByRole})`],
       ["Signature", r.signature],
     ];
-    let my = boxY + 42;
+    let my = metaBoxY + 32;
     for (const [k, v] of meta) {
       doc
         .fillColor(GRAY)
-        .fontSize(8)
+        .fontSize(7)
         .font("Helvetica")
-        .text(k.toUpperCase(), LEFT + 76, my, { width: 90 });
+        .text(k.toUpperCase(), LEFT + 66, my, {
+          width: 78,
+          characterSpacing: 0.5,
+        });
       doc
         .fillColor(DARK)
         .fontSize(9)
         .font("Helvetica-Bold")
-        .text(String(v), LEFT + 170, my, { width: PAGE_W - 200 });
-      my += 20;
+        .text(String(v), LEFT + 158, my, {
+          width: PAGE_W - 218,
+          ellipsis: true,
+        });
+      my += 18;
     }
+    doc.y = metaBoxY + metaBoxH + 14;
 
-    doc.moveDown(5);
-    const stampY = doc.y + 20;
-    doc
-      .roundedRect(LEFT + 120, stampY, PAGE_W - 240, 60, 10)
-      .lineWidth(2)
-      .strokeColor(GREEN)
-      .stroke();
-    doc
-      .fillColor(GREEN)
-      .fontSize(16)
-      .font("Helvetica-Bold")
-      .text("\u2714", LEFT + 120, stampY + 10, {
-        width: PAGE_W - 240,
-        align: "center",
-      });
-    doc
-      .fillColor(GREEN)
-      .fontSize(11)
-      .text("VERIFIED AUTHENTIC", LEFT + 120, stampY + 32, {
-        width: PAGE_W - 240,
-        align: "center",
-        characterSpacing: 2,
-      });
-
-    footer();
-    doc.addPage();
-
-    // ─── SUMMARY ───
     doc
       .fillColor(INDIGO)
-      .fontSize(18)
+      .fontSize(14)
       .font("Helvetica-Bold")
       .text("Executive Summary");
-    doc.moveDown(0.3);
+    doc.moveDown(0.2);
     doc
       .strokeColor(INDIGO)
       .lineWidth(2)
       .moveTo(LEFT, doc.y)
-      .lineTo(LEFT + 60, doc.y)
+      .lineTo(LEFT + 50, doc.y)
       .stroke();
-    doc.moveDown(1);
+    doc.moveDown(0.7);
 
     const summaryItems = [
       ["Total Votes", r.totalVotes.toLocaleString()],
       ["Categories", String(r.categories.length)],
-      ["Nominees", String(r.nominees.length)],
+      ["Participants", String(r.nominees.length)],
       [
-        "Avg Votes / Nominee",
+        "Avg Votes / Participant",
         r.nominees.length > 0
           ? (r.totalVotes / r.nominees.length).toFixed(1)
           : "0",
@@ -2601,13 +2656,14 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       ["Unique Devices", r.uniqueDevices.toLocaleString()],
     ];
     const cardW = (PAGE_W - 12) / 2;
-    const cardH = 56;
+    const cardH = 52;
+    const gridStartY = doc.y;
     for (let i = 0; i < summaryItems.length; i++) {
       const [label, value] = summaryItems[i];
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = LEFT + col * (cardW + 12);
-      const y = doc.y + row * (cardH + 8);
+      const y = gridStartY + row * (cardH + 8);
       doc
         .roundedRect(x, y, cardW, cardH, 8)
         .lineWidth(1)
@@ -2617,111 +2673,85 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .fillColor(GRAY)
         .fontSize(7)
         .font("Helvetica")
-        .text(label.toUpperCase(), x + 12, y + 10, {
+        .text(label.toUpperCase(), x + 12, y + 9, {
           width: cardW - 24,
-          characterSpacing: 1,
+          characterSpacing: 0.5,
         });
       doc
         .fillColor(DARK)
-        .fontSize(18)
+        .fontSize(17)
         .font("Helvetica-Bold")
-        .text(String(value), x + 12, y + 24, { width: cardW - 24 });
+        .text(String(value), x + 12, y + 22, { width: cardW - 24 });
     }
-    doc.y += Math.ceil(summaryItems.length / 2) * (cardH + 8) + 16;
-
-    if (r.isSuper && r.finance) {
-      doc
-        .fillColor(INDIGO)
-        .fontSize(14)
-        .font("Helvetica-Bold")
-        .text("Financial Summary");
-      doc.moveDown(0.4);
-      const finItems = [
-        ["Gross Revenue", `KES ${r.finance.grossRevenue.toLocaleString()}`],
-        ["Platform (10%)", `KES ${r.finance.platformRevenue.toLocaleString()}`],
-        ["Successful", String(r.finance.successful)],
-        ["Pending", String(r.finance.pending)],
-        ["Abandoned", String(r.finance.abandoned)],
-      ];
-      for (const [k, v] of finItems) {
-        const y = doc.y;
-        doc
-          .fillColor(GRAY)
-          .fontSize(9)
-          .font("Helvetica")
-          .text(k, LEFT, y, { width: 200 });
-        doc
-          .fillColor(DARK)
-          .fontSize(10)
-          .font("Helvetica-Bold")
-          .text(v, LEFT + 200, y, {
-            width: PAGE_W - 200,
-            align: "right",
-          });
-        doc.y = y + 14;
-      }
-    }
+    doc.y =
+      gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
 
     footer();
-    doc.addPage();
 
-    // ─── PER-CATEGORY ───
+    // ============================================================
+    // RESULTS BY CATEGORY
+    // ============================================================
+    doc.addPage();
+    doc
+      .fillColor(INDIGO)
+      .fontSize(14)
+      .font("Helvetica-Bold")
+      .text("Results by Category");
+    doc.moveDown(0.2);
+    doc
+      .strokeColor(INDIGO)
+      .lineWidth(2)
+      .moveTo(LEFT, doc.y)
+      .lineTo(LEFT + 50, doc.y)
+      .stroke();
+    doc.moveDown(0.7);
+
+    if (!r.perCategory.length) {
+      doc
+        .fillColor(GRAY)
+        .fontSize(10)
+        .font("Helvetica-Oblique")
+        .text("No categories have been created yet.", LEFT + 6, doc.y);
+      doc.moveDown(1);
+    }
+
     for (const cat of r.perCategory) {
-      if (doc.y > 660) {
-        footer();
-        doc.addPage();
-      }
+      ensureSpace(110);
+
       const headY = doc.y;
-      doc.roundedRect(LEFT, headY, PAGE_W, 34, 6).fill(INDIGO_LT);
+      doc.roundedRect(LEFT, headY, PAGE_W, 28, 5).fill(INDIGO_LT);
       doc
         .fillColor(INDIGO)
-        .fontSize(13)
+        .fontSize(12)
         .font("Helvetica-Bold")
-        .text(cat.name, LEFT + 12, headY + 9, { width: PAGE_W - 130 });
+        .text(cat.name, LEFT + 10, headY + 8, { width: PAGE_W - 130 });
       doc
         .fillColor(INDIGO)
-        .fontSize(9)
+        .fontSize(8)
         .font("Helvetica")
-        .text(`${cat.totalVotes.toLocaleString()} votes`, LEFT, headY + 12, {
-          width: PAGE_W - 12,
+        .text(`${cat.totalVotes.toLocaleString()} votes`, LEFT, headY + 10, {
+          width: PAGE_W - 10,
           align: "right",
         });
-      doc.y = headY + 44;
+      doc.y = headY + 36;
 
       if (!cat.nominees.length) {
         doc
           .fillColor(GRAY)
-          .fontSize(10)
+          .fontSize(9)
           .font("Helvetica-Oblique")
-          .text("No nominees in this category.", LEFT, doc.y, {
-            width: PAGE_W,
-          });
-        doc.moveDown(1);
+          .text("No participants in this category.", LEFT + 6, doc.y);
+        doc.moveDown(0.7);
         continue;
       }
 
-      doc.fillColor(GRAY).fontSize(8).font("Helvetica-Bold");
-      const y0 = doc.y;
-      doc.text("RANK", LEFT, y0, { width: 40 });
-      doc.text("NOMINEE", LEFT + 44, y0, { width: 160 });
-      doc.text("CODE", LEFT + 210, y0, { width: 100 });
-      doc.text("VOTES", LEFT + 320, y0, { width: 60, align: "right" });
-      doc.text("SHARE", LEFT + 388, y0, { width: 50, align: "right" });
-      doc.text("DISTRIBUTION", LEFT + 445, y0, { width: 62 });
-      doc.moveDown(0.6);
-      doc
-        .strokeColor(BORDER)
-        .lineWidth(0.5)
-        .moveTo(LEFT, doc.y)
-        .lineTo(RIGHT, doc.y)
-        .stroke();
-      doc.moveDown(0.3);
+      drawColHeaders();
 
       for (const n of cat.nominees) {
-        if (doc.y > 750) {
-          footer();
-          doc.addPage();
+        if (ensureSpace(24)) {
+          drawColHeaders();
         }
+
         const yy = doc.y;
         const rankColor =
           n.rank === 1
@@ -2739,13 +2769,14 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
               : n.rank === 3
                 ? "#9A3412"
                 : "#9CA3AF";
-        doc.circle(LEFT + 12, yy + 6, 9).fill(rankColor);
+
+        doc.circle(LEFT + 11, yy + 5, 8).fill(rankColor);
         doc
           .fillColor(rankText)
-          .fontSize(8)
+          .fontSize(7)
           .font("Helvetica-Bold")
-          .text(String(n.rank), LEFT + 3, yy + 3, {
-            width: 18,
+          .text(String(n.rank), LEFT + 3, yy + 2, {
+            width: 16,
             align: "center",
           });
 
@@ -2753,17 +2784,17 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           .fillColor(DARK)
           .fontSize(9)
           .font("Helvetica-Bold")
-          .text(n.name, LEFT + 44, yy + 1, { width: 160, ellipsis: true });
+          .text(n.name, LEFT + 44, yy, { width: 170, ellipsis: true });
         doc
           .fillColor(GRAY)
-          .fontSize(8)
+          .fontSize(7)
           .font("Helvetica")
-          .text(n.code, LEFT + 210, yy + 1, { width: 100 });
+          .text(n.code, LEFT + 218, yy + 1, { width: 100 });
         doc
           .fillColor(DARK)
           .fontSize(9)
           .font("Helvetica-Bold")
-          .text(n.votes.toLocaleString(), LEFT + 320, yy + 1, {
+          .text(n.votes.toLocaleString(), LEFT + 320, yy, {
             width: 60,
             align: "right",
           });
@@ -2771,130 +2802,173 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           .fillColor(INDIGO)
           .fontSize(9)
           .font("Helvetica-Bold")
-          .text(n.percent.toFixed(1) + "%", LEFT + 388, yy + 1, {
-            width: 50,
+          .text(n.percent.toFixed(1) + "%", LEFT + 384, yy, {
+            width: 55,
             align: "right",
           });
 
         const barX = LEFT + 445;
         const barW = 62;
-        const barY = yy + 3;
-        doc.roundedRect(barX, barY, barW, 5, 2.5).fill("#F3F4F6");
+        const barY = yy + 4;
+        doc.roundedRect(barX, barY, barW, 4, 2).fill("#F3F4F6");
         const fillW = Math.max(2, (Math.max(n.percent, 0.5) / 100) * barW);
-        doc.roundedRect(barX, barY, fillW, 5, 2.5).fill(INDIGO);
+        doc.roundedRect(barX, barY, fillW, 4, 2).fill(INDIGO);
 
-        doc.moveDown(0.65);
+        doc.y = yy + 18;
       }
 
-      doc.moveDown(0.4);
+      doc.moveDown(0.3);
       doc
         .strokeColor(BORDER)
         .lineWidth(0.5)
         .moveTo(LEFT, doc.y)
         .lineTo(RIGHT, doc.y)
         .stroke();
-      doc.moveDown(1);
+      doc.moveDown(0.8);
     }
 
     footer();
+
+    // ============================================================
+    // SIGNATURE PAGE — QR-verifiable
+    // ============================================================
     doc.addPage();
 
-    // ─── SIGNATURE PAGE ───
     doc
       .fillColor(INDIGO)
-      .fontSize(20)
+      .fontSize(18)
       .font("Helvetica-Bold")
-      .text("System Signature", { align: "center" });
-    doc.moveDown(0.5);
+      .text("Verification & Signature", { align: "center" });
+    doc.moveDown(0.3);
     doc
       .fillColor(GRAY)
-      .fontSize(10)
+      .fontSize(9)
       .font("Helvetica")
-      .text("This report is cryptographically signed for verification.", {
+      .text("Scan the QR code to verify this report online.", {
         align: "center",
       });
-    doc.moveDown(2);
+    doc.moveDown(1);
+
+    if (qrBuf) {
+      const qrSize = 190;
+      const qrX = (doc.page.width - qrSize) / 2;
+      const qrY = doc.y;
+      doc
+        .roundedRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20, 10)
+        .lineWidth(2)
+        .strokeColor(INDIGO)
+        .stroke();
+      doc.image(qrBuf, qrX, qrY, { width: qrSize, height: qrSize });
+      doc.y = qrY + qrSize + 20;
+      doc
+        .fillColor(INDIGO)
+        .fontSize(9)
+        .font("Helvetica-Bold")
+        .text("Scan to verify", { align: "center" });
+      doc.moveDown(1);
+    } else {
+      doc
+        .fillColor(GRAY)
+        .fontSize(10)
+        .font("Helvetica")
+        .text("QR code unavailable — use the verification block below.", {
+          align: "center",
+        });
+      doc.moveDown(1);
+    }
 
     const sigBoxY = doc.y;
+    const sigBoxH = 190;
     doc
-      .roundedRect(LEFT + 40, sigBoxY, PAGE_W - 80, 190, 14)
-      .lineWidth(2)
+      .roundedRect(LEFT + 20, sigBoxY, PAGE_W - 40, sigBoxH, 10)
+      .lineWidth(1.5)
       .strokeColor(INDIGO)
       .stroke();
     doc
       .fillColor(INDIGO_LT)
-      .roundedRect(LEFT + 40, sigBoxY, PAGE_W - 80, 34, 14)
+      .roundedRect(LEFT + 20, sigBoxY, PAGE_W - 40, 26, 10)
       .fill();
     doc
       .fillColor(INDIGO)
-      .fontSize(10)
+      .fontSize(8)
       .font("Helvetica-Bold")
-      .text("VERIFICATION BLOCK", LEFT + 40, sigBoxY + 12, {
-        width: PAGE_W - 80,
+      .text("VERIFICATION BLOCK", LEFT + 20, sigBoxY + 9, {
+        width: PAGE_W - 40,
         align: "center",
         characterSpacing: 2,
       });
 
-    let sy = sigBoxY + 50;
+    let sy = sigBoxY + 38;
     const sigItems = [
       ["Report ID", r.reportId],
       ["Signature", r.signature],
       ["Generated", formatDateTime(r.generatedAt)],
-      ["Generated By", `${r.generatedBy} (${r.generatedByRole})`],
-      ["Status", "\u2714 VALID"],
+      ["Prepared By", `${r.generatedBy} (${r.generatedByRole})`],
+      ["Status", "\u2713 VERIFIED AUTHENTIC"],
     ];
     for (const [k, v] of sigItems) {
       doc
         .fillColor(GRAY)
-        .fontSize(8)
+        .fontSize(7)
         .font("Helvetica")
-        .text(k.toUpperCase(), LEFT + 60, sy, {
-          width: 110,
-          characterSpacing: 1,
+        .text(k.toUpperCase(), LEFT + 40, sy, {
+          width: 100,
+          characterSpacing: 0.5,
         });
       doc
         .fillColor(k === "Status" ? GREEN : DARK)
-        .fontSize(10)
+        .fontSize(9)
         .font("Helvetica-Bold")
-        .text(String(v), LEFT + 180, sy - 1, { width: PAGE_W - 260 });
-      sy += 26;
+        .text(String(v), LEFT + 145, sy, {
+          width: PAGE_W - 170,
+          ellipsis: true,
+        });
+      sy += 28;
     }
+    doc.y = sigBoxY + sigBoxH + 14;
 
-    doc.y = sigBoxY + 220;
     doc
       .fillColor(GRAY)
-      .fontSize(9)
+      .fontSize(8)
       .font("Helvetica")
       .text(
-        "To verify this report's authenticity, contact the system administrator " +
-          "and provide the Report ID and Signature above. The signature is a " +
-          "SHA-256 hash of the report data combined with a server secret. Any " +
-          "modification to the numbers would invalidate the signature.",
+        "The signature above is a SHA-256 hash of the report totals combined " +
+          "with a server secret. Any modification to the totals would " +
+          "invalidate the signature. Scan the QR code to verify online.",
         LEFT,
         doc.y,
-        { width: PAGE_W, align: "center", lineGap: 3 },
+        { width: PAGE_W, align: "center", lineGap: 2 },
       );
+    doc.moveDown(0.8);
 
-    doc.moveDown(2);
     doc
       .fillColor(INDIGO)
-      .fontSize(10)
-      .font("Helvetica-Bold")
-      .text("Signed:", { align: "center" });
-    doc.moveDown(0.3);
-    doc
-      .fillColor(DARK)
-      .fontSize(12)
-      .font("Helvetica-Bold")
-      .text("Voteus.io Automated Reporting System", { align: "center" });
-    doc.moveDown(0.3);
+      .fontSize(7)
+      .font("Helvetica")
+      .text(verifyUrl, LEFT, doc.y, {
+        width: PAGE_W,
+        align: "center",
+        ellipsis: true,
+      });
+    doc.moveDown(1.2);
+
     doc
       .fillColor(GRAY)
       .fontSize(9)
       .font("Helvetica")
-      .text(`Generated ${formatDateTime(r.generatedAt)}`, {
-        align: "center",
-      });
+      .text("Signed by", { align: "center" });
+    doc.moveDown(0.2);
+    doc
+      .fillColor(DARK)
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text("Voteus.io Automated Reporting System", { align: "center" });
+    doc.moveDown(0.2);
+    doc
+      .fillColor(GRAY)
+      .fontSize(8)
+      .font("Helvetica")
+      .text(formatDateTime(r.generatedAt), { align: "center" });
 
     footer();
     doc.end();
@@ -2907,7 +2981,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
 });
 
 // ============================================================
-// SEO / STATIC / NOMINEE META / HERO IMAGES
+// SEO / STATIC / NOMINEE META
 // ============================================================
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
@@ -3066,7 +3140,7 @@ app.get("/nominee", sendHTMLNoCache("nominee.html"));
 app.get("/admin", sendHTMLNoCache("admin.html"));
 
 // ============================================================
-// CLEANUP / RECONCILE JOBS
+// CLEANUP JOBS
 // ============================================================
 setInterval(async () => {
   try {
@@ -3250,7 +3324,8 @@ const server = app.listen(PORT, async () => {
   console.log(
     `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,
   );
-  console.log(`  Exports:     /api/admin/export/{csv,pdf} · all admins`);
+  console.log(`  Exports:     /api/admin/export/{csv,pdf} · no financial data`);
+  console.log(`  QR verify:   /verify · ${QRCode ? "enabled" : "text-only"}`);
   console.log(`  Leaderboard: 1m=10 · 1h=25 · 12h=50 · 24h=100`);
   console.log(
     `  Boost:       +${BOOST_VOTES} votes = KES ${PRICES.boost_50} (once)`,
