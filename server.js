@@ -185,7 +185,6 @@ server.listen(PORT, () =>
 );
 require("dotenv").config();
 const express = require("express");
-const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
