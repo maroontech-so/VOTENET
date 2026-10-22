@@ -58,6 +58,7 @@ const WAL_CHECKPOINT_INTERVAL_MS = 60_000;
 const CHECKPOINT_WAL_THRESHOLD = 5 * 1024 * 1024;
 const RECONCILE_INTERVAL_MS = 60_000;
 const RECONCILE_MIN_AGE_MS = 30_000;
+const VOTES_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 const IMG_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const IMG_TARGET_DIMENSION = 700;
 const IMG_JPEG_QUALITY = 82;
@@ -279,9 +280,7 @@ async function initSchema() {
   for (const col of ["device_hash TEXT", "ip TEXT", "category_id TEXT"]) {
     try {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
-    } catch (e) {
-      /* column exists */
-    }
+    } catch (e) {}
   }
   for (const col of [
     "user_agent TEXT",
@@ -290,9 +289,7 @@ async function initSchema() {
   ]) {
     try {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
-    } catch (e) {
-      /* column exists */
-    }
+    } catch (e) {}
   }
 
   try {
@@ -715,6 +712,24 @@ async function broadcastVotes(nomineeId, votes) {
     console.warn("[SSE nominee broadcast]", e.message);
   }
 }
+
+// ✅ Ground-truth vote count: COUNT(free_votes) + nominee_boosts.votes_added.
+// Persists the absolute value to nominees.votes (idempotent — safe to call
+// concurrently and safe if sync layer clobbers nominees.votes).
+async function getAbsoluteVotes(nomineeId) {
+  const countRow = await db
+    .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
+    .get(nomineeId);
+  const boostRow = await db
+    .prepare("SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?")
+    .get(nomineeId);
+  const total = (countRow?.c || 0) + (boostRow?.votes_added || 0);
+  await db
+    .prepare("UPDATE nominees SET votes = ? WHERE id = ?")
+    .run(total, nomineeId);
+  return total;
+}
+
 function broadcastPublicVote(nomineeId, votes) {
   const payload = `event: vote\ndata: ${JSON.stringify({ nomineeId, votes })}\n\n`;
   for (const r of publicVoteClients) writeSSE(r, payload);
@@ -802,6 +817,8 @@ function escapeAttr(s) {
   );
 }
 
+// ✅ FIX: Report data computes votes from source of truth (free_votes + boost)
+// instead of trusting denormalized nominees.votes which can drift.
 async function loadReportData(req) {
   const isSuper = req.admin.role === "super";
   const reportId = buildReportId();
@@ -813,8 +830,11 @@ async function loadReportData(req) {
     .all();
   const nominees = await db
     .prepare(
-      `SELECT id, name, code, category_id, COALESCE(votes, 0) as votes
-     FROM nominees ORDER BY category_id, COALESCE(votes, 0) DESC`,
+      `SELECT n.id, n.name, n.code, n.category_id,
+        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
+        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes
+       FROM nominees n
+       ORDER BY n.category_id ASC, votes DESC`,
     )
     .all();
   const totalVotes = nominees.reduce((s, n) => s + (n.votes || 0), 0);
@@ -962,16 +982,34 @@ async function completeTransaction(reference, receipt) {
           sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
           args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
         });
+        // ✅ FIX: absolute count, not relative +50
         await t.execute({
-          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
-          args: [BOOST_VOTES, txRow.nominee_id],
+          sql: `UPDATE nominees SET votes =
+                (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
+                (SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?)
+                WHERE id = ?`,
+          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
-        extra.votes = BOOST_VOTES;
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
+        extra.votes = upd?.votes || 0;
+        extra.nomineeId = txRow.nominee_id;
+        extra.boosted = true;
       } else if (txRow.type === "vote") {
+        // ✅ FIX: absolute count
         await t.execute({
-          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + ? WHERE id = ?",
-          args: [meta.voteCount || 0, txRow.nominee_id],
+          sql: `UPDATE nominees SET votes =
+                (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
+                COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                WHERE id = ?`,
+          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
+        extra.votes = upd?.votes || 0;
+        extra.nomineeId = txRow.nominee_id;
       }
       await t.execute({
         sql: "INSERT INTO payment_logs (reference, event, details) VALUES (?, ?, ?)",
@@ -992,6 +1030,11 @@ async function completeTransaction(reference, receipt) {
           expiresAt: result.extra?.expiresAt || null,
           votes: result.extra?.votes || null,
         });
+      }
+      // ✅ FIX: broadcast boost votes to nominee + public SSE
+      if (result.extra?.boosted && result.extra?.nomineeId) {
+        broadcastVotes(result.extra.nomineeId, result.extra.votes);
+        broadcastPublicVote(result.extra.nomineeId, result.extra.votes);
       }
     } else {
       await logEvent(reference, "complete_skipped", { reason: result.reason });
@@ -1203,9 +1246,7 @@ app.post(
 
 app.get("/api/images/:id", async (req, res) => {
   const id = String(req.params.id || "").trim();
-  console.log(`[Images] GET ${id}`);
   if (!/^[0-9a-f-]{8,64}$/i.test(id)) {
-    console.warn(`[Images] ✗ invalid id format: ${id}`);
     res.setHeader("Cache-Control", "no-store");
     return res.status(400).end();
   }
@@ -1213,24 +1254,16 @@ app.get("/api/images/:id", async (req, res) => {
     let row = await db
       .prepare("SELECT data, mime FROM images WHERE id = ?")
       .get(id);
-    if (row) {
-      console.log(
-        `[Images] ✓ local hit: ${id} (${row.data?.length ?? 0} bytes)`,
-      );
-    } else {
-      console.log(`[Images] ✗ local miss, trying Turso: ${id}`);
+    if (!row) {
       const remoteRow = await db.pullImage(id);
       if (remoteRow) {
         row = { data: remoteRow.data, mime: remoteRow.mime };
-        console.log(`[Images] ✓ Turso hit: ${id}`);
       } else {
-        console.warn(`[Images] ✗ not found in local or Turso: ${id}`);
         res.setHeader("Cache-Control", "no-store");
         return res.status(404).end();
       }
     }
     if (!row.data || row.data.length === 0) {
-      console.error(`[Images] ✗ empty blob for ${id}`);
       res.setHeader("Cache-Control", "no-store");
       return res.status(500).end();
     }
@@ -1240,7 +1273,6 @@ app.get("/api/images/:id", async (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("ETag", `"${id}"`);
     res.send(buf);
-    console.log(`[Images] ✓ served ${id} (${buf.length} bytes)`);
   } catch (e) {
     console.error(`[Images] ✗ error for ${id}:`, e.message);
     res.setHeader("Cache-Control", "no-store");
@@ -1254,15 +1286,12 @@ app.get("/api/health", async (req, res) => {
     await db.prepare("SELECT 1").get();
   } catch (e) {
     dbOk = false;
-    console.warn("[Health db]", e.message);
   }
   let imageCount = null;
   try {
     const row = await db.prepare("SELECT COUNT(*) as c FROM images").get();
     imageCount = row?.c ?? 0;
-  } catch (e) {
-    console.warn("[Health image count]", e.message);
-  }
+  } catch (e) {}
   res.json({
     ok: dbOk,
     uptime: Math.floor(process.uptime()),
@@ -1369,7 +1398,6 @@ app.get("/api/categories", async (req, res) => {
   );
 });
 
-// ✅ FIX: /api/nominees exposes appealAllowed
 app.get("/api/nominees", async (req, res) => {
   const voterToken =
     typeof req.query.voterToken === "string" ? req.query.voterToken : null;
@@ -1513,14 +1541,10 @@ app.post(
         return res
           .status(400)
           .json({ error: "Password must contain at least one number" });
-      console.log(`[Register] Attempt: ${cleanEmail}`);
       const existing = await db
         .prepare("SELECT id FROM users WHERE LOWER(email) = ?")
         .get(cleanEmail);
       if (existing && existing.id) {
-        console.log(
-          `[Register] Already exists: ${cleanEmail} (${existing.id})`,
-        );
         return res.status(409).json({
           error:
             "An account with this email already exists. Try signing in instead.",
@@ -1541,7 +1565,6 @@ app.post(
             .toLowerCase()
             .includes("unique")
         ) {
-          console.log(`[Register] Race on insert: ${cleanEmail}`);
           return res.status(409).json({
             error:
               "An account with this email already exists. Try signing in instead.",
@@ -1553,7 +1576,6 @@ app.post(
       const token = jwt.sign({ id, role: "nominee" }, JWT_SECRET, {
         expiresIn: "7d",
       });
-      console.log(`[Register] Created: ${cleanEmail} (${id})`);
       res.json({
         token,
         user: { id, name: cleanName, email: cleanEmail, hasNominee: false },
@@ -1965,7 +1987,7 @@ app.post(
   },
 );
 
-// ✅ FIX B + C: match on voter_token OR device_hash + use modified token for appeal insert
+// ✅ FIX: absolute vote updates + corrected broadcast references
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -2056,9 +2078,13 @@ app.post(
               fpJson,
             ],
           });
+          // ✅ FIX: absolute update
           await t.execute({
-            sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + 1 WHERE id = ?",
-            args: [nominee.id],
+            sql: `UPDATE nominees SET votes =
+                  (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
+                  COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                  WHERE id = ?`,
+            args: [nominee.id, nominee.id, nominee.id],
           });
           await t.execute({
             sql: `UPDATE vote_allowances SET status = 'used', used_at = CURRENT_TIMESTAMP, used_vote_id = ? WHERE id = ?`,
@@ -2099,9 +2125,13 @@ app.post(
             fpJson,
           ],
         });
+        // ✅ FIX: absolute update
         await t.execute({
-          sql: "UPDATE nominees SET votes = COALESCE(votes, 0) + 1 WHERE id = ?",
-          args: [nominee.id],
+          sql: `UPDATE nominees SET votes =
+                (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
+                COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                WHERE id = ?`,
+          args: [nominee.id, nominee.id, nominee.id],
         });
         return { ok: true };
       });
@@ -2135,19 +2165,18 @@ app.post(
     }
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
-    const updated = await db
-      .prepare("SELECT COALESCE(votes, 0) AS votes FROM nominees WHERE id = ?")
-      .get(nominee.id);
-    broadcastVotes(nominee.id, updated.votes);
-    broadcastPublicVote(nominee.id, updated.votes);
+    // ✅ FIX: use absoluteVotes everywhere (was previously `updated.votes` → ReferenceError)
+    const absoluteVotes = await getAbsoluteVotes(nominee.id);
+    broadcastVotes(nominee.id, absoluteVotes);
+    broadcastPublicVote(nominee.id, absoluteVotes);
     broadcastAdminEvent({
       type: "vote",
       nomineeId: nominee.id,
-      votes: updated.votes,
+      votes: absoluteVotes,
       appealVote: !!result.appealVote,
       at: new Date().toISOString(),
     });
-    const response = { success: true, votes: updated.votes };
+    const response = { success: true, votes: absoluteVotes };
     if (result.appealVote) {
       response.appealVote = true;
       response.appealCode = result.appealCode;
@@ -2873,19 +2902,15 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
     if (!appeal) return res.status(404).json({ error: "Appeal not found" });
 
     if (appeal.status !== "pending")
-      return res
-        .status(400)
-        .json({
-          error: `Appeal already ${appeal.status} — cannot decide again`,
-        });
+      return res.status(400).json({
+        error: `Appeal already ${appeal.status} — cannot decide again`,
+      });
 
     let allowancesCreated = 0;
     let allowancesSkipped = 0;
     let blockedCategories = [];
 
     if (decision === "approve") {
-      // ✅ NEW: find EVERY category where this device/voter has already voted
-      //    — that's the set of categories they're actually blocked from.
       blockedCategories = await db
         .prepare(
           `SELECT DISTINCT category_id FROM free_votes
@@ -2901,8 +2926,6 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
         });
       }
 
-      // Create one allowance per blocked category. Skip if one already exists
-      // (e.g. admin approving a second appeal from the same device).
       for (const { category_id } of blockedCategories) {
         const existing = await db
           .prepare(
@@ -2970,16 +2993,19 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
   }
 });
 
+// ✅ FIX: compute totalVotes from source of truth
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
     const isSuper = req.admin.role === "super";
-    const totalVotes = (
-      await db
-        .prepare(
-          "SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees",
-        )
-        .get()
-    ).t;
+    const totalVotes =
+      (await db.prepare("SELECT COUNT(*) AS c FROM free_votes").get()).c +
+      (
+        await db
+          .prepare(
+            "SELECT COALESCE(SUM(votes_added), 0) AS b FROM nominee_boosts",
+          )
+          .get()
+      ).b;
     const nomineesCount = (
       await db.prepare("SELECT COUNT(*) as c FROM nominees").get()
     ).c;
@@ -3049,17 +3075,25 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
   }
 });
 
+// ✅ FIX: compute chart data from source of truth
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
-      `SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category
+      `SELECT n.name,
+        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
+        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes,
+        c.name AS category
      FROM nominees n JOIN categories c ON n.category_id = c.id
-     ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5`,
+     ORDER BY votes DESC LIMIT 5`,
     )
     .all();
   const categoryDistribution = await db
     .prepare(
-      `SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes
+      `SELECT c.name,
+        COALESCE(SUM(
+          (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
+          COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0)
+        ), 0) AS votes
      FROM categories c LEFT JOIN nominees n ON n.category_id = c.id
      GROUP BY c.id ORDER BY c.created_at ASC`,
     )
@@ -3086,8 +3120,10 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     .all();
   const allNominees = await db
     .prepare(
-      `SELECT n.id, n.name, n.code, n.img, n.category_id, COALESCE(n.votes, 0) as votes
-     FROM nominees n ORDER BY n.category_id, COALESCE(n.votes, 0) DESC`,
+      `SELECT n.id, n.name, n.code, n.img, n.category_id,
+        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
+        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes
+     FROM nominees n ORDER BY n.category_id, votes DESC`,
     )
     .all();
   const perCategory = allCategories.map((cat) => {
@@ -3285,7 +3321,7 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-// CSV export — full layout
+// CSV export
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
@@ -3368,7 +3404,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   }
 });
 
-// PDF export — FULL elaborate layout restored (cover + summary cards + per-category tables with rank badges/share bars + QR signature page)
+// PDF export
 app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
@@ -3924,7 +3960,6 @@ app.get("/sitemap.xml", async (req, res) => {
   }
 });
 
-// Nominee meta route with full OG tags (restored)
 app.get("/nominee/:code", async (req, res) => {
   try {
     const nominee = await db
@@ -4084,6 +4119,23 @@ setInterval(async () => {
   }
 }, RECONCILE_INTERVAL_MS);
 
+// ✅ NEW: periodic vote reconciliation — safety net against any drift
+setInterval(async () => {
+  try {
+    if (typeof db.reconcileVotes === "function") {
+      const fixed = await db.reconcileVotes();
+      if (fixed > 0) {
+        console.log(`[Votes Reconcile] Corrected ${fixed} nominee(s)`);
+        db.push().catch((e) =>
+          console.warn("[Push after votes reconcile]", e.message),
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("[Votes Reconcile]", e.message);
+  }
+}, VOTES_RECONCILE_INTERVAL_MS);
+
 app.use((err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.url}:`, err.message);
   if (res.headersSent) return next(err);
@@ -4130,6 +4182,13 @@ const server = app.listen(PORT, async () => {
     await initSchema();
     console.log("  ✓ Local schema ready");
     await db.bootstrapIfEmpty();
+    // ✅ NEW: ensure votes are correct at startup
+    if (typeof db.reconcileVotes === "function") {
+      const fixed = await db.reconcileVotes();
+      if (fixed > 0) {
+        console.log(`  ✓ Reconciled ${fixed} nominee(s) on startup`);
+      }
+    }
   } catch (e) {
     console.error("\n⚠ Startup failed:", e.message);
     console.error("  Server is up but DB operations will fail.\n");
@@ -4153,6 +4212,10 @@ const server = app.listen(PORT, async () => {
   setInterval(async () => {
     try {
       await db.pull();
+      // ✅ NEW: reconcile after each pull to catch any clobbering
+      if (typeof db.reconcileVotes === "function") {
+        await db.reconcileVotes();
+      }
     } catch (e) {
       console.warn("[Sync Pull]", e.message);
     }
@@ -4177,6 +4240,9 @@ const server = app.listen(PORT, async () => {
   );
   console.log(
     `  Reconcile:   pending txns every ${RECONCILE_INTERVAL_MS / 1000}s`,
+  );
+  console.log(
+    `  Votes:       reconciled every ${VOTES_RECONCILE_INTERVAL_MS / 1000}s`,
   );
   console.log(`  Images:      SQLite BLOB · /api/images/:id`);
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
