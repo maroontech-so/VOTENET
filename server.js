@@ -280,7 +280,9 @@ async function initSchema() {
   for (const col of ["device_hash TEXT", "ip TEXT", "category_id TEXT"]) {
     try {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
-    } catch (e) {}
+    } catch (e) {
+      /* column exists */
+    }
   }
   for (const col of [
     "user_agent TEXT",
@@ -289,14 +291,48 @@ async function initSchema() {
   ]) {
     try {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
-    } catch (e) {}
+    } catch (e) {
+      /* column exists */
+    }
   }
 
+  // ── CRITICAL FIX ──────────────────────────────────────────────
+  // Device/category uniqueness must EXCLUDE appeal votes so approved
+  // re-votes succeed even when the original device vote exists.
+  // Old index caused approved appeal votes to fail with UNIQUE constraint.
   try {
+    await db.exec(`DROP INDEX IF EXISTS idx_fv_device_cat`);
     await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
-      ON free_votes(device_hash, category_id) WHERE device_hash IS NOT NULL`);
+      ON free_votes(device_hash, category_id)
+      WHERE device_hash IS NOT NULL AND is_appeal = 0`);
+    console.log("[Schema] ✓ idx_fv_device_cat (non-appeal only)");
   } catch (e) {
-    console.warn("[Schema] idx_fv_device_cat:", e.message);
+    console.error(`[Schema] idx_fv_device_cat failed: ${e.message}`);
+    // Fallback: log existing duplicates so admin can clean them up
+    try {
+      const dups = await db
+        .prepare(
+          `SELECT device_hash, category_id, COUNT(*) AS n
+           FROM free_votes
+           WHERE device_hash IS NOT NULL AND is_appeal = 0
+           GROUP BY device_hash, category_id
+           HAVING n > 1
+           LIMIT 10`,
+        )
+        .all();
+      if (dups.length) {
+        console.error(
+          `[Schema] Found ${dups.length} device+category duplicate(s) — admin cleanup needed before index can be created`,
+        );
+        for (const d of dups) {
+          console.error(
+            `  device=${d.device_hash?.slice(0, 12)}… category=${d.category_id} count=${d.n}`,
+          );
+        }
+      }
+    } catch (de) {
+      console.warn("[Schema] dup check:", de.message);
+    }
   }
 
   try {
@@ -713,9 +749,9 @@ async function broadcastVotes(nomineeId, votes) {
   }
 }
 
-// ✅ Ground-truth vote count: COUNT(free_votes) + nominee_boosts.votes_added.
-// Persists the absolute value to nominees.votes (idempotent — safe to call
-// concurrently and safe if sync layer clobbers nominees.votes).
+// Ground-truth vote count: COUNT(free_votes) + nominee_boosts.votes_added.
+// Persists the absolute value to nominees.votes (idempotent — safe if sync
+// layer clobbers nominees.votes).
 async function getAbsoluteVotes(nomineeId) {
   const countRow = await db
     .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
@@ -817,7 +853,7 @@ function escapeAttr(s) {
   );
 }
 
-// ✅ FIX: Report data computes votes from source of truth (free_votes + boost)
+// Report data computes votes from source of truth (free_votes + boost)
 // instead of trusting denormalized nominees.votes which can drift.
 async function loadReportData(req) {
   const isSuper = req.admin.role === "super";
@@ -982,7 +1018,7 @@ async function completeTransaction(reference, receipt) {
           sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
           args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
         });
-        // ✅ FIX: absolute count, not relative +50
+        // Absolute count — immune to pull races
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -990,14 +1026,15 @@ async function completeTransaction(reference, receipt) {
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
-        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
-          txRow.nominee_id,
-        ]);
+        const upd = await t.get(
+          "SELECT votes FROM nominees WHERE id = ?",
+          [txRow.nominee_id],
+        );
         extra.votes = upd?.votes || 0;
         extra.nomineeId = txRow.nominee_id;
         extra.boosted = true;
       } else if (txRow.type === "vote") {
-        // ✅ FIX: absolute count
+        // Absolute count
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -1005,9 +1042,10 @@ async function completeTransaction(reference, receipt) {
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
-        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
-          txRow.nominee_id,
-        ]);
+        const upd = await t.get(
+          "SELECT votes FROM nominees WHERE id = ?",
+          [txRow.nominee_id],
+        );
         extra.votes = upd?.votes || 0;
         extra.nomineeId = txRow.nominee_id;
       }
@@ -1031,7 +1069,7 @@ async function completeTransaction(reference, receipt) {
           votes: result.extra?.votes || null,
         });
       }
-      // ✅ FIX: broadcast boost votes to nominee + public SSE
+      // Broadcast boost votes to nominee + public SSE
       if (result.extra?.boosted && result.extra?.nomineeId) {
         broadcastVotes(result.extra.nomineeId, result.extra.votes);
         broadcastPublicVote(result.extra.nomineeId, result.extra.votes);
@@ -1304,6 +1342,8 @@ app.get("/api/health", async (req, res) => {
       public: publicVoteClients.size,
       admins: adminStreamClients.size,
     },
+    syncQueue: db.getQueueSize ? db.getQueueSize() : null,
+    pushFailures: db.getPushFailures ? db.getPushFailures() : null,
   });
 });
 
@@ -1987,7 +2027,6 @@ app.post(
   },
 );
 
-// ✅ FIX: absolute vote updates + corrected broadcast references
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -2078,7 +2117,7 @@ app.post(
               fpJson,
             ],
           });
-          // ✅ FIX: absolute update
+          // Absolute count
           await t.execute({
             sql: `UPDATE nominees SET votes =
                   (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -2125,7 +2164,7 @@ app.post(
             fpJson,
           ],
         });
-        // ✅ FIX: absolute update
+        // Absolute count
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -2165,7 +2204,7 @@ app.post(
     }
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
-    // ✅ FIX: use absoluteVotes everywhere (was previously `updated.votes` → ReferenceError)
+    // Use ABSOLUTE count from free_votes + boost (ground truth)
     const absoluteVotes = await getAbsoluteVotes(nominee.id);
     broadcastVotes(nominee.id, absoluteVotes);
     broadcastPublicVote(nominee.id, absoluteVotes);
@@ -2993,7 +3032,7 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
   }
 });
 
-// ✅ FIX: compute totalVotes from source of truth
+// totalVotes computed from source of truth (free_votes + boosts)
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
     const isSuper = req.admin.role === "super";
@@ -3075,7 +3114,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
   }
 });
 
-// ✅ FIX: compute chart data from source of truth
+// Chart data computed from source of truth
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
@@ -3290,11 +3329,18 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   });
 });
 
+// Delete nominee — also cleans up related rows to avoid orphans
 app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
   await db
     .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
     .run(req.params.id);
+  await db
+    .prepare("DELETE FROM nominee_boosts WHERE nominee_id = ?")
+    .run(req.params.id);
   await db.prepare("DELETE FROM nominees WHERE id = ?").run(req.params.id);
+  db.push().catch((e) =>
+    console.warn("[Push after nominee delete]", e.message),
+  );
   broadcastAdminEvent({ type: "nominee:delete", nomineeId: req.params.id });
   res.json({ success: true });
 });
@@ -3321,7 +3367,6 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-// CSV export
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
@@ -3404,7 +3449,6 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   }
 });
 
-// PDF export
 app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
@@ -4119,7 +4163,7 @@ setInterval(async () => {
   }
 }, RECONCILE_INTERVAL_MS);
 
-// ✅ NEW: periodic vote reconciliation — safety net against any drift
+// Vote count reconciliation — safety net against any drift
 setInterval(async () => {
   try {
     if (typeof db.reconcileVotes === "function") {
@@ -4182,7 +4226,7 @@ const server = app.listen(PORT, async () => {
     await initSchema();
     console.log("  ✓ Local schema ready");
     await db.bootstrapIfEmpty();
-    // ✅ NEW: ensure votes are correct at startup
+    // Ensure votes are correct at startup
     if (typeof db.reconcileVotes === "function") {
       const fixed = await db.reconcileVotes();
       if (fixed > 0) {
@@ -4212,7 +4256,7 @@ const server = app.listen(PORT, async () => {
   setInterval(async () => {
     try {
       await db.pull();
-      // ✅ NEW: reconcile after each pull to catch any clobbering
+      // Reconcile after each pull to catch any clobbering
       if (typeof db.reconcileVotes === "function") {
         await db.reconcileVotes();
       }

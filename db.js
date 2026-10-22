@@ -9,6 +9,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const LOCAL_DB_PATH = path.join(DATA_DIR, "voting-local.db");
 
+/* ---------- local database (source of truth for vote counts) ---------- */
 const local = new Database(LOCAL_DB_PATH);
 local.pragma("journal_mode = WAL");
 local.pragma("synchronous = NORMAL");
@@ -24,17 +25,26 @@ local.exec(`
   );
 `);
 
+/* ---------- cloud client (backup) ---------- */
 const remote = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
+/* ---------- push failure tracking ---------- */
+let _pushFailures = 0;
+let _lastPushError = null;
+
+function getPushFailures() {
+  return { count: _pushFailures, lastError: _lastPushError };
+}
+
+/* ---------- helpers ---------- */
 function isWrite(sql) {
   const s = sql.trim().toUpperCase();
   return /^(INSERT|UPDATE|DELETE|REPLACE)/.test(s);
 }
 
-// Idempotent rewrite: INSERT → INSERT OR IGNORE (safer than OR REPLACE for retries)
 function makeIdempotent(sql) {
   const trimmed = sql.trim();
   if (/^INSERT\s+OR\s+(REPLACE|IGNORE)/i.test(trimmed)) return trimmed;
@@ -45,10 +55,15 @@ function makeIdempotent(sql) {
 }
 
 function serializeArg(a) {
-  if (Buffer.isBuffer(a)) return { __buf: a.toString("base64") };
-  if (a instanceof Uint8Array) return { __buf: Buffer.from(a).toString("base64") };
+  if (Buffer.isBuffer(a)) {
+    return { __buf: a.toString("base64") };
+  }
+  if (a instanceof Uint8Array) {
+    return { __buf: Buffer.from(a).toString("base64") };
+  }
   return a;
 }
+
 function deserializeArg(a) {
   if (a && typeof a === "object" && typeof a.__buf === "string") {
     return Buffer.from(a.__buf, "base64");
@@ -61,7 +76,8 @@ function enqueue(sql, args) {
   try {
     const normalized = makeIdempotent(sql);
     const serializable = (args || []).map(serializeArg);
-    local.prepare("INSERT INTO _sync_queue (sql, args) VALUES (?, ?)")
+    local
+      .prepare("INSERT INTO _sync_queue (sql, args) VALUES (?, ?)")
       .run(normalized, JSON.stringify(serializable));
   } catch (e) {
     console.error("[Queue]", e.message);
@@ -71,14 +87,19 @@ function enqueue(sql, args) {
 function prepare(sql) {
   const stmt = local.prepare(sql);
   return {
-    async get(...args) { return stmt.get(...args) || null; },
-    async all(...args) { return stmt.all(...args); },
+    async get(...args) {
+      return stmt.get(...args) || null;
+    },
+    async all(...args) {
+      return stmt.all(...args);
+    },
     async run(...args) {
       const r = stmt.run(...args);
       enqueue(sql, args);
       return {
         changes: Number(r.changes || 0),
-        lastInsertRowid: r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null,
+        lastInsertRowid:
+          r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null,
       };
     },
   };
@@ -97,7 +118,8 @@ async function tx(fn) {
       enqueue(sql, args || []);
       return {
         rowsAffected: Number(r.changes || 0),
-        lastInsertRowid: r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null,
+        lastInsertRowid:
+          r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null,
       };
     },
     get: async (sql, args) => {
@@ -114,7 +136,11 @@ async function tx(fn) {
     local.exec("COMMIT");
     return out;
   } catch (e) {
-    try { local.exec("ROLLBACK"); } catch (rb) { console.error("[tx rollback]", rb.message); }
+    try {
+      local.exec("ROLLBACK");
+    } catch (rb) {
+      console.error("[tx rollback]", rb.message);
+    }
     throw e;
   }
 }
@@ -126,10 +152,13 @@ async function tx(fn) {
 async function push() {
   let pushed = 0;
   const MAX_PER_RUN = 500;
+
   while (pushed < MAX_PER_RUN) {
-    const row = local.prepare(
-      "SELECT id, sql, args, attempts FROM _sync_queue ORDER BY id ASC LIMIT 1"
-    ).get();
+    const row = local
+      .prepare(
+        "SELECT id, sql, args, attempts FROM _sync_queue ORDER BY id ASC LIMIT 1",
+      )
+      .get();
     if (!row) break;
 
     const rawArgs = row.args ? JSON.parse(row.args) : [];
@@ -139,55 +168,79 @@ async function push() {
       await remote.execute({ sql: row.sql, args });
       local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
       pushed++;
+      _pushFailures = 0;
+      _lastPushError = null;
     } catch (e) {
       const msg = String(e.message || "");
-      if (msg.includes("UNIQUE constraint failed") || msg.includes("SQLITE_CONSTRAINT")) {
-        console.warn(`[Push] Dropping row ${row.id} — already exists`);
+      _lastPushError = msg;
+
+      if (
+        msg.includes("UNIQUE constraint failed") ||
+        msg.includes("SQLITE_CONSTRAINT")
+      ) {
+        console.warn(`[Push] Dropping row ${row.id} — already exists in cloud`);
         local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
         continue;
       }
-      if (msg.includes("syntax error") || msg.includes("no such table") || msg.includes("no such column")) {
-        console.error(`[Push] Dropping row ${row.id} — unrecoverable: ${msg}`);
+
+      if (
+        msg.includes("syntax error") ||
+        msg.includes("no such table") ||
+        msg.includes("no such column")
+      ) {
+        console.error(
+          `[Push] Dropping row ${row.id} — unrecoverable SQL: ${msg}`,
+        );
+        console.error(`       SQL: ${row.sql}`);
         local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
         continue;
       }
+
       const attempts = (row.attempts || 0) + 1;
       if (attempts >= 5) {
-        console.error(`[Push] Dropping row ${row.id} after ${attempts} attempts: ${msg}`);
+        console.error(
+          `[Push] Dropping row ${row.id} after ${attempts} attempts: ${msg}`,
+        );
+        console.error(`       SQL: ${row.sql}`);
         local.prepare("DELETE FROM _sync_queue WHERE id = ?").run(row.id);
         continue;
       }
-      local.prepare("UPDATE _sync_queue SET attempts = ? WHERE id = ?").run(attempts, row.id);
+      local
+        .prepare("UPDATE _sync_queue SET attempts = ? WHERE id = ?")
+        .run(attempts, row.id);
+      _pushFailures++;
       console.warn(`[Push] Transient failure (attempt ${attempts}): ${msg}`);
       break;
     }
   }
+
   return { pushed };
 }
 
 /**
  * Pull from Turso.
  *
- * CRITICAL DESIGN:
- * - `nominees`: UPSERT that updates metadata (name, img, desc, category_id, code)
- *   but NEVER touches `votes`. This preserves local vote counts.
- * - `free_votes`, `transactions`, `users`, and status-bearing tables: INSERT OR IGNORE
- *   (append-only / local-status-authoritative). Never overwrites existing rows.
+ * DESIGN:
+ * - `nominees`: UPSERT updates metadata (name, code, img, desc, category_id)
+ *   but NEVER touches `votes`. This preserves locally-accrued vote counts
+ *   regardless of what the cloud's denormalized `votes` column says.
+ * - `free_votes`, `transactions`, `users`, `nominee_boosts`, etc.: INSERT OR IGNORE
+ *   — append-only / local-status-authoritative. Never overwrites existing rows.
  * - `categories`, `admins`, `ip_lookup_cache`: INSERT OR REPLACE (safe config sync).
  * - `images`: skipped (lazy-loaded via pullImage).
- *
- * After the pull, `reconcileVotes()` re-derives `nominees.votes` from
- * `free_votes` count + `nominee_boosts`. This is the ground truth.
  */
 async function pull() {
-  // Config tables — safe to fully replace
   const REPLACE_TABLES = ["categories", "admins", "ip_lookup_cache"];
-
-  // Append-only / local-status-authoritative — never overwrite local rows
   const IGNORE_TABLES = [
-    "users", "free_votes", "transactions", "leaderboard_access",
-    "nominee_boosts", "payment_logs", "vote_reports",
-    "vote_appeals", "vote_allowances",
+    "users",
+    "free_votes",
+    "transactions",
+    "leaderboard_access",
+    "nominee_boosts",
+    "payment_logs",
+    "vote_reports",
+    "vote_appeals",
+    "vote_allowances",
   ];
 
   let pulled = 0;
@@ -241,7 +294,9 @@ async function pull() {
       const cols = res.columns;
       const updateCols = cols.filter((c) => c !== "id" && c !== "votes");
       if (updateCols.length > 0) {
-        const updateClause = updateCols.map((c) => `${c} = excluded.${c}`).join(", ");
+        const updateClause = updateCols
+          .map((c) => `${c} = excluded.${c}`)
+          .join(", ");
         const sql = `INSERT INTO nominees (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})
           ON CONFLICT(id) DO UPDATE SET ${updateClause}`;
         const stmt = local.prepare(sql);
@@ -263,30 +318,46 @@ async function pull() {
 }
 
 /**
- * Reconcile `nominees.votes` = COUNT(free_votes) + nominee_boosts.votes_added.
- * This is the source of truth for vote counts. Runs after pull and on bootstrap.
- * Queues absolute-value UPDATEs to Turso so cloud stays consistent.
+ * Reconcile nominees.votes = COUNT(free_votes) + nominee_boosts.votes_added.
+ * Ground truth. Queues absolute-value UPDATEs to Turso so cloud stays consistent.
  */
 async function reconcileVotes() {
   try {
-    const mismatched = local.prepare(`
+    const mismatched = local
+      .prepare(
+        `
       SELECT n.id,
         (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
         COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS expected
       FROM nominees n
-      WHERE n.votes !=
+      WHERE COALESCE(n.votes, -1) !=
         (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
         COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0)
-    `).all();
+    `,
+      )
+      .all();
 
     if (!mismatched.length) return 0;
 
-    const updateLocal = local.prepare("UPDATE nominees SET votes = ? WHERE id = ?");
-    for (const { id, expected } of mismatched) {
-      updateLocal.run(expected, id);
-      enqueue("UPDATE nominees SET votes = ? WHERE id = ?", [expected, id]);
-    }
-    console.log(`[Reconcile] Corrected votes for ${mismatched.length} nominee(s)`);
+    const updateLocal = local.prepare(
+      "UPDATE nominees SET votes = ? WHERE id = ?",
+    );
+    const enqueueUpdate = local.prepare(
+      "INSERT INTO _sync_queue (sql, args) VALUES (?, ?)",
+    );
+    const runUpdate = local.transaction((rows) => {
+      for (const { id, expected } of rows) {
+        updateLocal.run(expected, id);
+        enqueueUpdate.run(
+          "UPDATE nominees SET votes = ? WHERE id = ?",
+          JSON.stringify([expected, id]),
+        );
+      }
+    });
+    runUpdate(mismatched);
+    console.log(
+      `[Reconcile] Corrected votes for ${mismatched.length} nominee(s)`,
+    );
     return mismatched.length;
   } catch (e) {
     console.warn("[Reconcile]", e.message);
@@ -304,10 +375,15 @@ async function pullImage(id) {
     const row = res.rows[0];
     const vals = res.columns.map((c) => row[c]);
     const obj = Object.fromEntries(res.columns.map((c, i) => [c, vals[i]]));
+
     const data = Buffer.isBuffer(obj.data) ? obj.data : Buffer.from(obj.data);
-    local.prepare(
-      "INSERT OR REPLACE INTO images (id, data, mime, size, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).run(obj.id, data, obj.mime, obj.size, obj.created_at);
+
+    local
+      .prepare(
+        "INSERT OR REPLACE INTO images (id, data, mime, size, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(obj.id, data, obj.mime, obj.size, obj.created_at);
+
     return { ...obj, data };
   } catch (e) {
     console.warn("[pullImage]", e.message);
@@ -320,8 +396,12 @@ async function pullImage(id) {
    ================================================================ */
 
 async function verifyConnection() {
-  if (!process.env.TURSO_DATABASE_URL) throw new Error("TURSO_DATABASE_URL is not set in .env");
-  if (!process.env.TURSO_AUTH_TOKEN) throw new Error("TURSO_AUTH_TOKEN is not set in .env");
+  if (!process.env.TURSO_DATABASE_URL) {
+    throw new Error("TURSO_DATABASE_URL is not set in .env");
+  }
+  if (!process.env.TURSO_AUTH_TOKEN) {
+    throw new Error("TURSO_AUTH_TOKEN is not set in .env");
+  }
   console.log(`  Turso URL: ${process.env.TURSO_DATABASE_URL.slice(0, 45)}…`);
   await remote.execute("SELECT 1 AS ok");
   console.log("  ✓ Turso cloud reachable");
@@ -345,16 +425,51 @@ async function ensureRemoteSchema() {
     `CREATE TABLE IF NOT EXISTS vote_appeals (id TEXT PRIMARY KEY, appeal_code TEXT UNIQUE NOT NULL, report_code TEXT NOT NULL, device_hash TEXT NOT NULL, voter_token TEXT NOT NULL, category_id TEXT NOT NULL, category_name TEXT, reason TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, decided_at TEXT, decided_by TEXT, decision_note TEXT, UNIQUE(report_code, category_id))`,
     `CREATE TABLE IF NOT EXISTS vote_allowances (id TEXT PRIMARY KEY, appeal_code TEXT NOT NULL, device_hash TEXT NOT NULL, voter_token TEXT NOT NULL, category_id TEXT NOT NULL, status TEXT DEFAULT 'active', created_at TEXT DEFAULT CURRENT_TIMESTAMP, used_at TEXT, used_vote_id TEXT, UNIQUE(device_hash, category_id))`,
   ];
+
   let created = 0;
   for (const sql of statements) {
     try {
       await remote.execute(sql);
       created++;
     } catch (e) {
-      if (!e.message.includes("already exists")) console.warn(`[Remote Schema] ${e.message}`);
+      if (!e.message.includes("already exists")) {
+        console.warn(`[Remote Schema] ${e.message}`);
+      }
     }
   }
-  console.log(`  ✓ Remote schema verified (${created}/${statements.length})`);
+
+  // Ensure free_votes has all required columns on remote (older DBs may lack these)
+  for (const col of [
+    "device_hash TEXT",
+    "ip TEXT",
+    "category_id TEXT",
+    "user_agent TEXT",
+    "fingerprint_json TEXT",
+    "is_appeal INTEGER DEFAULT 0",
+  ]) {
+    try {
+      await remote.execute(`ALTER TABLE free_votes ADD COLUMN ${col}`);
+    } catch (e) {
+      // Column already exists — expected
+    }
+  }
+
+  // Device/category uniqueness must EXCLUDE appeal votes so approved
+  // re-votes succeed even when the original device vote exists.
+  try {
+    await remote.execute(`DROP INDEX IF EXISTS idx_fv_device_cat`);
+    await remote.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
+      ON free_votes(device_hash, category_id)
+      WHERE device_hash IS NOT NULL AND is_appeal = 0`);
+  } catch (e) {
+    if (!e.message.includes("already exists")) {
+      console.warn(`[Remote Schema] idx_fv_device_cat: ${e.message}`);
+    }
+  }
+
+  console.log(
+    `  ✓ Remote schema verified (${created}/${statements.length} statements OK)`,
+  );
 }
 
 async function bootstrapIfEmpty() {
@@ -362,36 +477,56 @@ async function bootstrapIfEmpty() {
   try {
     const row = local.prepare("SELECT COUNT(*) AS c FROM categories").get();
     isEmpty = !row || Number(row.c) === 0;
-  } catch { isEmpty = true; }
+  } catch {
+    isEmpty = true;
+  }
 
   if (!isEmpty) {
     console.log("  Local DB has data — using as primary");
-    // Even if not empty, reconcile vote counts on startup
-    await reconcileVotes();
     return;
   }
 
   console.log("  → Local DB is empty — pulling from Turso Cloud…");
   const { pulled } = await pull();
   console.log(`  ✓ Pull complete — ${pulled} row(s) restored`);
-  await reconcileVotes();
 }
 
 async function checkpoint() {
-  try { local.pragma("wal_checkpoint(TRUNCATE)"); } catch {}
+  try {
+    local.pragma("wal_checkpoint(TRUNCATE)");
+  } catch {}
 }
 
 async function walSize() {
-  try { return fs.statSync(LOCAL_DB_PATH + "-wal").size; } catch { return 0; }
+  try {
+    return fs.statSync(LOCAL_DB_PATH + "-wal").size;
+  } catch {
+    return 0;
+  }
 }
 
 function getQueueSize() {
-  try { return local.prepare("SELECT COUNT(*) AS c FROM _sync_queue").get().c; } catch { return 0; }
+  try {
+    return local.prepare("SELECT COUNT(*) AS c FROM _sync_queue").get().c;
+  } catch {
+    return 0;
+  }
 }
 
 module.exports = {
-  prepare, exec, tx, push, pull, pullImage,
-  reconcileVotes, checkpoint, walSize,
-  verifyConnection, ensureRemoteSchema, bootstrapIfEmpty,
-  getQueueSize, LOCAL_DB_PATH,
+  prepare,
+  exec,
+  tx,
+  push,
+  pull,
+  pullImage,
+  reconcileVotes,
+  checkpoint,
+  walSize,
+  verifyConnection,
+  ensureRemoteSchema,
+  bootstrapIfEmpty,
+  getQueueSize,
+  getPushFailures,
+  LOCAL_DB_PATH,
 };
