@@ -72,6 +72,12 @@
             .btn-danger:hover {
                 background: #b91c1c;
             }
+            .btn-success {
+                background: #16a34a;
+            }
+            .btn-success:hover {
+                background: #15803d;
+            }
             .btn-sm {
                 padding: 6px 12px;
                 font-size: 12px;
@@ -346,6 +352,195 @@
                 background: #f3f4f6;
                 color: #9ca3af;
             }
+
+            /* ===== STAGE SYSTEM (NEW) ===== */
+            .stage-hero {
+                background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+                border-radius: 20px;
+                color: white;
+                padding: 24px 28px;
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 20px 40px -18px rgba(30, 58, 138, 0.5);
+            }
+            .stage-hero::before {
+                content: "";
+                position: absolute;
+                top: -50px;
+                right: -50px;
+                width: 200px;
+                height: 200px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.06);
+            }
+            .stage-hero::after {
+                content: "";
+                position: absolute;
+                bottom: -80px;
+                left: -40px;
+                width: 220px;
+                height: 220px;
+                border-radius: 999px;
+                background: rgba(250, 204, 21, 0.08);
+            }
+            .stage-hero .stage-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                padding: 4px 12px;
+                border-radius: 980px;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .stage-hero .stage-next {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(250, 204, 21, 0.2);
+                border: 1px solid rgba(250, 204, 21, 0.5);
+                color: #fde68a;
+                padding: 4px 12px;
+                border-radius: 980px;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .stage-card {
+                background: white;
+                border: 1px solid #eef0f3;
+                border-radius: 16px;
+                padding: 20px;
+                transition: all 0.2s;
+            }
+            .stage-card:hover {
+                box-shadow: 0 10px 24px -12px rgba(63, 81, 181, 0.15);
+            }
+            .stage-timeline {
+                position: relative;
+                padding: 8px 0;
+            }
+            .stage-step {
+                display: flex;
+                gap: 16px;
+                position: relative;
+                padding-bottom: 24px;
+            }
+            .stage-step:last-child {
+                padding-bottom: 0;
+            }
+            .stage-step::before {
+                content: "";
+                position: absolute;
+                left: 15px;
+                top: 32px;
+                bottom: 0;
+                width: 2px;
+                background: #e5e7eb;
+            }
+            .stage-step:last-child::before {
+                display: none;
+            }
+            .stage-step.done::before {
+                background: #22c55e;
+            }
+            .stage-step.active::before {
+                background: linear-gradient(180deg, #3b82f6 0%, #e5e7eb 100%);
+            }
+            .stage-step .stage-bullet {
+                width: 32px;
+                height: 32px;
+                border-radius: 999px;
+                background: #f3f4f6;
+                color: #9ca3af;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                font-size: 13px;
+                flex-shrink: 0;
+                border: 2px solid white;
+                box-shadow: 0 0 0 2px #e5e7eb;
+                position: relative;
+                z-index: 1;
+            }
+            .stage-step.done .stage-bullet {
+                background: #22c55e;
+                color: white;
+                box-shadow: 0 0 0 2px #22c55e;
+            }
+            .stage-step.active .stage-bullet {
+                background: #3b82f6;
+                color: white;
+                box-shadow: 0 0 0 2px #3b82f6;
+                animation: stageBulletPulse 2s infinite;
+            }
+            @keyframes stageBulletPulse {
+                0%,
+                100% {
+                    box-shadow:
+                        0 0 0 2px #3b82f6,
+                        0 0 0 6px rgba(59, 130, 246, 0.15);
+                }
+                50% {
+                    box-shadow:
+                        0 0 0 2px #3b82f6,
+                        0 0 0 12px rgba(59, 130, 246, 0);
+                }
+            }
+            .stage-step .stage-body {
+                flex: 1;
+                min-width: 0;
+            }
+            .stage-step .stage-title {
+                font-size: 14px;
+                font-weight: 700;
+                color: #111827;
+                margin-bottom: 2px;
+            }
+            .stage-step.done .stage-title {
+                color: #16a34a;
+            }
+            .stage-step.active .stage-title {
+                color: #2563eb;
+            }
+            .stage-step .stage-dates {
+                font-size: 11px;
+                color: #6b7280;
+                font-family: monospace;
+            }
+            .nom-elim-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
+                background: #fef2f2;
+                color: #991b1b;
+                border: 1px solid #fecaca;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 9px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .nom-winner-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
+                background: #fef9c3;
+                color: #854d0e;
+                border: 1px solid #fde047;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 9px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
         </style>
     </head>
     <body>
@@ -483,6 +678,14 @@
                         <a
                             class="nav-item"
                             data-super
+                            data-tab="stages"
+                            onclick="switchTab('stages')"
+                        >
+                            <i class="ph ph-flag-checkered"></i> Stages
+                        </a>
+                        <a
+                            class="nav-item"
+                            data-super
                             data-tab="transactions"
                             onclick="switchTab('transactions')"
                         >
@@ -562,6 +765,108 @@
                                 >
                                     <i class="ph ph-file-pdf"></i> Signed PDF
                                 </button>
+                            </div>
+                        </div>
+
+                        <!-- STAGE HERO (NEW) -->
+                        <div id="overview-stage-hero" class="stage-hero mb-6">
+                            <div
+                                class="flex flex-wrap items-start justify-between gap-3 mb-4 relative z-10"
+                            >
+                                <div>
+                                    <div
+                                        class="text-[10px] font-bold uppercase tracking-widest text-indigo-200 mb-1"
+                                    >
+                                        Election Stage
+                                    </div>
+                                    <h2
+                                        class="text-2xl sm:text-3xl font-extrabold tracking-tight"
+                                        id="ov-stage-title"
+                                    >
+                                        Loading…
+                                    </h2>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="stage-pill" id="ov-stage-pill">
+                                        <span
+                                            class="live-dot"
+                                            style="
+                                                width: 6px;
+                                                height: 6px;
+                                                background: #22c55e;
+                                            "
+                                        ></span>
+                                        Active
+                                    </span>
+                                    <span class="stage-next" id="ov-stage-next">
+                                        <i class="ph ph-arrow-right"></i>
+                                        Next: —
+                                    </span>
+                                </div>
+                            </div>
+                            <div
+                                class="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10"
+                            >
+                                <div
+                                    class="bg-white/10 rounded-xl p-3 border border-white/15"
+                                >
+                                    <div
+                                        class="text-[10px] uppercase font-bold opacity-75 mb-1"
+                                    >
+                                        Advance Cutoff
+                                    </div>
+                                    <div
+                                        class="text-xl font-extrabold"
+                                        id="ov-stage-cutoff"
+                                    >
+                                        —
+                                    </div>
+                                </div>
+                                <div
+                                    class="bg-white/10 rounded-xl p-3 border border-white/15"
+                                >
+                                    <div
+                                        class="text-[10px] uppercase font-bold opacity-75 mb-1"
+                                    >
+                                        Active Nominees
+                                    </div>
+                                    <div
+                                        class="text-xl font-extrabold"
+                                        id="ov-stage-active"
+                                    >
+                                        —
+                                    </div>
+                                </div>
+                                <div
+                                    class="bg-white/10 rounded-xl p-3 border border-white/15"
+                                >
+                                    <div
+                                        class="text-[10px] uppercase font-bold opacity-75 mb-1"
+                                    >
+                                        Eliminated
+                                    </div>
+                                    <div
+                                        class="text-xl font-extrabold"
+                                        id="ov-stage-elim"
+                                    >
+                                        —
+                                    </div>
+                                </div>
+                                <div
+                                    class="bg-white/10 rounded-xl p-3 border border-white/15"
+                                >
+                                    <div
+                                        class="text-[10px] uppercase font-bold opacity-75 mb-1"
+                                    >
+                                        Last Advanced
+                                    </div>
+                                    <div
+                                        class="text-sm font-bold font-mono"
+                                        id="ov-stage-advanced"
+                                    >
+                                        —
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -888,7 +1193,8 @@
                             <div>
                                 <h1 class="text-2xl font-bold">Nominees</h1>
                                 <p class="text-sm text-gray-500 mt-1">
-                                    Sorted by highest votes first.
+                                    Sorted by highest votes first. Eliminated
+                                    nominees are flagged.
                                 </p>
                             </div>
                             <button onclick="openAddNominee()" class="btn">
@@ -914,11 +1220,345 @@
                                 >
                                     <option value="">All categories</option>
                                 </select>
+                                <select
+                                    id="nom-status-filter"
+                                    class="input sm:max-w-xs"
+                                    onchange="renderNomineeList()"
+                                >
+                                    <option value="">All statuses</option>
+                                    <option value="active">Active only</option>
+                                    <option value="eliminated">
+                                        Eliminated only
+                                    </option>
+                                    <option value="winner">Winners only</option>
+                                </select>
                             </div>
                             <div
                                 id="nominees-list"
                                 class="divide-y divide-gray-100"
                             ></div>
+                        </div>
+                    </section>
+
+                    <!-- ===================== STAGES (NEW) ===================== -->
+                    <section id="tab-stages" class="hidden">
+                        <div
+                            class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+                        >
+                            <div>
+                                <h1 class="text-2xl font-bold">
+                                    Election Stages
+                                </h1>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Super admin controls. Configure stage
+                                    windows and advance nominees between stages.
+                                    Votes continue cumulatively.
+                                </p>
+                            </div>
+                            <button
+                                onclick="openAdvanceModal()"
+                                class="btn btn-success"
+                                id="advance-stage-btn"
+                            >
+                                <i class="ph ph-fast-forward"></i> Advance Stage
+                            </button>
+                        </div>
+
+                        <!-- Current stage card -->
+                        <div class="stage-hero mb-6">
+                            <div
+                                class="flex flex-wrap items-start justify-between gap-3 mb-4 relative z-10"
+                            >
+                                <div>
+                                    <div
+                                        class="text-[10px] font-bold uppercase tracking-widest text-indigo-200 mb-1"
+                                    >
+                                        Current Stage
+                                    </div>
+                                    <h2
+                                        class="text-2xl sm:text-3xl font-extrabold tracking-tight"
+                                        id="stg-current-title"
+                                    >
+                                        —
+                                    </h2>
+                                    <p
+                                        class="text-sm text-indigo-100 mt-1"
+                                        id="stg-current-desc"
+                                    >
+                                        —
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <span
+                                        class="stage-pill"
+                                        id="stg-vote-state"
+                                    >
+                                        —
+                                    </span>
+                                    <span class="stage-next" id="stg-next">
+                                        <i class="ph ph-arrow-right"></i>
+                                        Next: —
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            <!-- Timeline -->
+                            <div class="stage-card lg:col-span-1">
+                                <h3
+                                    class="font-bold text-sm mb-4 flex items-center gap-2"
+                                >
+                                    <i
+                                        class="ph-fill ph-path text-indigo-600"
+                                    ></i>
+                                    Stage Timeline
+                                </h3>
+                                <div class="stage-timeline" id="stg-timeline">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Config form -->
+                            <div class="stage-card lg:col-span-2">
+                                <div
+                                    class="flex items-center justify-between mb-4"
+                                >
+                                    <h3
+                                        class="font-bold text-sm flex items-center gap-2"
+                                    >
+                                        <i
+                                            class="ph-fill ph-calendar-blank text-indigo-600"
+                                        ></i>
+                                        Stage Windows
+                                    </h3>
+                                    <span
+                                        class="text-[10px] text-gray-400 font-mono"
+                                        >Server-controlled · local time</span
+                                    >
+                                </div>
+                                <div
+                                    class="grid grid-cols-1 md:grid-cols-3 gap-4"
+                                >
+                                    <div
+                                        class="border border-gray-100 rounded-lg p-3 bg-gray-50"
+                                    >
+                                        <div
+                                            class="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1"
+                                        >
+                                            <i
+                                                class="ph-fill ph-number-circle-one text-indigo-500"
+                                            ></i>
+                                            Preliminaries
+                                        </div>
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >Start</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-prelim-start"
+                                            class="input mb-2 text-xs"
+                                        />
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >End</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-prelim-end"
+                                            class="input text-xs"
+                                        />
+                                    </div>
+                                    <div
+                                        class="border border-gray-100 rounded-lg p-3 bg-gray-50"
+                                    >
+                                        <div
+                                            class="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1"
+                                        >
+                                            <i
+                                                class="ph-fill ph-number-circle-two text-indigo-500"
+                                            ></i>
+                                            Semi Finals
+                                        </div>
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >Start</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-semi-start"
+                                            class="input mb-2 text-xs"
+                                        />
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >End</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-semi-end"
+                                            class="input text-xs"
+                                        />
+                                    </div>
+                                    <div
+                                        class="border border-gray-100 rounded-lg p-3 bg-gray-50"
+                                    >
+                                        <div
+                                            class="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1"
+                                        >
+                                            <i
+                                                class="ph-fill ph-number-circle-three text-indigo-500"
+                                            ></i>
+                                            Finals
+                                        </div>
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >Start</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-final-start"
+                                            class="input mb-2 text-xs"
+                                        />
+                                        <label
+                                            class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+                                            >End</label
+                                        >
+                                        <input
+                                            type="datetime-local"
+                                            id="cfg-final-end"
+                                            class="input text-xs"
+                                        />
+                                    </div>
+                                </div>
+                                <div
+                                    class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100"
+                                >
+                                    <button
+                                        onclick="saveStageConfig()"
+                                        class="btn btn-success"
+                                        id="save-stage-btn"
+                                    >
+                                        <i class="ph ph-check"></i> Save Stage
+                                        Windows
+                                    </button>
+                                    <button
+                                        onclick="resetStageConfig()"
+                                        class="btn btn-outline"
+                                    >
+                                        <i
+                                            class="ph ph-arrow-counter-clockwise"
+                                        ></i>
+                                        Reset
+                                    </button>
+                                </div>
+                                <p
+                                    class="text-[11px] text-gray-400 mt-3 leading-relaxed"
+                                >
+                                    <i class="ph ph-info"></i>
+                                    Stage dates control when voting is open in
+                                    each round. Leave blank to keep voting open
+                                    with no automatic deadline for that round.
+                                    Advancing a stage immediately moves nominees
+                                    per the cutoff rule below.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Cutoff rules -->
+                        <div class="stage-card mb-6">
+                            <h3
+                                class="font-bold text-sm mb-4 flex items-center gap-2"
+                            >
+                                <i
+                                    class="ph-fill ph-funnel text-indigo-600"
+                                ></i>
+                                Advancement Rules
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div
+                                    class="rounded-lg p-4 bg-blue-50 border border-blue-100"
+                                >
+                                    <div
+                                        class="text-xs font-bold text-blue-800 mb-1"
+                                    >
+                                        Preliminaries → Semi Finals
+                                    </div>
+                                    <div
+                                        class="text-2xl font-extrabold text-blue-900"
+                                    >
+                                        Top 5
+                                    </div>
+                                    <div class="text-xs text-blue-700 mt-1">
+                                        Per category advance
+                                    </div>
+                                </div>
+                                <div
+                                    class="rounded-lg p-4 bg-purple-50 border border-purple-100"
+                                >
+                                    <div
+                                        class="text-xs font-bold text-purple-800 mb-1"
+                                    >
+                                        Semi Finals → Finals
+                                    </div>
+                                    <div
+                                        class="text-2xl font-extrabold text-purple-900"
+                                    >
+                                        Top 2
+                                    </div>
+                                    <div class="text-xs text-purple-700 mt-1">
+                                        Per category advance
+                                    </div>
+                                </div>
+                                <div
+                                    class="rounded-lg p-4 bg-amber-50 border border-amber-100"
+                                >
+                                    <div
+                                        class="text-xs font-bold text-amber-800 mb-1"
+                                    >
+                                        Finals → Winner
+                                    </div>
+                                    <div
+                                        class="text-2xl font-extrabold text-amber-900"
+                                    >
+                                        Top 1
+                                    </div>
+                                    <div class="text-xs text-amber-700 mt-1">
+                                        Per category wins
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Per-category counts -->
+                        <div class="stage-card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3
+                                    class="font-bold text-sm flex items-center gap-2"
+                                >
+                                    <i
+                                        class="ph-fill ph-chart-bar text-indigo-600"
+                                    ></i>
+                                    Nominees per Category
+                                </h3>
+                                <button
+                                    onclick="loadStageStatus()"
+                                    class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
+                                >
+                                    <i class="ph ph-arrow-clockwise"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                            <div
+                                id="stg-counts"
+                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+                            >
+                                <div
+                                    class="text-center py-8 text-gray-400 text-sm"
+                                >
+                                    Loading…
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -1289,6 +1929,69 @@
             </div>
         </div>
 
+        <!-- MODAL: ADVANCE STAGE (NEW) -->
+        <div id="advance-stage-modal" class="modal">
+            <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('advance-stage-modal')"
+                    class="absolute top-3 right-3 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div class="text-center mb-5">
+                    <div
+                        class="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3"
+                    >
+                        <i class="ph-fill ph-warning text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold">Advance to Next Stage?</h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                        This is a <strong>one-way</strong> action. Nominees
+                        beyond the cutoff will be eliminated and can no longer
+                        receive votes. Votes continue cumulatively.
+                    </p>
+                </div>
+                <div
+                    class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm"
+                >
+                    <div
+                        class="flex items-center justify-between mb-2 font-semibold text-amber-900"
+                    >
+                        <span>Current</span>
+                        <i class="ph ph-arrow-right"></i>
+                        <span>Next</span>
+                    </div>
+                    <div
+                        class="flex items-center justify-between text-amber-800"
+                    >
+                        <span id="adv-from" class="font-bold">—</span>
+                        <span id="adv-to" class="font-bold">—</span>
+                    </div>
+                    <div
+                        class="mt-3 pt-3 border-t border-amber-200 text-xs text-amber-700"
+                    >
+                        Cutoff: <strong id="adv-cutoff">—</strong> nominees per
+                        category advance.
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button
+                        onclick="closeModal('advance-stage-modal')"
+                        class="btn btn-outline flex-1"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        id="adv-confirm-btn"
+                        onclick="confirmAdvance()"
+                        class="btn btn-danger flex-1"
+                    >
+                        <i class="ph ph-fast-forward"></i> Yes, Advance
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="toast">
             <i class="ph ph-check-circle text-green-400 text-xl"></i
             ><span id="toast-msg"></span>
@@ -1309,6 +2012,26 @@
             };
             const isSuper = () => getAdmin()?.role === "super";
 
+            const STAGE_LABELS = {
+                preliminaries: "Preliminaries",
+                semi_finals: "Semi Finals",
+                finals: "Finals",
+                completed: "Completed",
+            };
+            const STAGE_ORDER = ["preliminaries", "semi_finals", "finals"];
+            const NEXT_STAGE = {
+                preliminaries: "semi_finals",
+                semi_finals: "finals",
+                finals: "completed",
+                completed: null,
+            };
+            const STAGE_CUTOFF = {
+                preliminaries: 5,
+                semi_finals: 2,
+                finals: 1,
+                completed: 0,
+            };
+
             function escapeHtml(str) {
                 return String(str == null ? "" : str)
                     .replace(/&/g, "&amp;")
@@ -1324,6 +2047,7 @@
             let anSelectedFile = null;
             let anUploadedUrl = null;
             let lastCreds = null;
+            let STAGE_DATA = null;
 
             let liveStream = null;
             let livePollTimer = null;
@@ -1362,7 +2086,6 @@
                 $(id).classList.remove("show");
             }
 
-            /* ---------- LIVE ---------- */
             function setLiveStatus(connected) {
                 const dot = $("live-dot");
                 const label = $("live-status");
@@ -1404,7 +2127,11 @@
                         sseRetries = 0;
                         setLiveStatus(true);
                         try {
-                            scheduleLiveRefresh(JSON.parse(e.data));
+                            const evt = JSON.parse(e.data);
+                            if (evt.type === "stage:updated") {
+                                loadStageStatus();
+                            }
+                            scheduleLiveRefresh(evt);
                         } catch {}
                     });
                     liveStream.onopen = () => setLiveStatus(true);
@@ -1415,8 +2142,7 @@
                         liveStream = null;
                         setLiveStatus(false);
                         sseRetries++;
-                        if (sseRetries < 4)
-                            setTimeout(connectLiveStream, 5000);
+                        if (sseRetries < 4) setTimeout(connectLiveStream, 5000);
                     };
                 } catch (err) {
                     console.warn("[SSE]", err.message);
@@ -1437,13 +2163,13 @@
                 if (refreshing) return;
                 refreshing = true;
                 try {
-                    const activeTab = document.querySelector(
-                        ".nav-item.active",
-                    )?.dataset.tab;
+                    const activeTab =
+                        document.querySelector(".nav-item.active")?.dataset.tab;
                     if (!activeTab) return;
                     if (activeTab === "overview") await loadOverview();
                     else if (activeTab === "categories") await loadCategories();
                     else if (activeTab === "nominees") await loadNominees();
+                    else if (activeTab === "stages") await loadStageStatus();
                     else if (activeTab === "transactions")
                         await loadTransactions();
                     else if (activeTab === "admins") await loadAdmins();
@@ -1454,7 +2180,6 @@
                 }
             }
 
-            /* ---------- LOGIN ---------- */
             async function doLogin() {
                 const username = $("login-username").value.trim();
                 const password = $("login-password").value;
@@ -1494,7 +2219,6 @@
                 location.reload();
             }
 
-            /* ---------- TABS ---------- */
             function switchTab(tab) {
                 document
                     .querySelectorAll(".nav-item")
@@ -1508,6 +2232,7 @@
                     "overview",
                     "categories",
                     "nominees",
+                    "stages",
                     "transactions",
                     "admins",
                     "logs",
@@ -1519,6 +2244,7 @@
                 if (tab === "overview") loadOverview();
                 if (tab === "categories") loadCategories();
                 if (tab === "nominees") loadNominees();
+                if (tab === "stages") loadStageStatus();
                 if (tab === "transactions") loadTransactions();
                 if (tab === "admins") loadAdmins();
             }
@@ -1532,7 +2258,6 @@
                 $("sidebar-overlay").classList.add("hidden");
             }
 
-            /* ---------- INIT ---------- */
             async function showDashboard() {
                 const user = getAdmin();
                 if (!user) {
@@ -1584,7 +2309,6 @@
                 }
             }
 
-            /* ---------- OVERVIEW ---------- */
             async function loadOverview() {
                 try {
                     const stats = await api("/api/admin/stats");
@@ -1613,9 +2337,7 @@
                             Number(stats.grossRevenue || 0).toLocaleString();
                         $("s-plat").innerText =
                             "KES " +
-                            Number(
-                                stats.platformRevenue || 0,
-                            ).toLocaleString();
+                            Number(stats.platformRevenue || 0).toLocaleString();
                         $("s-pending").innerText = Number(
                             stats.pendingPayments || 0,
                         ).toLocaleString();
@@ -1634,6 +2356,9 @@
                     toast("Stats: " + e.message, false);
                 }
 
+                // Load stage hero
+                await loadOverviewStageHero();
+
                 try {
                     const chartsData = await api("/api/admin/charts");
                     renderCharts(chartsData);
@@ -1641,6 +2366,64 @@
                 } catch (e) {
                     console.error("[Charts]", e);
                     toast("Charts: " + e.message, false);
+                }
+            }
+
+            async function loadOverviewStageHero() {
+                try {
+                    const d = await api("/api/stages");
+                    STAGE_DATA = d;
+                    const cur = d.current || "preliminaries";
+                    const curLabel = STAGE_LABELS[cur] || cur;
+                    const next = d.next;
+                    const nextLabel = next ? STAGE_LABELS[next] || next : null;
+                    const cutoff = d.cutoff || 0;
+
+                    $("ov-stage-title").innerText = curLabel;
+
+                    const pill = $("ov-stage-pill");
+                    if (cur === "completed") {
+                        pill.innerHTML =
+                            '<i class="ph-fill ph-flag-checkered"></i> Completed';
+                        pill.style.background = "rgba(34,197,94,0.25)";
+                    } else if (!d.votingOpen) {
+                        pill.innerHTML =
+                            '<i class="ph-fill ph-lock"></i> Voting Closed';
+                        pill.style.background = "rgba(220,38,38,0.25)";
+                    } else {
+                        pill.innerHTML =
+                            '<span class="live-dot" style="width:6px;height:6px;background:#22c55e;"></span> Voting Open';
+                        pill.style.background = "rgba(255,255,255,0.15)";
+                    }
+
+                    $("ov-stage-next").innerHTML = nextLabel
+                        ? `<i class="ph ph-arrow-right"></i> Next: ${nextLabel}`
+                        : `<i class="ph-fill ph-check-circle"></i> Final stage`;
+
+                    $("ov-stage-cutoff").innerText =
+                        cur === "completed" ? "—" : `Top ${cutoff}`;
+
+                    // Active + eliminated counts
+                    const activeCount = NOMINEES.filter(
+                        (n) => !n.eliminated,
+                    ).length;
+                    const elimCount = NOMINEES.filter(
+                        (n) => n.eliminated,
+                    ).length;
+                    $("ov-stage-active").innerText =
+                        activeCount.toLocaleString();
+                    $("ov-stage-elim").innerText = elimCount.toLocaleString();
+
+                    $("ov-stage-advanced").innerText = d.last_advanced_at
+                        ? new Date(d.last_advanced_at).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                          })
+                        : "—";
+                } catch (e) {
+                    console.warn("[Overview stage]", e.message);
                 }
             }
 
@@ -1702,9 +2485,7 @@
 
                 const doEl = $("doughnutChart");
                 if (doEl) {
-                    const labels = data.categoryDistribution.map(
-                        (c) => c.name,
-                    );
+                    const labels = data.categoryDistribution.map((c) => c.name);
                     const values = data.categoryDistribution.map(
                         (c) => c.votes || 0,
                     );
@@ -1886,10 +2667,17 @@
 
                 grid.innerHTML = perCategory
                     .map((cat) => {
+                        const active = cat.nominees.filter(
+                            (n) => !n.eliminated,
+                        );
+                        const activeTotal = active.reduce(
+                            (s, n) => s + (n.votes || 0),
+                            0,
+                        );
                         const header = `
                         <div class="cat-card-header flex items-center justify-between gap-2">
                             <h4 class="font-bold text-sm text-gray-900 truncate">${escapeHtml(cat.name)}</h4>
-                            <span class="text-[10px] font-bold text-indigo-700 bg-white/70 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">${cat.totalVotes.toLocaleString()} vote${cat.totalVotes === 1 ? "" : "s"}</span>
+                            <span class="text-[10px] font-bold text-indigo-700 bg-white/70 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">${activeTotal.toLocaleString()} vote${activeTotal === 1 ? "" : "s"}</span>
                         </div>`;
 
                         if (!cat.nominees || !cat.nominees.length) {
@@ -1899,24 +2687,32 @@
                         }
 
                         const rows = cat.nominees
-                            .map(
-                                (n) => `
-                            <div class="nom-row flex items-center gap-2.5">
+                            .map((n) => {
+                                const isElim = !!n.eliminated;
+                                const isWinner =
+                                    n.stage === "winner" || n.final_rank === 1;
+                                const stageTag = isElim
+                                    ? `<span class="nom-elim-badge ml-1"><i class="ph-fill ph-x-circle"></i> ${escapeHtml(STAGE_LABELS[n.eliminated_stage] || "Elim")}</span>`
+                                    : isWinner
+                                      ? `<span class="nom-winner-badge ml-1"><i class="ph-fill ph-trophy"></i> Winner</span>`
+                                      : "";
+                                return `
+                            <div class="nom-row flex items-center gap-2.5 ${isElim ? "opacity-60" : ""}">
                                 <div class="rank-badge ${rankClass(n.rank)}">${n.rank}</div>
                                 <img
                                     src="${nomineeImg(n.name, n.img)}"
                                     alt=""
-                                    class="w-9 h-9 rounded-lg object-cover bg-gray-100 shrink-0"
+                                    class="w-9 h-9 rounded-lg object-cover bg-gray-100 shrink-0 ${isElim ? "grayscale" : ""}"
                                     onerror="this.onerror=null;this.src='https://placehold.co/40x40/3F51B5/ffffff?text=?'"
                                 />
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center justify-between gap-2 mb-1">
                                         <div class="min-w-0">
-                                            <div class="text-xs font-semibold text-gray-900 truncate">${escapeHtml(n.name)}</div>
+                                            <div class="text-xs font-semibold text-gray-900 truncate">${escapeHtml(n.name)}${stageTag}</div>
                                             <div class="text-[9px] font-mono text-gray-400 truncate">${escapeHtml(n.code || "")}</div>
                                         </div>
                                         <div class="text-right shrink-0">
-                                            <div class="text-xs font-bold text-indigo-600">${n.votes.toLocaleString()}</div>
+                                            <div class="text-xs font-bold ${isElim ? "text-gray-400" : "text-indigo-600"}">${n.votes.toLocaleString()}</div>
                                             <div class="text-[9px] font-medium text-gray-500">${n.percent}%</div>
                                         </div>
                                     </div>
@@ -1924,8 +2720,8 @@
                                         <div style="width: ${Math.max(n.percent, 1)}%"></div>
                                     </div>
                                 </div>
-                            </div>`,
-                            )
+                            </div>`;
+                            })
                             .join("");
 
                         return `<div class="cat-card">
@@ -1936,7 +2732,6 @@
                     .join("");
             }
 
-            /* ---------- CATEGORIES ---------- */
             async function loadCategories() {
                 await refreshBase();
                 const list = $("categories-list");
@@ -2016,7 +2811,6 @@
                 }
             }
 
-            /* ---------- NOMINEES ---------- */
             async function loadNominees() {
                 await refreshBase();
                 renderNomineeList();
@@ -2025,8 +2819,16 @@
             function renderNomineeList() {
                 const q = ($("nom-search").value || "").trim().toLowerCase();
                 const catId = $("nom-cat-filter").value;
+                const status = $("nom-status-filter").value;
                 const filtered = NOMINEES.filter((n) => {
                     if (catId && n.category_id !== catId) return false;
+                    if (status === "active" && n.eliminated) return false;
+                    if (status === "eliminated" && !n.eliminated) return false;
+                    if (
+                        status === "winner" &&
+                        !(n.stage === "winner" || n.final_rank === 1)
+                    )
+                        return false;
                     if (!q) return true;
                     return (
                         n.name.toLowerCase().includes(q) ||
@@ -2045,15 +2847,29 @@
                         const img = n.img
                             ? n.img
                             : `https://placehold.co/80x80/3F51B5/ffffff?text=${encodeURIComponent((n.name || "?")[0])}`;
+                        const isElim = !!n.eliminated;
+                        const isWinner =
+                            n.stage === "winner" || n.final_rank === 1;
+                        let statusTag = "";
+                        if (isWinner) {
+                            statusTag = `<span class="nom-winner-badge"><i class="ph-fill ph-trophy"></i> Winner</span>`;
+                        } else if (isElim) {
+                            statusTag = `<span class="nom-elim-badge"><i class="ph-fill ph-x-circle"></i> ${escapeHtml(STAGE_LABELS[n.eliminated_stage] || "Eliminated")}</span>`;
+                        } else {
+                            statusTag = `<span class="text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Active</span>`;
+                        }
                         return `
-                        <div class="flex items-center gap-4 p-4">
-                            <img src="${img}" class="w-12 h-12 rounded-lg object-cover bg-gray-100" onerror="this.onerror=null;this.src='https://placehold.co/80x80/3F51B5/ffffff?text=?';">
+                        <div class="flex items-center gap-4 p-4 ${isElim ? "bg-gray-50/50" : ""}">
+                            <img src="${img}" class="w-12 h-12 rounded-lg object-cover bg-gray-100 ${isElim ? "grayscale opacity-70" : ""}" onerror="this.onerror=null;this.src='https://placehold.co/80x80/3F51B5/ffffff?text=?';">
                             <div class="flex-1 min-w-0">
-                                <div class="font-semibold truncate">${escapeHtml(n.name)}</div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <div class="font-semibold truncate">${escapeHtml(n.name)}</div>
+                                    ${statusTag}
+                                </div>
                                 <div class="text-xs text-gray-500">${escapeHtml(n.category)} · <span class="font-mono">${escapeHtml(n.code)}</span></div>
                             </div>
                             <div class="text-right hidden sm:block">
-                                <div class="text-sm font-bold text-indigo-600">${(n.votes || 0).toLocaleString()}</div>
+                                <div class="text-sm font-bold ${isElim ? "text-gray-400" : "text-indigo-600"}">${(n.votes || 0).toLocaleString()}</div>
                                 <div class="text-[10px] text-gray-400 uppercase tracking-wider">Votes</div>
                             </div>
                             <button onclick="deleteNominee('${n.id}')" class="btn btn-danger btn-sm"><i class="ph ph-trash"></i></button>
@@ -2252,7 +3068,316 @@
                 }
             }
 
-            /* ---------- TRANSACTIONS ---------- */
+            /* ===== STAGE MANAGEMENT (NEW) ===== */
+            function toLocalInput(isoStr) {
+                if (!isoStr) return "";
+                try {
+                    const d = new Date(isoStr);
+                    if (isNaN(d)) return "";
+                    const pad = (n) => String(n).padStart(2, "0");
+                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                } catch {
+                    return "";
+                }
+            }
+
+            function fromLocalInput(val) {
+                if (!val) return null;
+                try {
+                    const d = new Date(val);
+                    if (isNaN(d)) return null;
+                    return d.toISOString();
+                } catch {
+                    return null;
+                }
+            }
+
+            async function loadStageStatus() {
+                try {
+                    const d = await api("/api/admin/stages/status");
+                    STAGE_DATA = d.stages;
+                    const s = d.stages;
+                    const cur = s.current_stage || "preliminaries";
+                    const curLabel = STAGE_LABELS[cur] || cur;
+                    const next = s.next;
+
+                    $("stg-current-title").innerText = curLabel;
+
+                    let desc = "";
+                    if (cur === "preliminaries") {
+                        desc = `All nominees compete. Top ${s.cutoff} per category advance to Semi Finals.`;
+                    } else if (cur === "semi_finals") {
+                        desc = `Semi-finalists compete. Top ${s.cutoff} per category advance to Finals.`;
+                    } else if (cur === "finals") {
+                        desc = `Finalists compete. Top ${s.cutoff} per category wins.`;
+                    } else {
+                        desc = "Election complete. Winners have been declared.";
+                    }
+                    $("stg-current-desc").innerText = desc;
+
+                    const voteState = $("stg-vote-state");
+                    // Compute votingOpen from window boundaries
+                    const now = Date.now();
+                    const starts = {
+                        preliminaries: s.preliminaries_start,
+                        semi_finals: s.semifinals_start,
+                        finals: s.finals_start,
+                    };
+                    const ends = {
+                        preliminaries: s.preliminaries_end,
+                        semi_finals: s.semifinals_end,
+                        finals: s.finals_end,
+                    };
+                    let open = cur !== "completed";
+                    const stIso = starts[cur];
+                    const enIso = ends[cur];
+                    if (stIso && new Date(stIso).getTime() > now) open = false;
+                    if (enIso && new Date(enIso).getTime() < now) open = false;
+
+                    if (cur === "completed") {
+                        voteState.innerHTML =
+                            '<i class="ph-fill ph-flag-checkered"></i> Completed';
+                        voteState.style.background = "rgba(34,197,94,0.25)";
+                    } else if (open) {
+                        voteState.innerHTML =
+                            '<span class="live-dot" style="width:6px;height:6px;background:#22c55e;"></span> Voting Open';
+                        voteState.style.background = "rgba(255,255,255,0.15)";
+                    } else {
+                        voteState.innerHTML =
+                            '<i class="ph-fill ph-lock"></i> Voting Closed';
+                        voteState.style.background = "rgba(220,38,38,0.25)";
+                    }
+
+                    $("stg-next").innerHTML = next
+                        ? `<i class="ph ph-arrow-right"></i> Next: ${STAGE_LABELS[next] || next}`
+                        : `<i class="ph-fill ph-check-circle"></i> Final stage`;
+
+                    // Populate config inputs
+                    $("cfg-prelim-start").value = toLocalInput(
+                        s.preliminaries_start,
+                    );
+                    $("cfg-prelim-end").value = toLocalInput(
+                        s.preliminaries_end,
+                    );
+                    $("cfg-semi-start").value = toLocalInput(
+                        s.semifinals_start,
+                    );
+                    $("cfg-semi-end").value = toLocalInput(s.semifinals_end);
+                    $("cfg-final-start").value = toLocalInput(s.finals_start);
+                    $("cfg-final-end").value = toLocalInput(s.finals_end);
+
+                    // Timeline
+                    renderStageTimeline(s);
+
+                    // Advance button state
+                    const advBtn = $("advance-stage-btn");
+                    if (cur === "completed") {
+                        advBtn.disabled = true;
+                        advBtn.classList.add("opacity-50");
+                        advBtn.innerHTML =
+                            '<i class="ph-fill ph-check-circle"></i> Completed';
+                    } else {
+                        advBtn.disabled = false;
+                        advBtn.classList.remove("opacity-50");
+                        advBtn.innerHTML =
+                            '<i class="ph ph-fast-forward"></i> Advance Stage';
+                    }
+
+                    // Per-category counts
+                    const counts = d.counts || [];
+                    const grid = $("stg-counts");
+                    if (!counts.length) {
+                        grid.innerHTML =
+                            '<div class="col-span-full text-center py-8 text-gray-400 text-sm">No categories yet.</div>';
+                    } else {
+                        grid.innerHTML = counts
+                            .map(
+                                (c) => `
+                            <div class="border border-gray-100 rounded-lg p-3 bg-gray-50 flex items-center justify-between">
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-sm truncate">${escapeHtml(c.category)}</div>
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">Total: ${c.total}</div>
+                                </div>
+                                <div class="flex gap-2 shrink-0">
+                                    <div class="text-center">
+                                        <div class="text-lg font-bold text-green-600">${c.active}</div>
+                                        <div class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Active</div>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="text-lg font-bold text-red-500">${c.total - c.active}</div>
+                                        <div class="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Elim</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `,
+                            )
+                            .join("");
+                    }
+                } catch (e) {
+                    toast(e.message, false);
+                }
+            }
+
+            function renderStageTimeline(s) {
+                const cur = s.current_stage || "preliminaries";
+                const idx = STAGE_ORDER.indexOf(cur);
+                const steps = [
+                    {
+                        key: "preliminaries",
+                        label: "Preliminaries",
+                        start: s.preliminaries_start,
+                        end: s.preliminaries_end,
+                    },
+                    {
+                        key: "semi_finals",
+                        label: "Semi Finals",
+                        start: s.semifinals_start,
+                        end: s.semifinals_end,
+                    },
+                    {
+                        key: "finals",
+                        label: "Finals",
+                        start: s.finals_start,
+                        end: s.finals_end,
+                    },
+                ];
+                const wrap = $("stg-timeline");
+                wrap.innerHTML =
+                    steps
+                        .map((st, i) => {
+                            let state = "";
+                            if (cur === "completed") state = "done";
+                            else if (i < idx) state = "done";
+                            else if (i === idx) state = "active";
+                            else state = "";
+                            const fmt = (iso) =>
+                                iso
+                                    ? new Date(iso).toLocaleString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                      })
+                                    : "not set";
+                            return `
+                            <div class="stage-step ${state}">
+                                <div class="stage-bullet">${i + 1}</div>
+                                <div class="stage-body">
+                                    <div class="stage-title">${st.label}</div>
+                                    <div class="stage-dates">
+                                        ${fmt(st.start)} → ${fmt(st.end)}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        })
+                        .join("") +
+                    `
+                    <div class="stage-step ${cur === "completed" ? "done" : ""}">
+                        <div class="stage-bullet"><i class="ph-fill ph-trophy text-xs"></i></div>
+                        <div class="stage-body">
+                            <div class="stage-title">Completed</div>
+                            <div class="stage-dates">Winners declared</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async function saveStageConfig() {
+                const payload = {
+                    preliminaries_start:
+                        fromLocalInput($("cfg-prelim-start").value) || null,
+                    preliminaries_end:
+                        fromLocalInput($("cfg-prelim-end").value) || null,
+                    semifinals_start:
+                        fromLocalInput($("cfg-semi-start").value) || null,
+                    semifinals_end:
+                        fromLocalInput($("cfg-semi-end").value) || null,
+                    finals_start:
+                        fromLocalInput($("cfg-final-start").value) || null,
+                    finals_end:
+                        fromLocalInput($("cfg-final-end").value) || null,
+                };
+                const btn = $("save-stage-btn");
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin"></i> Saving…';
+                try {
+                    await api("/api/admin/stages/config", {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+                    toast("Stage windows saved");
+                    await loadStageStatus();
+                } catch (e) {
+                    toast(e.message, false);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+
+            function resetStageConfig() {
+                if (!STAGE_DATA) return;
+                $("cfg-prelim-start").value = toLocalInput(
+                    STAGE_DATA.preliminaries_start,
+                );
+                $("cfg-prelim-end").value = toLocalInput(
+                    STAGE_DATA.preliminaries_end,
+                );
+                $("cfg-semi-start").value = toLocalInput(
+                    STAGE_DATA.semifinals_start,
+                );
+                $("cfg-semi-end").value = toLocalInput(
+                    STAGE_DATA.semifinals_end,
+                );
+                $("cfg-final-start").value = toLocalInput(
+                    STAGE_DATA.finals_start,
+                );
+                $("cfg-final-end").value = toLocalInput(STAGE_DATA.finals_end);
+                toast("Form reset");
+            }
+
+            function openAdvanceModal() {
+                if (!STAGE_DATA) return;
+                if (STAGE_DATA.current_stage === "completed") {
+                    toast("Election already completed", false);
+                    return;
+                }
+                const cur = STAGE_DATA.current_stage;
+                const next = NEXT_STAGE[cur];
+                $("adv-from").innerText = STAGE_LABELS[cur] || cur;
+                $("adv-to").innerText = STAGE_LABELS[next] || next;
+                $("adv-cutoff").innerText = STAGE_CUTOFF[cur] || 0;
+                $("advance-stage-modal").classList.add("show");
+            }
+
+            async function confirmAdvance() {
+                const btn = $("adv-confirm-btn");
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="ph ph-spinner animate-spin"></i> Advancing…';
+                try {
+                    const r = await api("/api/admin/stages/advance", {
+                        method: "POST",
+                    });
+                    closeModal("advance-stage-modal");
+                    toast(`Advanced to ${STAGE_LABELS[r.to] || r.to}`, true);
+                    await loadStageStatus();
+                    await loadNominees();
+                    await loadOverview();
+                } catch (e) {
+                    toast(e.message, false);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+
+            /* ===== END STAGE MANAGEMENT ===== */
+
             async function loadTransactions() {
                 try {
                     const txs = await api("/api/admin/transactions");
@@ -2271,7 +3396,7 @@
                             leaderboard_12h: "Leaderboard (12 h)",
                             leaderboard_24h: "Leaderboard (1 day)",
                             leaderboard_2h: "Leaderboard (2 h · legacy)",
-                            boost_50: "Power Boost (+50)",
+                            boost_50: "Power Boost (+100)",
                         })[t] || t;
                     tbody.innerHTML = txs
                         .map(
@@ -2302,7 +3427,6 @@
                 }
             }
 
-            /* ---------- ADMINS ---------- */
             async function loadAdmins() {
                 try {
                     const d = await api("/api/admin/users");
@@ -2327,15 +3451,19 @@
                                 <div>
                                     <div class="font-semibold">${escapeHtml(a.display_name || a.username)} <span class="text-gray-400 text-xs font-normal">@${escapeHtml(a.username)}</span></div>
                                     <div class="text-xs text-gray-500">
-                                        ${a.revoked
-                                            ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
-                                            : `Created ${new Date(a.created_at).toLocaleDateString()}`}
+                                        ${
+                                            a.revoked
+                                                ? `Revoked ${new Date(a.revoked_at).toLocaleDateString()}`
+                                                : `Created ${new Date(a.created_at).toLocaleDateString()}`
+                                        }
                                     </div>
                                 </div>
                             </div>
-                            ${a.revoked
-                                ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
-                                : `<button onclick="revokeAdmin('${a.id}','${escapeHtml(a.username)}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`}
+                            ${
+                                a.revoked
+                                    ? `<span class="text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-100 text-red-700">Revoked</span>`
+                                    : `<button onclick="revokeAdmin('${a.id}','${escapeHtml(a.username)}')" class="btn btn-danger btn-sm"><i class="ph ph-prohibit"></i> Revoke</button>`
+                            }
                         </div>`);
                     }
                     list.innerHTML = rows.join("");
@@ -2389,7 +3517,6 @@
                 }
             }
 
-            /* ---------- LOGS ---------- */
             async function loadLogs() {
                 const ref = $("log-ref").value.trim();
                 if (!ref) {
@@ -2428,7 +3555,6 @@
                 }
             }
 
-            /* ---------- EXPORT ---------- */
             async function downloadExport(kind) {
                 try {
                     const res = await fetch(`/api/admin/export/${kind}`, {

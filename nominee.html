@@ -292,7 +292,7 @@
                 border-radius: 12px;
                 margin-bottom: 8px;
                 border: 1px solid transparent;
-                transition: all 0.2s;
+                transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             }
             .lb-row.me {
                 background: #eff6ff;
@@ -324,6 +324,7 @@
                 font-weight: 800;
                 font-size: 13px;
                 flex-shrink: 0;
+                transition: all 0.3s ease;
             }
             .lb-row.me .lb-rank {
                 background: #2563eb;
@@ -332,6 +333,23 @@
             .lb-row.other .lb-rank {
                 background: #e5e7eb;
                 color: #6b7280;
+            }
+            .lb-rank.rank-up {
+                animation: rankUp 0.8s ease;
+            }
+            @keyframes rankUp {
+                0% {
+                    transform: scale(1);
+                    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
+                }
+                50% {
+                    transform: scale(1.25);
+                    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+                }
+                100% {
+                    transform: scale(1);
+                    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+                }
             }
             .unlock-opt {
                 display: flex;
@@ -445,9 +463,179 @@
             .input.valid {
                 border-color: #86efac;
             }
+
+            #confetti-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                pointer-events: none;
+                z-index: 9999;
+            }
+            #d-votes.counting {
+                color: #2563eb;
+                text-shadow: 0 0 24px rgba(37, 99, 235, 0.35);
+            }
+            @keyframes votePop {
+                0% {
+                    transform: scale(1);
+                }
+                40% {
+                    transform: scale(1.15);
+                }
+                100% {
+                    transform: scale(1);
+                }
+            }
+            .vote-pop {
+                animation: votePop 0.5s ease;
+            }
+            .lb-row.climbing {
+                animation: climb 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            @keyframes climb {
+                0% {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                30% {
+                    transform: translateX(-8px);
+                    background: #dbeafe;
+                }
+                60% {
+                    transform: translateX(6px);
+                    background: #eff6ff;
+                }
+                100% {
+                    transform: translateX(0);
+                    background: inherit;
+                }
+            }
+
+            /* === Stage / zone banner — soft, encouraging palette === */
+            .zone-banner {
+                border-radius: 16px;
+                padding: 20px 22px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                border: 1px solid #e5e7eb;
+                background: #ffffff;
+                position: relative;
+            }
+            .zone-banner.safe {
+                background: #f0fdf4;
+                border-color: #bbf7d0;
+                color: #14532d;
+            }
+            .zone-banner.safe .zone-icon {
+                background: #dcfce7;
+                color: #16a34a;
+            }
+            .zone-banner.momentum {
+                background: #f0f9ff;
+                border-color: #bae6fd;
+                color: #0c4a6e;
+            }
+            .zone-banner.momentum .zone-icon {
+                background: #e0f2fe;
+                color: #0284c7;
+            }
+            .zone-banner.winner {
+                background: #fffbeb;
+                border-color: #fde68a;
+                color: #713f12;
+            }
+            .zone-banner.winner .zone-icon {
+                background: #fef3c7;
+                color: #d97706;
+            }
+            .zone-banner.eliminated {
+                background: #f8fafc;
+                border-color: #e2e8f0;
+                color: #475569;
+            }
+            .zone-banner.eliminated .zone-icon {
+                background: #f1f5f9;
+                color: #64748b;
+            }
+            .zone-banner.completed {
+                background: #f8fafc;
+                border-color: #e2e8f0;
+                color: #475569;
+            }
+            .zone-banner.completed .zone-icon {
+                background: #f1f5f9;
+                color: #64748b;
+            }
+            .zone-banner .zone-icon {
+                width: 52px;
+                height: 52px;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                flex-shrink: 0;
+            }
+            .zone-banner .zone-body {
+                flex: 1;
+                min-width: 0;
+            }
+            .zone-banner .zone-title {
+                font-size: 15px;
+                font-weight: 700;
+                margin-bottom: 4px;
+                color: inherit;
+            }
+            .zone-banner .zone-message {
+                font-size: 13px;
+                line-height: 1.5;
+                opacity: 0.85;
+                font-weight: 500;
+            }
+            .zone-banner .zone-progress {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 10px;
+            }
+            .zone-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: rgba(255, 255, 255, 0.75);
+                border: 1px solid rgba(0, 0, 0, 0.05);
+                padding: 3px 10px;
+                border-radius: 999px;
+                font-size: 11px;
+                font-weight: 600;
+                color: inherit;
+            }
+            .zone-banner .zone-actions {
+                display: flex;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            @media (max-width: 640px) {
+                .zone-banner {
+                    flex-wrap: wrap;
+                    padding: 16px 18px;
+                    gap: 12px;
+                }
+                .zone-banner .zone-actions {
+                    width: 100%;
+                }
+                .zone-banner .zone-actions .btn {
+                    width: 100%;
+                }
+            }
         </style>
     </head>
     <body class="min-h-screen">
+        <canvas id="confetti-canvas"></canvas>
+
         <!-- AUTH -->
         <section
             id="view-auth"
@@ -814,20 +1002,54 @@
                     </button>
                 </div>
 
+                <!-- STAGE / ZONE BANNER (NEW) -->
+                <div id="zone-banner" class="zone-banner green hidden">
+                    <div class="zone-icon">
+                        <i class="ph-fill ph-shield-check"></i>
+                    </div>
+                    <div class="zone-body">
+                        <div class="zone-title" id="zone-title">Safe Zone</div>
+                        <div class="zone-message" id="zone-message">
+                            You're in the safe zone. Keep it up!
+                        </div>
+                        <div class="zone-progress" id="zone-progress"></div>
+                    </div>
+                    <div class="zone-actions">
+                        <button
+                            onclick="openShareShortcut()"
+                            class="btn btn-sm"
+                            style="background: #059669"
+                        >
+                            <i class="ph-fill ph-share-network"></i> Share
+                        </button>
+                    </div>
+                </div>
+
                 <div class="card overflow-hidden">
                     <div class="flex flex-col md:flex-row">
                         <div
-                            class="relative md:w-2/5 lg:w-1/3 aspect-square md:aspect-auto md:min-h-[440px] bg-gray-100 shrink-0"
+                            class="relative md:w-2/5 lg:w-1/3 aspect-square md:aspect-auto md:min-h-[440px] bg-gray-100 shrink-0 group"
                         >
                             <img
                                 id="d-img"
                                 class="absolute inset-0 w-full h-full object-cover"
                                 alt=""
-                                onerror="this.onerror=null;this.src='https://placehold.co/800x800/1e293b/ffffff?text=?';"
+                                onerror="
+                                    this.onerror = null;
+                                    this.src =
+                                        'https://placehold.co/800x800/1e293b/ffffff?text=?';
+                                "
                             />
                             <div
                                 class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none"
                             ></div>
+                            <button
+                                onclick="openEditModal()"
+                                class="absolute bottom-4 right-4 bg-white/90 hover:bg-white text-gray-900 text-xs font-bold px-3 py-2 rounded-lg shadow-lg flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Edit photo or name"
+                            >
+                                <i class="ph ph-pencil-simple"></i> Edit
+                            </button>
                         </div>
 
                         <div class="flex-1 p-6 sm:p-8 flex flex-col">
@@ -852,7 +1074,7 @@
                                 >
                                     <span
                                         id="d-votes"
-                                        class="text-6xl sm:text-7xl font-extrabold text-gray-900 tracking-tighter transition-transform duration-200 inline-block"
+                                        class="text-6xl sm:text-7xl font-extrabold text-gray-900 tracking-tighter transition-all duration-200 inline-block"
                                         >0</span
                                     >
                                     <span
@@ -876,6 +1098,13 @@
                                     >
                                         —
                                     </h1>
+                                    <button
+                                        onclick="openEditModal()"
+                                        class="text-xs text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1"
+                                        title="Edit name or photo"
+                                    >
+                                        <i class="ph ph-pencil-simple"></i>
+                                    </button>
                                     <span
                                         class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-gray-100 text-gray-700 border border-gray-200"
                                     >
@@ -1135,6 +1364,86 @@
             </main>
         </section>
 
+        <!-- EDIT MODAL -->
+        <div id="edit-modal" class="modal">
+            <div class="modal-panel card w-full max-w-md p-6 relative">
+                <button
+                    onclick="closeModal('edit-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                >
+                    <i class="ph ph-x"></i>
+                </button>
+                <div id="edit-form">
+                    <div
+                        class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-3"
+                    >
+                        <i class="ph ph-pencil-simple text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-1">Edit Profile</h3>
+                    <p class="text-sm text-gray-500 mb-5">
+                        Update your display name or profile photo. Changes go
+                        live immediately.
+                    </p>
+
+                    <label
+                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
+                        >Profile Photo</label
+                    >
+                    <div
+                        class="photo-picker mb-4"
+                        onclick="
+                            document.getElementById('edit-img-file').click()
+                        "
+                    >
+                        <div class="placeholder" id="edit-picker-placeholder">
+                            <i class="ph ph-camera"></i
+                            ><span>Tap to change</span>
+                        </div>
+                        <img id="edit-img-preview" class="hidden" alt="" />
+                        <div class="overlay">
+                            <i class="ph ph-pencil-simple"></i> Change
+                        </div>
+                    </div>
+                    <input
+                        type="file"
+                        id="edit-img-file"
+                        accept="image/*"
+                        class="hidden"
+                        onchange="handleEditImage(event)"
+                    />
+                    <div class="upload-bar" id="edit-upload-bar">
+                        <div id="edit-upload-progress"></div>
+                    </div>
+
+                    <label
+                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 mt-5"
+                        >Display Name</label
+                    >
+                    <input
+                        id="edit-name"
+                        class="input mb-5"
+                        placeholder="Your public name"
+                    />
+
+                    <div class="flex gap-2">
+                        <button
+                            onclick="closeModal('edit-modal')"
+                            class="btn btn-outline flex-1"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            id="edit-save-btn"
+                            onclick="submitEditProfile()"
+                            class="btn flex-1"
+                        >
+                            <i class="ph ph-check"></i> Save Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- CHANGE CATEGORY MODAL -->
         <div id="change-cat-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
@@ -1211,10 +1520,7 @@
                     <p class="text-sm text-gray-600 mb-4">
                         Your category has been updated.
                     </p>
-                    <button
-                        onclick="verifyCategoryChange()"
-                        class="btn w-full"
-                    >
+                    <button onclick="verifyCategoryChange()" class="btn w-full">
                         Continue
                     </button>
                 </div>
@@ -1248,7 +1554,7 @@
             </div>
         </div>
 
-        <!-- UNLOCK MODAL — 4 tiers -->
+        <!-- UNLOCK MODAL -->
         <div id="unlock-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1327,7 +1633,11 @@
                             id="opt-12h"
                             onclick="selectUnlock('12h')"
                         >
-                            <input type="radio" name="unlock-type" value="12h" />
+                            <input
+                                type="radio"
+                                name="unlock-type"
+                                value="12h"
+                            />
                             <div
                                 class="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"
                             >
@@ -1350,7 +1660,11 @@
                             id="opt-24h"
                             onclick="selectUnlock('24h')"
                         >
-                            <input type="radio" name="unlock-type" value="24h" />
+                            <input
+                                type="radio"
+                                name="unlock-type"
+                                value="24h"
+                            />
                             <div
                                 class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"
                             >
@@ -1519,10 +1833,12 @@
                                         >One-time</span
                                     >
                                 </div>
-                                <p class="text-gray-300 text-xs leading-relaxed">
+                                <p
+                                    class="text-gray-300 text-xs leading-relaxed"
+                                >
                                     Instantly add
                                     <strong class="text-yellow-300"
-                                        >+50 verified votes</strong
+                                        >+100 verified votes</strong
                                     >
                                     to your campaign.
                                 </p>
@@ -1539,7 +1855,7 @@
                                 <div
                                     class="text-2xl font-black text-white leading-none"
                                 >
-                                    +50
+                                    +100
                                 </div>
                                 <div
                                     class="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1"
@@ -1634,7 +1950,7 @@
                             Boost Activated!
                         </h4>
                         <p class="text-sm text-gray-300 mb-4">
-                            +50 votes added to your campaign.
+                            +100 votes added to your campaign.
                         </p>
                         <button
                             onclick="
@@ -1785,6 +2101,18 @@
             let lastVoteCount = null;
             let voteEvents = [];
             let lbTimerInterval = null;
+            let currentZone = null;
+            let currentStage = null;
+
+            let editSelectedFile = null;
+            let editUploadedUrl = null;
+
+            const STAGE_LABELS = {
+                preliminaries: "Preliminaries",
+                semi_finals: "Semi Finals",
+                finals: "Finals",
+                completed: "Completed",
+            };
 
             function toast(msg, ok = true) {
                 const t = $("toast");
@@ -1952,7 +2280,10 @@
                 if (!email || !isValidEmail(email))
                     return toast("Please enter a valid email", false);
                 if (password.length < 8)
-                    return toast("Password must be at least 8 characters", false);
+                    return toast(
+                        "Password must be at least 8 characters",
+                        false,
+                    );
                 if (!/\d/.test(password))
                     return toast("Password must contain a number", false);
                 if (password !== password2)
@@ -2119,6 +2450,117 @@
                 reader.readAsDataURL(f);
             }
 
+            function handleEditImage(event) {
+                const f = event.target.files[0];
+                if (!f) return;
+                if (!f.type.startsWith("image/"))
+                    return toast("Please choose an image file", false);
+                if (f.size > 10 * 1024 * 1024)
+                    return toast("Image must be under 10 MB", false);
+                editSelectedFile = f;
+                editUploadedUrl = null;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    $("edit-img-preview").src = e.target.result;
+                    $("edit-img-preview").classList.remove("hidden");
+                    $("edit-picker-placeholder").classList.add("hidden");
+                };
+                reader.readAsDataURL(f);
+            }
+
+            function openEditModal() {
+                if (!nominee) return;
+                editSelectedFile = null;
+                editUploadedUrl = null;
+                $("edit-name").value = nominee.name || "";
+                $("edit-img-preview").src =
+                    nominee.img ||
+                    `https://placehold.co/400x400/1e293b/ffffff?text=${encodeURIComponent((nominee.name || "?")[0])}`;
+                $("edit-img-preview").classList.remove("hidden");
+                $("edit-picker-placeholder").classList.add("hidden");
+                $("edit-modal").classList.add("show");
+            }
+
+            async function submitEditProfile() {
+                if (!nominee) return;
+                const newName = $("edit-name").value.trim();
+                if (!newName) return toast("Name cannot be empty", false);
+                setBusy(
+                    "edit-save-btn",
+                    true,
+                    '<i class="ph ph-spinner animate-spin"></i> Saving…',
+                );
+                try {
+                    let imgUrl = null;
+                    if (editSelectedFile && !editUploadedUrl) {
+                        imgUrl = await uploadImageEdit();
+                    } else if (editUploadedUrl) {
+                        imgUrl = editUploadedUrl;
+                    }
+                    const body = { name: newName };
+                    if (imgUrl) body.img = imgUrl;
+                    const d = await api("/api/nominee/update-profile", {
+                        method: "POST",
+                        body: JSON.stringify(body),
+                    });
+                    nominee = d.nominee || nominee;
+                    $("d-name").innerText = nominee.name;
+                    if (nominee.img) $("d-img").src = nominee.img;
+                    closeModal("edit-modal");
+                    toast("Profile updated ✓");
+                } catch (e) {
+                    toast(e.message || "Update failed", false);
+                } finally {
+                    setBusy("edit-save-btn", false);
+                }
+            }
+
+            function uploadImageEdit() {
+                return new Promise((resolve, reject) => {
+                    if (!editSelectedFile) return resolve(null);
+                    const fd = new FormData();
+                    fd.append("image", editSelectedFile);
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload");
+                    xhr.setRequestHeader(
+                        "Authorization",
+                        "Bearer " + getToken(),
+                    );
+                    $("edit-upload-bar").classList.add("show");
+                    $("edit-upload-progress").style.width = "0%";
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            $("edit-upload-progress").style.width =
+                                Math.round((e.loaded / e.total) * 100) + "%";
+                        }
+                    };
+                    xhr.onload = () => {
+                        $("edit-upload-bar").classList.remove("show");
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const d = JSON.parse(xhr.responseText);
+                                editUploadedUrl = d.url;
+                                resolve(d.url);
+                            } catch {
+                                reject(new Error("Invalid response"));
+                            }
+                            return;
+                        }
+                        let msg = `Upload failed (${xhr.status})`;
+                        try {
+                            const parsed = JSON.parse(xhr.responseText);
+                            if (parsed && parsed.error) msg = parsed.error;
+                        } catch {}
+                        reject(new Error(msg));
+                    };
+                    xhr.onerror = () => {
+                        $("edit-upload-bar").classList.remove("show");
+                        reject(new Error("Network error"));
+                    };
+                    xhr.send(fd);
+                });
+            }
+
             function uploadImage() {
                 return new Promise((resolve, reject) => {
                     if (!selectedFile) return resolve(null);
@@ -2200,13 +2642,149 @@
                 }
             }
 
+            const _confettiCanvas = document.getElementById("confetti-canvas");
+            const _confettiCtx = _confettiCanvas
+                ? _confettiCanvas.getContext("2d")
+                : null;
+            let _confettiParticles = [];
+            let _confettiRaf = null;
+            let _confettiCols = [
+                "#2563eb",
+                "#16a34a",
+                "#facc15",
+                "#f97316",
+                "#a855f7",
+                "#ec4899",
+                "#0ea5e9",
+            ];
+
+            function _resizeConfetti() {
+                if (!_confettiCanvas) return;
+                _confettiCanvas.width = window.innerWidth;
+                _confettiCanvas.height = window.innerHeight;
+            }
+            window.addEventListener("resize", _resizeConfetti);
+            _resizeConfetti();
+
+            function _confettiBurst(opts = {}) {
+                if (!_confettiCtx) return;
+                const count = opts.count || 120;
+                const originX = opts.x ?? window.innerWidth / 2;
+                const originY = opts.y ?? window.innerHeight * 0.35;
+                const spread = opts.spread || Math.PI * 2;
+                const baseAngle = opts.baseAngle ?? -Math.PI / 2;
+                for (let i = 0; i < count; i++) {
+                    const angle = baseAngle + (Math.random() - 0.5) * spread;
+                    const speed = 6 + Math.random() * 8;
+                    _confettiParticles.push({
+                        x: originX,
+                        y: originY,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        size: 4 + Math.random() * 6,
+                        rot: Math.random() * Math.PI,
+                        rotV: (Math.random() - 0.5) * 0.3,
+                        color: _confettiCols[
+                            Math.floor(Math.random() * _confettiCols.length)
+                        ],
+                        life: 0,
+                        maxLife: 90 + Math.random() * 60,
+                        gravity: 0.28 + Math.random() * 0.15,
+                        drag: 0.985,
+                    });
+                }
+                if (!_confettiRaf)
+                    _confettiRaf = requestAnimationFrame(_confettiTick);
+            }
+
+            function _confettiTick() {
+                if (!_confettiCtx) return;
+                _confettiCtx.clearRect(
+                    0,
+                    0,
+                    _confettiCanvas.width,
+                    _confettiCanvas.height,
+                );
+                for (let i = _confettiParticles.length - 1; i >= 0; i--) {
+                    const p = _confettiParticles[i];
+                    p.life++;
+                    p.vy += p.gravity;
+                    p.vx *= p.drag;
+                    p.vy *= p.drag;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.rot += p.rotV;
+                    const alpha = Math.max(0, 1 - p.life / p.maxLife);
+                    if (
+                        alpha <= 0 ||
+                        p.y > window.innerHeight + 40 ||
+                        p.x < -40 ||
+                        p.x > window.innerWidth + 40
+                    ) {
+                        _confettiParticles.splice(i, 1);
+                        continue;
+                    }
+                    _confettiCtx.save();
+                    _confettiCtx.globalAlpha = alpha;
+                    _confettiCtx.translate(p.x, p.y);
+                    _confettiCtx.rotate(p.rot);
+                    _confettiCtx.fillStyle = p.color;
+                    _confettiCtx.fillRect(
+                        -p.size / 2,
+                        -p.size / 4,
+                        p.size,
+                        p.size / 2,
+                    );
+                    _confettiCtx.restore();
+                }
+                if (_confettiParticles.length > 0) {
+                    _confettiRaf = requestAnimationFrame(_confettiTick);
+                } else {
+                    _confettiRaf = null;
+                    _confettiCtx.clearRect(
+                        0,
+                        0,
+                        _confettiCanvas.width,
+                        _confettiCanvas.height,
+                    );
+                }
+            }
+
+            function animateNumber(el, from, to, duration = 1200, opts = {}) {
+                if (!el) return;
+                const start = performance.now();
+                const delta = to - from;
+                from = Number(from) || 0;
+                to = Number(to) || 0;
+                el.classList.add("counting");
+                el.classList.remove("vote-pop");
+                void el.offsetWidth;
+                el.classList.add("vote-pop");
+                function step(now) {
+                    const t = Math.min(1, (now - start) / duration);
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    const val = Math.round(from + delta * eased);
+                    el.innerText = val.toLocaleString();
+                    if (t < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        el.innerText = to.toLocaleString();
+                        el.classList.remove("counting");
+                        if (typeof opts.onDone === "function") opts.onDone();
+                    }
+                }
+                requestAnimationFrame(step);
+            }
+
             function paintVotes(n, animate = true) {
                 const el = $("d-votes");
                 if (!el) return;
-                el.innerText = Number(n || 0).toLocaleString();
-                if (animate) {
-                    el.classList.add("scale-110");
-                    setTimeout(() => el.classList.remove("scale-110"), 200);
+                const target = Number(n || 0);
+                const prev = Number(lastVoteCount ?? target);
+                if (!animate || target === prev) {
+                    el.innerText = target.toLocaleString();
+                } else {
+                    animateNumber(el, prev, target, 1400);
                 }
                 const upd = $("d-votes-updated");
                 if (upd)
@@ -2226,7 +2804,7 @@
 
             function applyVotes(fresh, source) {
                 fresh = Number(fresh || 0);
-                const prev = lastVoteCount ?? fresh;
+                const prev = Number(lastVoteCount ?? fresh);
                 if (fresh < prev) return;
                 if (nominee) nominee.votes = fresh;
                 if (fresh > prev) {
@@ -2234,6 +2812,10 @@
                     toast(`+${delta} new vote${delta > 1 ? "s" : ""} 🎉`);
                     pushVoteEvent(delta, fresh);
                     renderActivity();
+                    _confettiBurst({ count: Math.min(220, 60 + delta * 6) });
+                    try {
+                        loadDashboard();
+                    } catch {}
                 }
                 lastVoteCount = fresh;
                 paintVotes(fresh, fresh !== prev);
@@ -2271,6 +2853,15 @@
                             applyVotes(votes, "sse");
                         } catch {}
                     });
+                    voteStream.addEventListener("stage", (e) => {
+                        try {
+                            const { stage } = JSON.parse(e.data);
+                            toast(
+                                `Stage updated: ${STAGE_LABELS[stage] || stage}`,
+                            );
+                            setTimeout(() => loadDashboard(), 500);
+                        } catch {}
+                    });
                     voteStream.addEventListener("payment", (e) => {
                         try {
                             const evt = JSON.parse(e.data);
@@ -2285,12 +2876,27 @@
                             } else if (evt.type === "category_change") {
                                 toast("Category updated ✓");
                             } else if (evt.type === "boost_50") {
-                                toast("Power Boost activated · +50 votes 🚀");
+                                toast("Power Boost activated · +100 votes 🚀");
+                                _confettiBurst({
+                                    count: 300,
+                                    spread: Math.PI * 2,
+                                });
+                                if (evt.votes != null) {
+                                    const prev = Number(lastVoteCount ?? 0);
+                                    animateNumber(
+                                        $("d-votes"),
+                                        prev,
+                                        evt.votes,
+                                        1600,
+                                    );
+                                    lastVoteCount = evt.votes;
+                                    if (nominee) nominee.votes = evt.votes;
+                                }
                             }
                             closeModal("unlock-modal");
                             closeModal("change-cat-modal");
                             closeModal("boost-modal");
-                            setTimeout(() => loadDashboard(), 400);
+                            setTimeout(() => loadDashboard(), 600);
                         } catch {}
                     });
                     voteStream.onerror = () => {
@@ -2369,6 +2975,88 @@
                 lbTimerInterval = setInterval(tick, 1000);
             }
 
+            let _hasBooted = false;
+
+            function renderZoneBanner() {
+                const b = $("zone-banner");
+                if (!b || !currentZone) return;
+                b.classList.remove(
+                    "hidden",
+                    "safe",
+                    "momentum",
+                    "eliminated",
+                    "winner",
+                    "completed",
+                );
+                const title = $("zone-title");
+                const msg = $("zone-message");
+                const prog = $("zone-progress");
+                const icon = b.querySelector(".zone-icon i");
+                const actions = b.querySelector(".zone-actions");
+
+                const z = currentZone.zone;
+                const rank = currentZone.rank || 0;
+                const total = currentZone.total || 0;
+                const cutoff = currentZone.cutoff || 5;
+                const gap = currentZone.gap || 0;
+
+                // Show the "Share" shortcut for anyone still in the running
+                if (actions) actions.style.display = "";
+
+                if (z === "green") {
+                    b.classList.add("safe");
+                    icon.className = "ph-fill ph-seal-check";
+                    title.innerText = "You're in a strong position";
+                    msg.innerText =
+                        "You're inside the group that advances. Keep sharing your link — every vote helps you climb higher.";
+                    prog.innerHTML = `
+                        <span class="zone-pill"><i class="ph-fill ph-hash"></i> Rank #${rank}</span>
+                        <span class="zone-pill"><i class="ph-fill ph-users-three"></i> ${total} in category</span>
+                        <span class="zone-pill"><i class="ph-fill ph-flag-checkered"></i> Top ${cutoff} advance</span>
+                    `;
+                } else if (z === "danger") {
+                    b.classList.add("momentum");
+                    icon.className = "ph-fill ph-trend-up";
+                    title.innerText = "You're climbing";
+                    if (gap > 0) {
+                        msg.innerText = `You're #${rank} of ${total}. Just ${gap} more ${gap === 1 ? "vote" : "votes"} to reach the top ${cutoff} — keep going, you're close!`;
+                    } else {
+                        msg.innerText = `You're #${rank} of ${total}. A small push will take you to the top ${cutoff}. Keep sharing your link!`;
+                    }
+                    prog.innerHTML = `
+                        <span class="zone-pill"><i class="ph-fill ph-hash"></i> Rank #${rank}</span>
+                        <span class="zone-pill"><i class="ph-fill ph-target"></i> ${gap} ${gap === 1 ? "vote" : "votes"} to top ${cutoff}</span>
+                        <span class="zone-pill"><i class="ph-fill ph-users-three"></i> ${total} in category</span>
+                    `;
+                } else if (z === "winner") {
+                    b.classList.add("winner");
+                    icon.className = "ph-fill ph-trophy";
+                    title.innerText = "Congratulations — you won! 🏆";
+                    msg.innerText =
+                        "You're the winner in your category. Thank you for a great campaign and for inspiring your voters.";
+                    prog.innerHTML = "";
+                    if (actions) actions.style.display = "none";
+                } else if (z === "eliminated") {
+                    b.classList.add("eliminated");
+                    icon.className = "ph-fill ph-heart";
+                    title.innerText = "Thank you for taking part";
+                    const atLabel = currentZone.stage
+                        ? STAGE_LABELS[currentZone.stage] || currentZone.stage
+                        : "an earlier stage";
+                    msg.innerText = `Your journey ended at ${atLabel}. We truly appreciate your participation — thank you for being part of Gala Awards 2026.`;
+                    prog.innerHTML = "";
+                    if (actions) actions.style.display = "none";
+                } else if (z === "completed") {
+                    b.classList.add("completed");
+                    icon.className = "ph-fill ph-flag-checkered";
+                    title.innerText = "Election complete";
+                    msg.innerText =
+                        "The votes have been counted and the results are in. Thank you for being part of Gala Awards 2026.";
+                    prog.innerHTML = "";
+                    if (actions) actions.style.display = "none";
+                }
+            }
+
             async function loadDashboard(opts = {}) {
                 const fromLogin = !!opts.fromLogin;
                 if (!getToken()) {
@@ -2379,6 +3067,8 @@
                 try {
                     const d = await api("/api/nominee/me");
                     nominee = d.nominee;
+                    currentZone = d.zone || null;
+                    currentStage = d.stage?.current || null;
                     $("dashboard-error").classList.add("hidden");
 
                     $("d-img").src =
@@ -2388,10 +3078,31 @@
                     $("d-cat").innerText = nominee.category;
                     $("d-code").innerText = nominee.code;
 
-                    lastVoteCount = Number(nominee.votes || 0);
-                    paintVotes(lastVoteCount, false);
+                    renderZoneBanner();
 
-                    // ✅ FIX: Share link now uses query parameter format
+                    const newTotal = Number(nominee.votes || 0);
+                    if (!_hasBooted) {
+                        lastVoteCount = newTotal;
+                        paintVotes(lastVoteCount, false);
+                        _hasBooted = true;
+                        setTimeout(
+                            () =>
+                                _confettiBurst({
+                                    count: 180,
+                                    spread: Math.PI * 2,
+                                }),
+                            200,
+                        );
+                    } else {
+                        const prev = Number(lastVoteCount ?? newTotal);
+                        if (newTotal !== prev) {
+                            animateNumber($("d-votes"), prev, newTotal, 1400);
+                        } else {
+                            paintVotes(newTotal, false);
+                        }
+                        lastVoteCount = newTotal;
+                    }
+
                     $("d-link").value =
                         `${location.origin}/?c=${encodeURIComponent(nominee.code)}`;
 
@@ -2423,10 +3134,10 @@
             }
 
             function renderLeaderboard(board, access) {
-                const row = (icon, label, votes, me) => `
-                    <div class="lb-row ${me ? "me" : "other"}">
+                const row = (icon, label, votes, me, opts = {}) => `
+                    <div class="lb-row ${me ? "me" : "other"} ${opts.climbing ? "climbing" : ""}" data-key="${opts.key || ""}">
                         <div class="flex items-center gap-3 relative z-10">
-                            <div class="lb-rank"><i class="${icon}"></i></div>
+                            <div class="lb-rank ${opts.rankUp ? "rank-up" : ""}"><i class="${icon}"></i></div>
                             <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs text-gray-500 font-medium"}">${label}</span>
                         </div>
                         <span class="${me ? "font-bold text-blue-700 text-sm" : "text-xs font-mono text-gray-500"}">${(votes || 0).toLocaleString()}</span>
@@ -2438,15 +3149,23 @@
                         "Competitor Ahead",
                         board.above.votes,
                         false,
+                        { key: "above" },
                     );
                 if (board && board.self)
-                    relHTML += row("ph ph-user", "You", board.self.votes, true);
+                    relHTML += row(
+                        "ph ph-user",
+                        "You",
+                        board.self.votes,
+                        true,
+                        { key: "self", rankUp: true },
+                    );
                 if (board && board.below)
                     relHTML += row(
                         "ph ph-arrow-down",
                         "Competitor Behind",
                         board.below.votes,
                         false,
+                        { key: "below" },
                     );
                 $("rel-board").innerHTML =
                     relHTML ||
@@ -2491,12 +3210,19 @@
             async function loadFullLeaderboard() {
                 try {
                     const d = await api("/api/nominee/leaderboard");
-                    $("full-board").innerHTML = d.leaderboard
-                        .map(
-                            (r) => `
-                        <div class="lb-row ${r.isMe ? "me" : "other"}">
+                    const prevSelfRank = window.__lastSelfRank;
+                    let newSelfRank = null;
+                    const html = d.leaderboard
+                        .map((r) => {
+                            if (r.isMe) newSelfRank = r.rank;
+                            const climbing =
+                                r.isMe &&
+                                prevSelfRank != null &&
+                                r.rank < prevSelfRank;
+                            return `
+                        <div class="lb-row ${r.isMe ? "me" : "other"} ${climbing ? "climbing" : ""}">
                             <div class="flex items-center gap-3 relative z-10 min-w-0">
-                                <div class="lb-rank">${r.rank}</div>
+                                <div class="lb-rank ${climbing ? "rank-up" : ""}">${r.rank}</div>
                                 <div class="min-w-0">
                                     <div class="text-sm font-semibold truncate">${r.name}${r.isMe ? ' <span class="text-blue-600 text-xs">(You)</span>' : ""}</div>
                                     <div class="text-[10px] font-mono text-gray-500">${r.code}</div>
@@ -2504,9 +3230,12 @@
                             </div>
                             <div class="text-sm font-mono font-bold ${r.isMe ? "text-blue-700" : "text-gray-700"} relative z-10">${(r.votes || 0).toLocaleString()}</div>
                         </div>
-                    `,
-                        )
+                    `;
+                        })
                         .join("");
+                    $("full-board").innerHTML = html;
+                    if (newSelfRank != null)
+                        window.__lastSelfRank = newSelfRank;
                     if (d.access?.type === "timed" && d.access.expiresAt) {
                         startLeaderboardTimer(d.access.expiresAt);
                     }
@@ -2561,6 +3290,11 @@
                 const wrap = $("boost-card-wrap");
                 if (!wrap || !nominee) return;
 
+                if (nominee.eliminated) {
+                    wrap.innerHTML = "";
+                    return;
+                }
+
                 if (nominee.boosted) {
                     const dateStr = nominee.boostPurchasedAt
                         ? new Date(nominee.boostPurchasedAt).toLocaleDateString(
@@ -2579,7 +3313,7 @@
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="text-green-300 font-extrabold text-lg tracking-tight">Power Boost Active</h3>
-                                        <span class="text-[10px] font-bold bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full uppercase tracking-wider">+50 votes</span>
+                                        <span class="text-[10px] font-bold bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full uppercase tracking-wider">+100 votes</span>
                                     </div>
                                     <p class="text-green-400/80 text-xs">Activated${dateStr ? " on " + dateStr : ""} · Counts toward your final total.</p>
                                 </div>
@@ -2604,12 +3338,12 @@
                                         <h3 class="text-white text-xl font-extrabold tracking-tight">Power Boost</h3>
                                         <span class="text-[10px] font-bold bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider">One-time</span>
                                     </div>
-                                    <p class="text-gray-300 text-sm leading-relaxed">Instantly add <strong class="text-yellow-300">+50 verified votes</strong> to your campaign.</p>
+                                    <p class="text-gray-300 text-sm leading-relaxed">Instantly add <strong class="text-yellow-300">+100 verified votes</strong> to your campaign.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-3 mb-5">
                                 <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
-                                    <div class="text-2xl font-black text-white leading-none">+50</div>
+                                    <div class="text-2xl font-black text-white leading-none">+100</div>
                                     <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Votes added</div>
                                 </div>
                                 <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
@@ -2632,8 +3366,20 @@
                     </div>`;
             }
 
+            function openShareShortcut() {
+                $("d-link")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+            }
+
             function openBoost() {
                 if (!nominee) return;
+                if (nominee.eliminated)
+                    return toast(
+                        "You cannot purchase a boost after elimination",
+                        false,
+                    );
                 if (nominee.boosted)
                     return toast("Boost already active", false);
                 $("boost-phone").value = "";
@@ -2736,6 +3482,11 @@
 
             function openChangeCategory() {
                 if (!nominee) return;
+                if (nominee.eliminated)
+                    return toast(
+                        "You cannot change category after elimination",
+                        false,
+                    );
                 const others = categories.filter(
                     (c) => c.id !== nominee.category_id,
                 );
@@ -2886,6 +3637,10 @@
                             pollTimers[kind] = null;
                             $(loadingId).classList.add("hidden");
                             $(successId).classList.remove("hidden");
+                            _confettiBurst({
+                                count: kind === "boost" ? 300 : 160,
+                                spread: Math.PI * 2,
+                            });
                         } else if (
                             s.status === "failed" ||
                             s.status === "abandoned"

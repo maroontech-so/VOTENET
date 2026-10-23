@@ -50,7 +50,7 @@ const LEADERBOARD_1H_MS = 60 * 60 * 1000;
 const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000;
 const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000;
 const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000;
-const BOOST_VOTES = 50;
+const BOOST_VOTES = 100;
 const STALE_TX_MINUTES = 15;
 const SYNC_PUSH_INTERVAL_MS = 30_000;
 const SYNC_PULL_INTERVAL_MS = 60_000;
@@ -65,6 +65,27 @@ const IMG_JPEG_QUALITY = 82;
 const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000;
 const REPORT_SECRET =
   process.env.REPORT_SECRET || JWT_SECRET || "voteus-report-secret";
+
+// ─── Stage system constants ───
+const STAGE_ORDER = ["preliminaries", "semi_finals", "finals", "completed"];
+const STAGE_LABELS = {
+  preliminaries: "Preliminaries",
+  semi_finals: "Semi Finals",
+  finals: "Finals",
+  completed: "Completed",
+};
+const NEXT_STAGE = {
+  preliminaries: "semi_finals",
+  semi_finals: "finals",
+  finals: "completed",
+  completed: null,
+};
+// Number that advance FROM the current stage TO the next
+const STAGE_CUTOFF = {
+  preliminaries: 5, // Top 5 advance to semis
+  semi_finals: 2, // Top 2 advance to finals
+  finals: 1, // Top 1 wins
+};
 
 app.use(
   express.json({
@@ -219,6 +240,233 @@ function parseFingerprint(fpJson) {
   }
 }
 
+// ─── Stage helpers ───
+async function getStages() {
+  try {
+    const row = await db
+      .prepare("SELECT * FROM election_stages WHERE id = 1")
+      .get();
+    if (row) return row;
+  } catch (e) {
+    console.warn("[Stages]", e.message);
+  }
+  return {
+    id: 1,
+    current_stage: "preliminaries",
+    preliminaries_start: null,
+    preliminaries_end: VOTE_DEADLINE,
+    semifinals_start: null,
+    semifinals_end: null,
+    finals_start: null,
+    finals_end: null,
+    last_advanced_at: null,
+    updated_at: null,
+  };
+}
+
+function stageStartField(stage) {
+  return {
+    preliminaries: "preliminaries_start",
+    semi_finals: "semifinals_start",
+    finals: "finals_start",
+    completed: null,
+  }[stage];
+}
+
+function stageEndField(stage) {
+  return {
+    preliminaries: "preliminaries_end",
+    semi_finals: "semifinals_end",
+    finals: "finals_end",
+    completed: null,
+  }[stage];
+}
+
+async function votingOpen() {
+  const s = await getStages();
+  if (!s || s.current_stage === "completed") return false;
+  const now = Date.now();
+  const start = s[stageStartField(s.current_stage)];
+  const end = s[stageEndField(s.current_stage)];
+  if (start) {
+    const startMs = new Date(start).getTime();
+    if (Number.isFinite(startMs) && now < startMs) return false;
+  }
+  if (end) {
+    const endMs = new Date(end).getTime();
+    if (Number.isFinite(endMs) && now > endMs) return false;
+  }
+  return true;
+}
+
+function broadcastStage(stage) {
+  broadcastAdminEvent({ type: "stage:updated", stage });
+  const payload = `event: stage\ndata: ${JSON.stringify({ stage })}\n\n`;
+  for (const clients of nomineeVoteClients.values()) {
+    for (const r of clients) writeSSE(r, payload);
+  }
+  for (const r of publicVoteClients) writeSSE(r, payload);
+}
+
+async function advanceStage() {
+  const s = await getStages();
+  const current = s.current_stage || "preliminaries";
+  if (current === "completed")
+    return { ok: false, error: "Election already completed" };
+  const next = NEXT_STAGE[current];
+  if (!next) return { ok: false, error: "No next stage" };
+
+  const categories = await db.prepare("SELECT id, name FROM categories").all();
+  const now = new Date().toISOString();
+  const results = [];
+
+  for (const cat of categories) {
+    // Active nominees in this category, ranked by current cumulative votes
+    const rows = await db
+      .prepare(
+        `SELECT id, name, votes FROM nominees
+         WHERE category_id = ? AND eliminated = 0
+         ORDER BY COALESCE(votes, 0) DESC, created_at ASC`,
+      )
+      .all(cat.id);
+
+    const cutoff = STAGE_CUTOFF[current] || 999;
+
+    if (next === "completed") {
+      // Finalize winner (rank 1) and rank all others
+      for (let i = 0; i < rows.length; i++) {
+        const n = rows[i];
+        if (i === 0) {
+          await db
+            .prepare(
+              `UPDATE nominees SET final_rank = 1, stage = 'winner', eliminated = 0 WHERE id = ?`,
+            )
+            .run(n.id);
+        } else {
+          await db
+            .prepare(
+              `UPDATE nominees SET final_rank = ?, eliminated = 1, eliminated_stage = 'finals' WHERE id = ?`,
+            )
+            .run(i + 1, n.id);
+        }
+      }
+      results.push({
+        category: cat.name,
+        winner: rows[0]?.name || null,
+        runnerUp: rows[1]?.name || null,
+      });
+    } else {
+      for (let i = 0; i < rows.length; i++) {
+        const n = rows[i];
+        if (i < cutoff) {
+          await db
+            .prepare(
+              `UPDATE nominees SET stage = ?, qualified_at = ? WHERE id = ?`,
+            )
+            .run(next, now, n.id);
+        } else {
+          await db
+            .prepare(
+              `UPDATE nominees SET eliminated = 1, eliminated_stage = ? WHERE id = ?`,
+            )
+            .run(current, n.id);
+        }
+      }
+      results.push({
+        category: cat.name,
+        qualified: rows.slice(0, cutoff).map((n) => ({
+          name: n.name,
+          votes: n.votes,
+        })),
+        eliminated: rows.slice(cutoff).map((n) => ({
+          name: n.name,
+          votes: n.votes,
+        })),
+      });
+    }
+  }
+
+  await db
+    .prepare(
+      `UPDATE election_stages SET current_stage = ?, last_advanced_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+    )
+    .run(next, now);
+
+  db.push().catch((e) => console.warn("[Push after stage advance]", e.message));
+  broadcastStage(next);
+
+  return { ok: true, from: current, to: next, results };
+}
+
+async function getNomineeZone(nominee) {
+  if (nominee.eliminated) {
+    const atLabel =
+      STAGE_LABELS[nominee.eliminated_stage] || nominee.eliminated_stage || "a";
+    return {
+      zone: "eliminated",
+      label: "Eliminated",
+      message: `You were eliminated at ${atLabel}. Thank you for participating.`,
+      stage: nominee.eliminated_stage,
+    };
+  }
+  if (nominee.stage === "winner") {
+    return {
+      zone: "winner",
+      label: "Winner",
+      message: "Congratulations — you are the winner! 🏆",
+    };
+  }
+
+  const s = await getStages();
+  const current = s.current_stage || "preliminaries";
+  if (current === "completed") {
+    return {
+      zone: "completed",
+      label: "Completed",
+      message: "The election has ended.",
+    };
+  }
+
+  const cutoff = STAGE_CUTOFF[current] || 5;
+  const active = await db
+    .prepare(
+      `SELECT id, votes FROM nominees
+       WHERE category_id = ? AND eliminated = 0
+       ORDER BY COALESCE(votes, 0) DESC, created_at ASC`,
+    )
+    .all(nominee.category_id);
+
+  const myIdx = active.findIndex((n) => n.id === nominee.id);
+  const myRank = myIdx >= 0 ? myIdx + 1 : active.length + 1;
+  const total = active.length;
+
+  if (myRank <= cutoff) {
+    return {
+      zone: "green",
+      label: "Safe Zone",
+      rank: myRank,
+      cutoff,
+      total,
+      message: `You're #${myRank} of ${total} — inside the safe zone (top ${cutoff}). Keep it up!`,
+    };
+  }
+
+  const cutoffNominee = active[cutoff - 1];
+  const gap = cutoffNominee
+    ? Math.max(0, (cutoffNominee.votes || 0) - (nominee.votes || 0) + 1)
+    : 0;
+
+  return {
+    zone: "danger",
+    label: "At Risk",
+    rank: myRank,
+    cutoff,
+    total,
+    gap,
+    message: `You're #${myRank} of ${total} — need ${gap} more vote${gap === 1 ? "" : "s"} to enter the safe zone (top ${cutoff}). Share your link!`,
+  };
+}
+
 async function initSchema() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -275,7 +523,34 @@ async function initSchema() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP, revoked INTEGER DEFAULT 0,
       revoked_at TEXT, revoked_by TEXT
     );
+    CREATE TABLE IF NOT EXISTS election_stages (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      current_stage TEXT DEFAULT 'preliminaries',
+      preliminaries_start TEXT,
+      preliminaries_end TEXT,
+      semifinals_start TEXT,
+      semifinals_end TEXT,
+      finals_start TEXT,
+      finals_end TEXT,
+      last_advanced_at TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  // Add stage columns to nominees
+  for (const col of [
+    "stage TEXT DEFAULT 'preliminaries'",
+    "eliminated INTEGER DEFAULT 0",
+    "eliminated_stage TEXT",
+    "qualified_at TEXT",
+    "final_rank INTEGER",
+  ]) {
+    try {
+      await db.exec(`ALTER TABLE nominees ADD COLUMN ${col}`);
+    } catch (e) {
+      /* column exists */
+    }
+  }
 
   for (const col of ["device_hash TEXT", "ip TEXT", "category_id TEXT"]) {
     try {
@@ -296,10 +571,6 @@ async function initSchema() {
     }
   }
 
-  // ── CRITICAL FIX ──────────────────────────────────────────────
-  // Device/category uniqueness must EXCLUDE appeal votes so approved
-  // re-votes succeed even when the original device vote exists.
-  // Old index caused approved appeal votes to fail with UNIQUE constraint.
   try {
     await db.exec(`DROP INDEX IF EXISTS idx_fv_device_cat`);
     await db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
@@ -308,31 +579,6 @@ async function initSchema() {
     console.log("[Schema] ✓ idx_fv_device_cat (non-appeal only)");
   } catch (e) {
     console.error(`[Schema] idx_fv_device_cat failed: ${e.message}`);
-    // Fallback: log existing duplicates so admin can clean them up
-    try {
-      const dups = await db
-        .prepare(
-          `SELECT device_hash, category_id, COUNT(*) AS n
-           FROM free_votes
-           WHERE device_hash IS NOT NULL AND is_appeal = 0
-           GROUP BY device_hash, category_id
-           HAVING n > 1
-           LIMIT 10`,
-        )
-        .all();
-      if (dups.length) {
-        console.error(
-          `[Schema] Found ${dups.length} device+category duplicate(s) — admin cleanup needed before index can be created`,
-        );
-        for (const d of dups) {
-          console.error(
-            `  device=${d.device_hash?.slice(0, 12)}… category=${d.category_id} count=${d.n}`,
-          );
-        }
-      }
-    } catch (de) {
-      console.warn("[Schema] dup check:", de.message);
-    }
   }
 
   try {
@@ -351,6 +597,24 @@ async function initSchema() {
       console.log(`[Schema] Normalized ${r.changes} NULL votes row(s)`);
   } catch (e) {
     console.warn("[Schema] votes backfill:", e.message);
+  }
+
+  // Seed election_stages
+  try {
+    const existing = await db
+      .prepare("SELECT COUNT(*) AS c FROM election_stages")
+      .get();
+    if (!existing || Number(existing.c) === 0) {
+      await db
+        .prepare(
+          `INSERT INTO election_stages (id, current_stage, preliminaries_start, preliminaries_end)
+           VALUES (1, 'preliminaries', ?, ?)`,
+        )
+        .run(new Date().toISOString(), VOTE_DEADLINE);
+      console.log("[Schema] Seeded default election_stages row");
+    }
+  } catch (e) {
+    console.warn("[Schema] election_stages seed:", e.message);
   }
 
   try {
@@ -491,9 +755,6 @@ function generateCode(name) {
     .toUpperCase()
     .slice(0, 2);
   return `VOTE_${initials}${Math.floor(100 + Math.random() * 900)}`;
-}
-function votingOpen() {
-  return new Date() < new Date(VOTE_DEADLINE);
 }
 function normalizePhone(phone) {
   let p = String(phone).replace(/\D/g, "");
@@ -748,24 +1009,6 @@ async function broadcastVotes(nomineeId, votes) {
     console.warn("[SSE nominee broadcast]", e.message);
   }
 }
-
-// Ground-truth vote count: COUNT(free_votes) + nominee_boosts.votes_added.
-// Persists the absolute value to nominees.votes (idempotent — safe if sync
-// layer clobbers nominees.votes).
-async function getAbsoluteVotes(nomineeId) {
-  const countRow = await db
-    .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
-    .get(nomineeId);
-  const boostRow = await db
-    .prepare("SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?")
-    .get(nomineeId);
-  const total = (countRow?.c || 0) + (boostRow?.votes_added || 0);
-  await db
-    .prepare("UPDATE nominees SET votes = ? WHERE id = ?")
-    .run(total, nomineeId);
-  return total;
-}
-
 function broadcastPublicVote(nomineeId, votes) {
   const payload = `event: vote\ndata: ${JSON.stringify({ nomineeId, votes })}\n\n`;
   for (const r of publicVoteClients) writeSSE(r, payload);
@@ -853,8 +1096,6 @@ function escapeAttr(s) {
   );
 }
 
-// Report data computes votes from source of truth (free_votes + boost)
-// instead of trusting denormalized nominees.votes which can drift.
 async function loadReportData(req) {
   const isSuper = req.admin.role === "super";
   const reportId = buildReportId();
@@ -866,11 +1107,9 @@ async function loadReportData(req) {
     .all();
   const nominees = await db
     .prepare(
-      `SELECT n.id, n.name, n.code, n.category_id,
-        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes
-       FROM nominees n
-       ORDER BY n.category_id ASC, votes DESC`,
+      `SELECT id, name, code, category_id, COALESCE(votes, 0) as votes,
+        stage, eliminated, eliminated_stage, final_rank
+     FROM nominees ORDER BY category_id, COALESCE(votes, 0) DESC`,
     )
     .all();
   const totalVotes = nominees.reduce((s, n) => s + (n.votes || 0), 0);
@@ -908,6 +1147,10 @@ async function loadReportData(req) {
         rank: i + 1,
         percent:
           catTotal > 0 ? Math.round((n.votes / catTotal) * 1000) / 10 : 0,
+        stage: n.stage,
+        eliminated: n.eliminated,
+        eliminated_stage: n.eliminated_stage,
+        final_rank: n.final_rank,
       })),
     };
   });
@@ -1018,7 +1261,6 @@ async function completeTransaction(reference, receipt) {
           sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
           args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
         });
-        // Absolute count — immune to pull races
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -1026,15 +1268,13 @@ async function completeTransaction(reference, receipt) {
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
-        const upd = await t.get(
-          "SELECT votes FROM nominees WHERE id = ?",
-          [txRow.nominee_id],
-        );
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
         extra.votes = upd?.votes || 0;
         extra.nomineeId = txRow.nominee_id;
         extra.boosted = true;
       } else if (txRow.type === "vote") {
-        // Absolute count
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -1042,10 +1282,9 @@ async function completeTransaction(reference, receipt) {
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
-        const upd = await t.get(
-          "SELECT votes FROM nominees WHERE id = ?",
-          [txRow.nominee_id],
-        );
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
         extra.votes = upd?.votes || 0;
         extra.nomineeId = txRow.nominee_id;
       }
@@ -1069,7 +1308,6 @@ async function completeTransaction(reference, receipt) {
           votes: result.extra?.votes || null,
         });
       }
-      // Broadcast boost votes to nominee + public SSE
       if (result.extra?.boosted && result.extra?.nomineeId) {
         broadcastVotes(result.extra.nomineeId, result.extra.votes);
         broadcastPublicVote(result.extra.nomineeId, result.extra.votes);
@@ -1347,12 +1585,56 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-app.get("/api/config", (req, res) => {
+// ── Public stages endpoint ──
+app.get("/api/stages", async (req, res) => {
+  const s = await getStages();
+  const open = await votingOpen();
   res.json({
-    deadline: VOTE_DEADLINE,
-    votingOpen: votingOpen(),
+    current: s.current_stage,
+    label: STAGE_LABELS[s.current_stage] || s.current_stage,
+    next: NEXT_STAGE[s.current_stage] || null,
+    nextLabel: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
+    cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+    votingOpen: open,
+    preliminaries_start: s.preliminaries_start,
+    preliminaries_end: s.preliminaries_end,
+    semifinals_start: s.semifinals_start,
+    semifinals_end: s.semifinals_end,
+    finals_start: s.finals_start,
+    finals_end: s.finals_end,
+    last_advanced_at: s.last_advanced_at,
+    updated_at: s.updated_at,
+  });
+});
+
+app.get("/api/config", async (req, res) => {
+  const s = await getStages();
+  const open = await votingOpen();
+  const currentEnd =
+    {
+      preliminaries: s.preliminaries_end,
+      semi_finals: s.semifinals_end,
+      finals: s.finals_end,
+      completed: null,
+    }[s.current_stage] || VOTE_DEADLINE;
+  res.json({
+    deadline: currentEnd,
+    votingOpen: open,
     freeVoting: true,
     votesPerCategory: 1,
+    stage: {
+      current: s.current_stage,
+      label: STAGE_LABELS[s.current_stage] || s.current_stage,
+      preliminariesStart: s.preliminaries_start,
+      preliminariesEnd: s.preliminaries_end,
+      semifinalsStart: s.semifinals_start,
+      semifinalsEnd: s.semifinals_end,
+      finalsStart: s.finals_start,
+      finalsEnd: s.finals_end,
+      next: NEXT_STAGE[s.current_stage] || null,
+      nextLabel: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
+      cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+    },
     payheroConfigured: !!(
       PAYHERO_API_KEY &&
       PAYHERO_API_SECRET &&
@@ -1781,6 +2063,105 @@ app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   }
 });
 
+// ─── Admin: Stage management (super only) ───
+app.get("/api/admin/stages/status", superAuth, async (req, res) => {
+  try {
+    const s = await getStages();
+    const cats = await db.prepare("SELECT id, name FROM categories").all();
+    const counts = [];
+    for (const cat of cats) {
+      const row = await db
+        .prepare(
+          `SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN eliminated = 0 THEN 1 ELSE 0 END) AS active
+           FROM nominees WHERE category_id = ?`,
+        )
+        .get(cat.id);
+      counts.push({
+        category: cat.name,
+        total: Number(row?.total || 0),
+        active: Number(row?.active || 0),
+      });
+    }
+    res.json({
+      stages: {
+        current_stage: s.current_stage,
+        label: STAGE_LABELS[s.current_stage] || s.current_stage,
+        next: NEXT_STAGE[s.current_stage] || null,
+        next_label: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
+        cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+        preliminaries_start: s.preliminaries_start,
+        preliminaries_end: s.preliminaries_end,
+        semifinals_start: s.semifinals_start,
+        semifinals_end: s.semifinals_end,
+        finals_start: s.finals_start,
+        finals_end: s.finals_end,
+        last_advanced_at: s.last_advanced_at,
+        updated_at: s.updated_at,
+      },
+      counts,
+    });
+  } catch (e) {
+    console.error("[Stage status]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/stages/config", superAuth, async (req, res) => {
+  try {
+    const {
+      preliminaries_start,
+      preliminaries_end,
+      semifinals_start,
+      semifinals_end,
+      finals_start,
+      finals_end,
+    } = req.body || {};
+    await getStages(); // ensure row exists
+    await db
+      .prepare(
+        `UPDATE election_stages SET
+          preliminaries_start = ?,
+          preliminaries_end = ?,
+          semifinals_start = ?,
+          semifinals_end = ?,
+          finals_start = ?,
+          finals_end = ?,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = 1`,
+      )
+      .run(
+        preliminaries_start || null,
+        preliminaries_end || null,
+        semifinals_start || null,
+        semifinals_end || null,
+        finals_start || null,
+        finals_end || null,
+      );
+    const s = await getStages();
+    db.push().catch((e) =>
+      console.warn("[Push after stage config]", e.message),
+    );
+    broadcastStage(s.current_stage);
+    res.json({ ok: true, stages: s });
+  } catch (e) {
+    console.error("[Stage config]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/stages/advance", superAuth, async (req, res) => {
+  try {
+    const r = await advanceStage();
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r);
+  } catch (e) {
+    console.error("[Stage advance]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 async function getLeaderboardAccess(userId) {
   const acc = await db
     .prepare("SELECT * FROM leaderboard_access WHERE user_id = ?")
@@ -1806,7 +2187,8 @@ app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
       `SELECT n.id, n.user_id, n.name, n.category_id, n.code, n.img, n.desc,
-            COALESCE(n.votes, 0) AS votes, n.created_at, c.name as category
+            COALESCE(n.votes, 0) AS votes, n.created_at, c.name as category,
+            n.stage, n.eliminated, n.eliminated_stage, n.final_rank
      FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?`,
     )
     .get(req.user.id);
@@ -1816,18 +2198,38 @@ app.get("/api/nominee/me", auth, async (req, res) => {
       "SELECT votes_added, created_at FROM nominee_boosts WHERE nominee_id = ?",
     )
     .get(nominee.id);
-  const rows = await db
+
+  // Leaderboard: active nominees only (eliminated ones are out of competition)
+  const activeRows = await db
     .prepare(
       `SELECT id, COALESCE(votes, 0) AS votes FROM nominees
-     WHERE category_id = ? ORDER BY COALESCE(votes, 0) DESC`,
+       WHERE category_id = ? AND eliminated = 0
+       ORDER BY COALESCE(votes, 0) DESC, created_at ASC`,
     )
     .all(nominee.category_id);
-  const idx = rows.findIndex((r) => r.id === nominee.id);
-  const leaderboard = {
-    above: idx > 0 ? { votes: rows[idx - 1].votes } : null,
-    self: { votes: nominee.votes },
-    below: idx < rows.length - 1 ? { votes: rows[idx + 1].votes } : null,
-  };
+  const idx = activeRows.findIndex((r) => r.id === nominee.id);
+  let leaderboard;
+  if (idx >= 0) {
+    leaderboard = {
+      above: idx > 0 ? { votes: activeRows[idx - 1].votes } : null,
+      self: { votes: nominee.votes },
+      below:
+        idx < activeRows.length - 1
+          ? { votes: activeRows[idx + 1].votes }
+          : null,
+    };
+  } else {
+    leaderboard = {
+      above: null,
+      self: { votes: nominee.votes },
+      below: null,
+      eliminated: true,
+    };
+  }
+
+  const stages = await getStages();
+  const zone = await getNomineeZone(nominee);
+
   res.json({
     nominee: {
       ...nominee,
@@ -1839,7 +2241,72 @@ app.get("/api/nominee/me", auth, async (req, res) => {
     leaderboardAccess: await getLeaderboardAccess(req.user.id),
     boostPrice: PRICES.boost_50,
     boostVotes: BOOST_VOTES,
+    stage: {
+      current: stages.current_stage,
+      label: STAGE_LABELS[stages.current_stage] || stages.current_stage,
+      next: NEXT_STAGE[stages.current_stage] || null,
+      nextLabel: STAGE_LABELS[NEXT_STAGE[stages.current_stage]] || null,
+      cutoff: STAGE_CUTOFF[stages.current_stage] || 5,
+      preliminariesStart: stages.preliminaries_start,
+      preliminariesEnd: stages.preliminaries_end,
+      semifinalsStart: stages.semifinals_start,
+      semifinalsEnd: stages.semifinals_end,
+      finalsStart: stages.finals_start,
+      finalsEnd: stages.finals_end,
+    },
+    zone,
   });
+});
+
+app.post("/api/nominee/update-profile", auth, async (req, res) => {
+  const { name, img } = req.body || {};
+  const nominee = await db
+    .prepare("SELECT * FROM nominees WHERE user_id = ?")
+    .get(req.user.id);
+  if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
+
+  const updates = [];
+  const args = [];
+
+  if (name !== undefined) {
+    const cleanName = String(name).trim();
+    if (!cleanName)
+      return res.status(400).json({ error: "Name cannot be empty" });
+    if (cleanName.length > 80)
+      return res.status(400).json({ error: "Name too long (max 80 chars)" });
+    updates.push("name = ?");
+    args.push(cleanName);
+  }
+
+  if (img !== undefined) {
+    const cleanImg = String(img).trim();
+    if (cleanImg && !/^\/api\/images\/[0-9a-f-]+$/i.test(cleanImg)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid image URL — must be an /api/images/ path" });
+    }
+    updates.push("img = ?");
+    args.push(cleanImg || null);
+  }
+
+  if (!updates.length)
+    return res.status(400).json({ error: "Nothing to update" });
+
+  args.push(nominee.id);
+  await db
+    .prepare(`UPDATE nominees SET ${updates.join(", ")} WHERE id = ?`)
+    .run(...args);
+
+  const updated = await db
+    .prepare(
+      `SELECT n.*, c.name as category FROM nominees n
+       JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
+    )
+    .get(nominee.id);
+
+  db.push().catch((e) => console.warn("[Push after profile edit]", e.message));
+  broadcastAdminEvent({ type: "nominee:update", nomineeId: nominee.id });
+  res.json({ nominee: updated });
 });
 
 app.get("/api/nominee/leaderboard", auth, async (req, res) => {
@@ -1853,8 +2320,8 @@ app.get("/api/nominee/leaderboard", auth, async (req, res) => {
   const rows = await db
     .prepare(
       `SELECT n.id, n.name, n.code, n.img, COALESCE(n.votes, 0) AS votes
-     FROM nominees n WHERE n.category_id = ?
-     ORDER BY COALESCE(n.votes, 0) DESC`,
+     FROM nominees n WHERE n.category_id = ? AND n.eliminated = 0
+     ORDER BY COALESCE(n.votes, 0) DESC, n.created_at ASC`,
     )
     .all(nominee.category_id);
   res.json({
@@ -1922,6 +2389,10 @@ app.post(
       .prepare("SELECT * FROM nominees WHERE user_id = ?")
       .get(req.user.id);
     if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
+    if (nominee.eliminated)
+      return res
+        .status(400)
+        .json({ error: "You cannot change category after elimination" });
     if (nominee.category_id === newCategoryId)
       return res.status(400).json({ error: "Already in this category" });
     if (
@@ -1999,6 +2470,10 @@ app.post(
       .prepare("SELECT * FROM nominees WHERE user_id = ?")
       .get(req.user.id);
     if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
+    if (nominee.eliminated)
+      return res
+        .status(400)
+        .json({ error: "You cannot purchase a boost after elimination" });
     const existing = await db
       .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
       .get(nominee.id);
@@ -2031,7 +2506,7 @@ app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
   async (req, res) => {
-    if (!votingOpen())
+    if (!(await votingOpen()))
       return res.status(403).json({ error: "Voting is closed" });
     const {
       nomineeCode,
@@ -2060,6 +2535,16 @@ app.post(
       .prepare("SELECT * FROM nominees WHERE code = ?")
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
+
+    // Reject votes for eliminated nominees
+    if (nominee.eliminated) {
+      return res.status(403).json({
+        error: `${nominee.name} was eliminated from the ${STAGE_LABELS[nominee.eliminated_stage] || "competition"}.`,
+        code: "NOMINEE_ELIMINATED",
+        eliminatedStage: nominee.eliminated_stage,
+      });
+    }
+
     const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     const ua = String(userAgent || req.headers["user-agent"] || "").slice(
       0,
@@ -2117,7 +2602,6 @@ app.post(
               fpJson,
             ],
           });
-          // Absolute count
           await t.execute({
             sql: `UPDATE nominees SET votes =
                   (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -2164,7 +2648,6 @@ app.post(
             fpJson,
           ],
         });
-        // Absolute count
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
@@ -2204,8 +2687,19 @@ app.post(
     }
 
     db.push().catch((e) => console.warn("[Push after vote]", e.message));
-    // Use ABSOLUTE count from free_votes + boost (ground truth)
-    const absoluteVotes = await getAbsoluteVotes(nominee.id);
+    const absoluteVotes = await (async () => {
+      const c = await db
+        .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
+        .get(nominee.id);
+      const b = await db
+        .prepare("SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?")
+        .get(nominee.id);
+      const total = (c?.c || 0) + (b?.votes_added || 0);
+      await db
+        .prepare("UPDATE nominees SET votes = ? WHERE id = ?")
+        .run(total, nominee.id);
+      return total;
+    })();
     broadcastVotes(nominee.id, absoluteVotes);
     broadcastPublicVote(nominee.id, absoluteVotes);
     broadcastAdminEvent({
@@ -2778,9 +3272,6 @@ app.post(
           category.name,
           String(reason).trim().slice(0, 2000),
         );
-      console.log(
-        `[Appeal] ${appealCode} filed by ${report.ip} for ${category.name} (report ${code})`,
-      );
       broadcastAdminEvent({
         type: "appeal:new",
         appealCode,
@@ -3005,12 +3496,6 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
         code,
       );
 
-    console.log(
-      `[Appeal] ${code} ${decision === "approve" ? "APPROVED" : "REJECTED"} by ${req.admin.username}` +
-        (decision === "approve"
-          ? ` — ${allowancesCreated} new allowance(s), ${allowancesSkipped} skipped across ${blockedCategories.length} categor${blockedCategories.length === 1 ? "y" : "ies"}`
-          : ""),
-    );
     broadcastAdminEvent({ type: "appeal:decided", appealCode: code, decision });
 
     const totalCovered = allowancesCreated + allowancesSkipped;
@@ -3032,21 +3517,23 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
   }
 });
 
-// totalVotes computed from source of truth (free_votes + boosts)
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
   try {
     const isSuper = req.admin.role === "super";
-    const totalVotes =
-      (await db.prepare("SELECT COUNT(*) AS c FROM free_votes").get()).c +
-      (
-        await db
-          .prepare(
-            "SELECT COALESCE(SUM(votes_added), 0) AS b FROM nominee_boosts",
-          )
-          .get()
-      ).b;
+    const totalVotes = (
+      await db
+        .prepare(
+          "SELECT COALESCE(SUM(COALESCE(votes, 0)), 0) as t FROM nominees",
+        )
+        .get()
+    ).t;
     const nomineesCount = (
       await db.prepare("SELECT COUNT(*) as c FROM nominees").get()
+    ).c;
+    const activeNomineesCount = (
+      await db
+        .prepare("SELECT COUNT(*) as c FROM nominees WHERE eliminated = 0")
+        .get()
     ).c;
     const categoriesCount = (
       await db.prepare("SELECT COUNT(*) as c FROM categories").get()
@@ -3066,6 +3553,7 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
     const base = {
       totalVotes,
       nomineesCount,
+      activeNomineesCount,
       categoriesCount,
       uniqueVoters,
       uniqueDevices,
@@ -3114,25 +3602,18 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
   }
 });
 
-// Chart data computed from source of truth
 app.get("/api/admin/charts", adminAuth, async (req, res) => {
   const topNominees = await db
     .prepare(
-      `SELECT n.name,
-        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes,
-        c.name AS category
+      `SELECT n.name, COALESCE(n.votes, 0) as votes, c.name as category
      FROM nominees n JOIN categories c ON n.category_id = c.id
-     ORDER BY votes DESC LIMIT 5`,
+     WHERE n.eliminated = 0
+     ORDER BY COALESCE(n.votes, 0) DESC LIMIT 5`,
     )
     .all();
   const categoryDistribution = await db
     .prepare(
-      `SELECT c.name,
-        COALESCE(SUM(
-          (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-          COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0)
-        ), 0) AS votes
+      `SELECT c.name, COALESCE(SUM(COALESCE(n.votes, 0)), 0) as votes
      FROM categories c LEFT JOIN nominees n ON n.category_id = c.id
      GROUP BY c.id ORDER BY c.created_at ASC`,
     )
@@ -3159,10 +3640,9 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
     .all();
   const allNominees = await db
     .prepare(
-      `SELECT n.id, n.name, n.code, n.img, n.category_id,
-        (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS votes
-     FROM nominees n ORDER BY n.category_id, votes DESC`,
+      `SELECT n.id, n.name, n.code, n.img, n.category_id, COALESCE(n.votes, 0) as votes,
+        n.eliminated, n.stage
+     FROM nominees n ORDER BY n.category_id, COALESCE(n.votes, 0) DESC`,
     )
     .all();
   const perCategory = allCategories.map((cat) => {
@@ -3180,6 +3660,8 @@ app.get("/api/admin/charts", adminAuth, async (req, res) => {
         votes: n.votes,
         rank: i + 1,
         percent: total > 0 ? Math.round((n.votes / total) * 1000) / 10 : 0,
+        eliminated: n.eliminated,
+        stage: n.stage,
       })),
     };
   });
@@ -3329,7 +3811,6 @@ app.post("/api/admin/nominees", adminAuth, async (req, res) => {
   });
 });
 
-// Delete nominee — also cleans up related rows to avoid orphans
 app.delete("/api/admin/nominees/:id", adminAuth, async (req, res) => {
   await db
     .prepare("DELETE FROM free_votes WHERE nominee_id = ?")
@@ -3370,6 +3851,7 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
+    const stages = await getStages();
     const lines = [];
     const add = (...a) => lines.push(a.join(""));
     const bar = "\u2550".repeat(60);
@@ -3379,6 +3861,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     add(`Report ID,${r.reportId}`);
     add(`Generated,${formatDateTime(r.generatedAt)}`);
     add(`Generated By,${csvEscape(r.generatedBy)} (${r.generatedByRole})`);
+    add(`Stage,${STAGE_LABELS[stages.current_stage] || stages.current_stage}`);
     add(`Event,Gala Awards 2026 - MKUPLC`);
     add(`Platform,Voteus.io`);
     add(`Signature,${r.signature}`);
@@ -3408,7 +3891,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
         add("");
         continue;
       }
-      add("Rank,Name,Code,Votes,Share %,Share Bar");
+      add("Rank,Name,Code,Votes,Share %,Share Bar,Stage,Eliminated,Final Rank");
       for (const n of cat.nominees)
         add(
           [
@@ -3418,6 +3901,9 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
             n.votes,
             n.percent.toFixed(1) + "%",
             `"${shareBar(n.percent)}"`,
+            n.stage || "",
+            n.eliminated ? "yes" : "no",
+            n.final_rank || "",
           ].join(","),
         );
       add("");
@@ -3432,11 +3918,6 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
     add(`Generated: ${formatDateTime(r.generatedAt)}`);
     add(`Verified: VALID`);
     add("");
-    add(
-      "To verify authenticity, contact the system administrator and provide the Report ID and Signature above.",
-    );
-    add("");
-    add("Signed: Voteus.io Automated Reporting System");
     const filename = `votenet-report-${r.reportId}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -3452,6 +3933,7 @@ app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
 app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   try {
     const r = await loadReportData(req);
+    const stages = await getStages();
     const verifyUrl =
       `https://gala.voteus.xyz/verify?` +
       `r=${encodeURIComponent(r.reportId)}&s=${r.signature}` +
@@ -3517,7 +3999,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       doc.text("CODE", LEFT + 218, hy, { width: 100 });
       doc.text("VOTES", LEFT + 320, hy, { width: 60, align: "right" });
       doc.text("SHARE", LEFT + 384, hy, { width: 55, align: "right" });
-      doc.text("DISTRIBUTION", LEFT + 445, hy, { width: 62 });
+      doc.text("STAGE", LEFT + 445, hy, { width: 62 });
       doc.y = hy + 10;
       doc
         .strokeColor(BORDER)
@@ -3528,7 +4010,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       doc.y += 3;
     };
 
-    // ── PAGE 1: COVER ──
     doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
     doc.moveDown(1.2);
     doc
@@ -3553,7 +4034,10 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .fillColor(INDIGO)
       .fontSize(12)
       .font("Helvetica")
-      .text("Gala Awards 2026  ·  MKUPLC", { align: "center" });
+      .text(
+        `Gala Awards 2026  ·  MKUPLC  ·  ${STAGE_LABELS[stages.current_stage] || stages.current_stage}`,
+        { align: "center" },
+      );
 
     doc.moveDown(1);
     const metaBoxY = doc.y,
@@ -3662,7 +4146,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     doc.y = gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
     footer();
 
-    // ── RESULTS BY CATEGORY ──
     doc.addPage();
     doc
       .fillColor(INDIGO)
@@ -3744,7 +4227,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
             align: "center",
           });
         doc
-          .fillColor(DARK)
+          .fillColor(n.eliminated ? "#9CA3AF" : DARK)
           .fontSize(9)
           .font("Helvetica-Bold")
           .text(n.name, LEFT + 44, yy, { width: 170, ellipsis: true });
@@ -3769,12 +4252,19 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
             width: 55,
             align: "right",
           });
-        const barX = LEFT + 445,
-          barW = 62,
-          barY = yy + 4;
-        doc.roundedRect(barX, barY, barW, 4, 2).fill("#F3F4F6");
-        const fillW = Math.max(2, (Math.max(n.percent, 0.5) / 100) * barW);
-        doc.roundedRect(barX, barY, fillW, 4, 2).fill(INDIGO);
+        // Stage column
+        const stageLabel = n.eliminated
+          ? "Elim."
+          : n.stage === "winner"
+            ? "Winner"
+            : STAGE_LABELS[n.stage] || "—";
+        doc
+          .fillColor(
+            n.eliminated ? "#DC2626" : n.stage === "winner" ? "#16A34A" : GRAY,
+          )
+          .fontSize(7)
+          .font("Helvetica-Bold")
+          .text(stageLabel, LEFT + 445, yy + 1, { width: 62 });
         doc.y = yy + 18;
       }
       doc.moveDown(0.3);
@@ -3788,7 +4278,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     }
     footer();
 
-    // ── SIGNATURE PAGE ──
     doc.addPage();
     doc
       .fillColor(INDIGO)
@@ -4163,7 +4652,6 @@ setInterval(async () => {
   }
 }, RECONCILE_INTERVAL_MS);
 
-// Vote count reconciliation — safety net against any drift
 setInterval(async () => {
   try {
     if (typeof db.reconcileVotes === "function") {
@@ -4226,7 +4714,6 @@ const server = app.listen(PORT, async () => {
     await initSchema();
     console.log("  ✓ Local schema ready");
     await db.bootstrapIfEmpty();
-    // Ensure votes are correct at startup
     if (typeof db.reconcileVotes === "function") {
       const fixed = await db.reconcileVotes();
       if (fixed > 0) {
@@ -4256,7 +4743,6 @@ const server = app.listen(PORT, async () => {
   setInterval(async () => {
     try {
       await db.pull();
-      // Reconcile after each pull to catch any clobbering
       if (typeof db.reconcileVotes === "function") {
         await db.reconcileVotes();
       }
@@ -4292,18 +4778,13 @@ const server = app.listen(PORT, async () => {
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
   console.log(`  Voting:      FREE · one per device per category`);
   console.log(
+    `  Stages:      preliminaries → semi_finals (top 5) → finals (top 2) → completed`,
+  );
+  console.log(
     `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,
   );
   console.log(`  Exports:     /api/admin/export/{csv,pdf} · no financial data`);
   console.log(`  QR verify:   /verify · ${QRCode ? "enabled" : "text-only"}`);
-  console.log(
-    `  Forensics:   /report · /api/report-auto-vote · /admin/reports`,
-  );
-  console.log(`  Appeals:     /api/report-appeal · /api/admin/appeals`);
-  console.log(`  Leaderboard: 1m=10 · 1h=25 · 12h=50 · 24h=100`);
-  console.log(
-    `  Boost:       +${BOOST_VOTES} votes = KES ${PRICES.boost_50} (once)`,
-  );
   console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}`);
   console.log(
     `  Hero wide:   ${fs.existsSync(HERO_WIDE) ? "✓" : "✗ MISSING"} ${HERO_WIDE}`,

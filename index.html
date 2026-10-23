@@ -183,6 +183,60 @@
                 }
             }
 
+            /* ============ STAGE BANNER (NEW) ============ */
+            .stage-banner {
+                width: 100%;
+                background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+                color: white;
+                padding: clamp(10px, 1.4vw, 16px) clamp(16px, 3vw, 40px);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: clamp(8px, 1.5vw, 16px);
+                flex-wrap: wrap;
+                text-align: center;
+            }
+            .stage-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                padding: 4px 12px;
+                border-radius: 980px;
+                font-size: clamp(10px, 1.2vw, 12px);
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .stage-banner .stage-text {
+                font-size: clamp(12px, 1.3vw, 15px);
+                font-weight: 500;
+                opacity: 0.95;
+            }
+            .stage-banner .stage-text strong {
+                font-weight: 800;
+                color: #fbbf24;
+            }
+            .stage-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 999px;
+                background: #22c55e;
+                animation: stagePulse 1.8s infinite;
+            }
+            @keyframes stagePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
+            }
+
             .hero {
                 position: relative;
                 width: 100%;
@@ -349,6 +403,18 @@
                 transform: translateY(-6px) scale(1.02);
                 box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.3);
             }
+            /* Eliminated card style */
+            .card.eliminated {
+                cursor: not-allowed;
+                filter: grayscale(0.85);
+            }
+            .card.eliminated:hover {
+                transform: none;
+                box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.15);
+            }
+            .card.eliminated img {
+                opacity: 0.55 !important;
+            }
             .card img {
                 width: 100%;
                 height: 100%;
@@ -365,6 +431,9 @@
             }
             .card:hover img {
                 transform: scale(1.09);
+            }
+            .card.eliminated:hover img {
+                transform: none;
             }
             .card .overlay {
                 position: absolute;
@@ -383,6 +452,24 @@
                 color: white;
                 z-index: 2;
             }
+            /* Eliminated badge overlay */
+            .card .elim-badge {
+                position: absolute;
+                top: 8px;
+                left: 8px;
+                background: rgba(220, 38, 38, 0.95);
+                color: white;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                padding: 4px 8px;
+                border-radius: 6px;
+                z-index: 3;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
             .card .code {
                 font-size: 10px;
                 font-weight: 700;
@@ -390,6 +477,9 @@
                 text-transform: uppercase;
                 color: #93c5fd;
                 margin-bottom: 3px;
+            }
+            .card.eliminated .code {
+                color: #9ca3af;
             }
             .card .name {
                 font-size: 15px;
@@ -421,6 +511,10 @@
                 background: #0071e3;
                 border-color: #0071e3;
             }
+            .card.eliminated:hover .cta {
+                background: rgba(107, 114, 128, 0.35);
+                border-color: rgba(107, 114, 128, 0.5);
+            }
             .card .cta.voted {
                 background: rgba(34, 197, 94, 0.35);
                 border-color: rgba(34, 197, 94, 0.55);
@@ -433,10 +527,13 @@
                 background: rgba(107, 114, 128, 0.35);
                 border-color: rgba(107, 114, 128, 0.5);
             }
-            
             .card:hover .cta.category-voted {
                 background: rgba(107, 114, 128, 0.55);
                 border-color: rgba(107, 114, 128, 0.7);
+            }
+            .card .cta.eliminated {
+                background: rgba(107, 114, 128, 0.35);
+                border-color: rgba(107, 114, 128, 0.5);
             }
             @media (min-width: 640px) {
                 .card .overlay {
@@ -514,6 +611,12 @@
                 color: #166534;
                 background: rgba(220, 252, 231, 0.8);
                 border-color: rgba(134, 239, 172, 0.6);
+            }
+            /* Stage-info pill in category header */
+            .cat-badge.stage-info {
+                color: #6d28d9;
+                background: rgba(237, 233, 254, 0.85);
+                border-color: rgba(196, 181, 253, 0.6);
             }
             .cat-header .rule {
                 flex: 1;
@@ -675,6 +778,18 @@
     </head>
     <body>
         <div class="top-wrap">
+            <!-- STAGE BANNER (NEW) -->
+            <div id="stage-banner" class="stage-banner">
+                <span class="stage-pill" id="stage-pill">
+                    <span class="stage-dot"></span>
+                    <span id="stage-pill-label">Loading stage…</span>
+                </span>
+                <span class="stage-text" id="stage-text">
+                    <strong>Top 5</strong> from each category advance to Semi
+                    Finals
+                </span>
+            </div>
+
             <section class="hero">
                 <div class="hero-content">
                     <div class="countdown-container">
@@ -833,6 +948,15 @@
                     >
                         <i class="ph ph-hash text-gray-400 text-xs"></i
                         ><span id="pm-code"></span>
+                    </div>
+                    <div
+                        id="pm-elim-note"
+                        class="hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium"
+                    >
+                        <i class="ph-fill ph-warning-circle inline mr-1"></i>
+                        <span id="pm-elim-text"
+                            >This nominee has been eliminated.</span
+                        >
                     </div>
                     <p
                         class="text-gray-600 leading-relaxed mb-6 flex-grow"
@@ -1017,7 +1141,8 @@
             const $ = (id) => document.getElementById(id);
             let categories = [],
                 nominees = [],
-                currentNom = null;
+                currentNom = null,
+                stageInfo = null;
             const EAGER_COUNT = 12;
             const MIN_NOMINEES_FOR_NO_PROMPT = 6;
             const VOTER_TOKEN_KEY = "vn_voter_token";
@@ -1025,6 +1150,25 @@
             let liveStream = null;
             let livePollTimer = null;
             let sseRetries = 0;
+
+            const STAGE_LABELS = {
+                preliminaries: "Preliminaries",
+                semi_finals: "Semi Finals",
+                finals: "Finals",
+                completed: "Completed",
+            };
+            const NEXT_STAGE = {
+                preliminaries: "semi_finals",
+                semi_finals: "finals",
+                finals: "completed",
+                completed: null,
+            };
+            const STAGE_CUTOFF = {
+                preliminaries: 5,
+                semi_finals: 2,
+                finals: 1,
+                completed: 0,
+            };
 
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
@@ -1249,6 +1393,33 @@
                 return data;
             }
 
+            function renderStageBanner() {
+                const pill = $("stage-pill");
+                const label = $("stage-pill-label");
+                const txt = $("stage-text");
+                if (!stageInfo) return;
+                const cur = stageInfo.current || "preliminaries";
+                const curLabel = STAGE_LABELS[cur] || cur;
+                label.innerText = curLabel + " Stage";
+
+                if (cur === "completed") {
+                    pill.style.background = "rgba(34,197,94,0.25)";
+                    txt.innerHTML =
+                        "<strong>Election Complete</strong> · Winners announced below";
+                    return;
+                }
+                const next = NEXT_STAGE[cur];
+                const nextLabel = STAGE_LABELS[next] || next;
+                const cutoff = STAGE_CUTOFF[cur] || 5;
+                txt.innerHTML = `<strong>Top ${cutoff}</strong> from each category advance to ${nextLabel}`;
+                if (!stageInfo.votingOpen) {
+                    pill.style.background = "rgba(220,38,38,0.25)";
+                    label.innerText = curLabel + " · Voting Closed";
+                } else {
+                    pill.style.background = "rgba(255,255,255,0.15)";
+                }
+            }
+
             async function init() {
                 try {
                     const deviceHash = await getDeviceFingerprint();
@@ -1256,21 +1427,26 @@
                         voterToken: getVoterToken(),
                         deviceHash,
                     }).toString();
-                    const [cfg, cats, noms] = await Promise.all([
+                    const [cfg, cats, noms, stages] = await Promise.all([
                         api("/api/config"),
                         api("/api/categories"),
                         api("/api/nominees?" + qs),
+                        api("/api/stages"),
                     ]);
+                    stageInfo = stages;
                     categories = cats;
                     nominees = noms;
                     $("stat-cats").innerText = cats.length;
-                    $("stat-noms").innerText = noms.length;
+                    $("stat-noms").innerText = noms.filter(
+                        (n) => !n.eliminated,
+                    ).length;
                     const d = new Date(cfg.deadline);
                     $("stat-close").innerText = d.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                     });
                     startCountdown(cfg.deadline);
+                    renderStageBanner();
                     preloadFirstImages();
                     render();
                     handleDeepLink();
@@ -1290,13 +1466,25 @@
                 nominees = await api("/api/nominees?" + qs);
             }
 
+            async function refreshStage() {
+                try {
+                    stageInfo = await api("/api/stages");
+                    renderStageBanner();
+                } catch (e) {
+                    /* silent */
+                }
+            }
+
             function startLiveUpdates() {
                 if (livePollTimer) clearInterval(livePollTimer);
                 livePollTimer = setInterval(() => {
                     if (document.hidden) return;
-                    refreshNominees()
-                        .then(render)
-                        .catch(() => {});
+                    Promise.all([
+                        refreshNominees()
+                            .then(render)
+                            .catch(() => {}),
+                        refreshStage().catch(() => {}),
+                    ]);
                 }, 45_000);
                 connectLiveStream();
             }
@@ -1316,6 +1504,16 @@
                         try {
                             const { nomineeId, votes } = JSON.parse(e.data);
                             applyLiveVote(nomineeId, votes);
+                        } catch {}
+                    });
+                    liveStream.addEventListener("stage", (e) => {
+                        try {
+                            const { stage } = JSON.parse(e.data);
+                            stageInfo = { ...stageInfo, current: stage };
+                            renderStageBanner();
+                            refreshNominees()
+                                .then(render)
+                                .catch(() => {});
                         } catch {}
                     });
                     liveStream.onerror = () => {
@@ -1349,7 +1547,7 @@
                 const badge = sec.querySelector(".cat-badge");
                 if (!badge || badge.classList.contains("voted")) return;
                 const catList = nominees.filter(
-                    (x) => x.category_id === n.category_id,
+                    (x) => x.category_id === n.category_id && !x.eliminated,
                 );
                 const total = catList.reduce((s, x) => s + (x.votes || 0), 0);
                 badge.innerHTML = `<i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes`;
@@ -1451,18 +1649,39 @@
                 }
                 c.innerHTML = "";
                 let cardIndex = 0;
+                const cur = stageInfo?.current || "preliminaries";
+                const cutoff = STAGE_CUTOFF[cur] || 5;
+                const curLabel = STAGE_LABELS[cur] || cur;
+
                 categories.forEach((cat) => {
                     const list = nominees.filter(
                         (n) => n.category_id === cat.id,
                     );
                     if (!list.length) return;
-                    const total = list.reduce((s, n) => s + (n.votes || 0), 0);
+                    const active = list.filter((n) => !n.eliminated);
+                    const eliminated = list.filter((n) => n.eliminated);
+                    // Sort: active first (by votes), then eliminated (by votes)
+                    const sorted = [
+                        ...active.sort(
+                            (a, b) => (b.votes || 0) - (a.votes || 0),
+                        ),
+                        ...eliminated.sort(
+                            (a, b) => (b.votes || 0) - (a.votes || 0),
+                        ),
+                    ];
+
+                    const activeTotal = active.reduce(
+                        (s, n) => s + (n.votes || 0),
+                        0,
+                    );
                     const categoryVoted = list.some((n) => n.categoryVoted);
                     const votedNominee = list.find((n) => n.voted);
                     const appealAllowed = list.some((n) => n.appealAllowed);
 
                     let badge;
-                    if (appealAllowed) {
+                    if (cur === "completed") {
+                        badge = `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Final Results</div>`;
+                    } else if (appealAllowed) {
                         badge = `<div class="cat-badge" style="background:rgba(16,185,129,0.15);color:#065f46;border-color:rgba(16,185,129,0.4);"><i class="ph-fill ph-arrow-clockwise"></i> Appeal approved — vote again</div>`;
                     } else if (votedNominee) {
                         badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(votedNominee.name)}</div>`;
@@ -1472,8 +1691,14 @@
                                 ?.name || "another nominee";
                         badge = `<div class="cat-badge voted"><i class="ph-fill ph-lock"></i> Voted (${escapeHtml(votedFor)})</div>`;
                     } else {
-                        badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes</div>`;
+                        badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${activeTotal.toLocaleString()} votes</div>`;
                     }
+
+                    // Stage info badge
+                    const stageBadge =
+                        cur !== "completed"
+                            ? `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`
+                            : `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Winners declared</div>`;
 
                     const sec = document.createElement("div");
                     sec.className = "w-full";
@@ -1482,15 +1707,19 @@
                         <div class="cat-header">
                             <h2>${escapeHtml(cat.name)}</h2>
                             ${badge}
+                            ${stageBadge}
                             <div class="rule"></div>
                         </div>
                         <div class="grid-tiles"></div>`;
                     const grid = sec.querySelector(".grid-tiles");
-                    list.forEach((n) => {
+                    sorted.forEach((n) => {
                         const eager = cardIndex < EAGER_COUNT;
                         cardIndex++;
                         const src = n.img || placeholderImg(n.name);
                         const fallbackSrc = escapeHtml(placeholderImg(n.name));
+                        const isEliminated = !!n.eliminated;
+                        const isWinner =
+                            n.stage === "winner" || n.final_rank === 1;
                         const isVoted = !!n.voted;
                         const isCategoryVoted = !isVoted && !!n.categoryVoted;
                         const appealRow = !!n.appealAllowed;
@@ -1498,7 +1727,15 @@
                         let ctaClass = "",
                             ctaIcon = "ph-check-circle",
                             ctaText = "Cast Vote";
-                        if (appealRow) {
+                        if (isWinner) {
+                            ctaClass = "voted";
+                            ctaIcon = "ph-trophy";
+                            ctaText = "Winner 🏆";
+                        } else if (isEliminated) {
+                            ctaClass = "eliminated";
+                            ctaIcon = "ph-x-circle";
+                            ctaText = "Eliminated";
+                        } else if (appealRow) {
                             ctaClass = "appeal-allowed";
                             ctaIcon = "ph-arrow-clockwise";
                             ctaText = "Vote Again";
@@ -1512,9 +1749,19 @@
                             ctaText = "Category Voted";
                         }
 
+                        const elimBadge = isEliminated
+                            ? `<div class="elim-badge"><i class="ph-fill ph-x-circle"></i> ${escapeHtml(
+                                  STAGE_LABELS[n.eliminated_stage] || "Elim",
+                              )}</div>`
+                            : isWinner
+                              ? `<div class="elim-badge" style="background:rgba(22,163,74,0.95);"><i class="ph-fill ph-trophy"></i> Winner</div>`
+                              : "";
+
                         const el = document.createElement("div");
-                        el.className = "card";
+                        el.className =
+                            "card" + (isEliminated ? " eliminated" : "");
                         el.innerHTML = `
+                            ${elimBadge}
                             <img src="${escapeHtml(src)}" alt="${escapeHtml(n.name)}" width="700" height="700"
                                  loading="${eager ? "eager" : "lazy"}" decoding="async"
                                  ${eager ? 'fetchpriority="high"' : ""}
@@ -1550,10 +1797,39 @@
                 $("pm-code").innerText = n.code;
                 $("pm-desc").innerText = n.desc || "No description provided.";
 
+                const elimNote = $("pm-elim-note");
+                const elimText = $("pm-elim-text");
+                if (n.eliminated) {
+                    elimNote.classList.remove("hidden");
+                    elimText.innerText = `Eliminated at ${STAGE_LABELS[n.eliminated_stage] || "an earlier stage"}. Voting is closed for this nominee.`;
+                } else if (n.stage === "winner" || n.final_rank === 1) {
+                    elimNote.classList.remove("hidden");
+                    elimNote.className =
+                        "mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-medium";
+                    elimNote.querySelector("i").className =
+                        "ph-fill ph-trophy inline mr-1";
+                    elimText.innerText = "🏆 Winner — congratulations!";
+                } else {
+                    elimNote.classList.add("hidden");
+                    elimNote.className =
+                        "hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium";
+                    elimNote.querySelector("i").className =
+                        "ph-fill ph-warning-circle inline mr-1";
+                }
+
                 const btn = $("profile-vote-btn");
                 btn.classList.remove("voted");
 
-                if (n.appealAllowed) {
+                if (n.eliminated) {
+                    btn.innerHTML = '<i class="ph ph-x-circle"></i> Eliminated';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.stage === "winner" || n.final_rank === 1) {
+                    btn.innerHTML =
+                        '<i class="ph-fill ph-trophy"></i> Winner 🏆';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.appealAllowed) {
                     btn.innerHTML =
                         '<i class="ph-fill ph-arrow-clockwise"></i> Vote Again (Appeal Approved)';
                     btn.disabled = false;
@@ -1604,8 +1880,19 @@
 
             function proceedToVote() {
                 if (!currentNom) return;
+                if (currentNom.eliminated) {
+                    toast("This nominee has been eliminated", false);
+                    return;
+                }
+                if (
+                    currentNom.stage === "winner" ||
+                    currentNom.final_rank === 1
+                ) {
+                    toast("This nominee is the winner 🏆", false);
+                    return;
+                }
                 if (currentNom.appealAllowed) {
-                    // Allow re-vote — bypass "already voted" checks
+                    // Allow re-vote
                 } else if (currentNom.voted) {
                     toast("You've already voted for " + currentNom.name, false);
                     return;
@@ -1631,6 +1918,10 @@
 
             async function castVote() {
                 if (!currentNom) return;
+                if (currentNom.eliminated) {
+                    toast("This nominee has been eliminated", false);
+                    return;
+                }
                 if (!currentNom.appealAllowed) {
                     if (currentNom.voted) {
                         toast("You've already voted for this nominee", false);

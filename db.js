@@ -31,7 +31,6 @@ const remote = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-/* ---------- push failure tracking ---------- */
 let _pushFailures = 0;
 let _lastPushError = null;
 
@@ -55,12 +54,9 @@ function makeIdempotent(sql) {
 }
 
 function serializeArg(a) {
-  if (Buffer.isBuffer(a)) {
-    return { __buf: a.toString("base64") };
-  }
-  if (a instanceof Uint8Array) {
+  if (Buffer.isBuffer(a)) return { __buf: a.toString("base64") };
+  if (a instanceof Uint8Array)
     return { __buf: Buffer.from(a).toString("base64") };
-  }
   return a;
 }
 
@@ -220,14 +216,14 @@ async function push() {
 /**
  * Pull from Turso.
  *
- * DESIGN:
- * - `nominees`: UPSERT updates metadata (name, code, img, desc, category_id)
- *   but NEVER touches `votes`. This preserves locally-accrued vote counts
- *   regardless of what the cloud's denormalized `votes` column says.
- * - `free_votes`, `transactions`, `users`, `nominee_boosts`, etc.: INSERT OR IGNORE
- *   — append-only / local-status-authoritative. Never overwrites existing rows.
- * - `categories`, `admins`, `ip_lookup_cache`: INSERT OR REPLACE (safe config sync).
- * - `images`: skipped (lazy-loaded via pullImage).
+ * - `nominees`: UPSERT updates metadata but PRESERVES local `votes` AND all
+ *   stage-related columns (stage, eliminated, eliminated_stage, qualified_at,
+ *   final_rank) — those are controlled locally by super admin and should never
+ *   be overwritten by stale cloud values.
+ * - `election_stages`: NOT pulled — super admin config is local source of truth.
+ *   Table exists on Turso via ensureRemoteSchema for backup.
+ * - Append-only tables use INSERT OR IGNORE (never overwrite local status).
+ * - Config tables (categories, admins, ip_lookup_cache) use INSERT OR REPLACE.
  */
 async function pull() {
   const REPLACE_TABLES = ["categories", "admins", "ip_lookup_cache"];
@@ -242,6 +238,8 @@ async function pull() {
     "vote_appeals",
     "vote_allowances",
   ];
+  // Election stages is intentionally NOT pulled. Local is authoritative for
+  // super-admin stage config. Push syncs local to cloud for backup only.
 
   let pulled = 0;
 
@@ -287,12 +285,23 @@ async function pull() {
     }
   }
 
-  // Nominees: UPSERT metadata but preserve local `votes`
+  // Nominees: UPSERT metadata; preserve votes AND stage-related local columns
+  const PROTECTED_NOMINEE_COLS = [
+    "id",
+    "votes",
+    "stage",
+    "eliminated",
+    "eliminated_stage",
+    "qualified_at",
+    "final_rank",
+  ];
   try {
     const res = await remote.execute("SELECT * FROM nominees");
     if (res.rows && res.rows.length) {
       const cols = res.columns;
-      const updateCols = cols.filter((c) => c !== "id" && c !== "votes");
+      const updateCols = cols.filter(
+        (c) => !PROTECTED_NOMINEE_COLS.includes(c),
+      );
       if (updateCols.length > 0) {
         const updateClause = updateCols
           .map((c) => `${c} = excluded.${c}`)
@@ -317,10 +326,6 @@ async function pull() {
   return { pulled };
 }
 
-/**
- * Reconcile nominees.votes = COUNT(free_votes) + nominee_boosts.votes_added.
- * Ground truth. Queues absolute-value UPDATEs to Turso so cloud stays consistent.
- */
 async function reconcileVotes() {
   try {
     const mismatched = local
@@ -424,6 +429,7 @@ async function ensureRemoteSchema() {
     `CREATE TABLE IF NOT EXISTS ip_lookup_cache (ip TEXT PRIMARY KEY, country TEXT, region TEXT, city TEXT, isp TEXT, org TEXT, asn TEXT, fetched_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS vote_appeals (id TEXT PRIMARY KEY, appeal_code TEXT UNIQUE NOT NULL, report_code TEXT NOT NULL, device_hash TEXT NOT NULL, voter_token TEXT NOT NULL, category_id TEXT NOT NULL, category_name TEXT, reason TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, decided_at TEXT, decided_by TEXT, decision_note TEXT, UNIQUE(report_code, category_id))`,
     `CREATE TABLE IF NOT EXISTS vote_allowances (id TEXT PRIMARY KEY, appeal_code TEXT NOT NULL, device_hash TEXT NOT NULL, voter_token TEXT NOT NULL, category_id TEXT NOT NULL, status TEXT DEFAULT 'active', created_at TEXT DEFAULT CURRENT_TIMESTAMP, used_at TEXT, used_vote_id TEXT, UNIQUE(device_hash, category_id))`,
+    `CREATE TABLE IF NOT EXISTS election_stages (id INTEGER PRIMARY KEY CHECK (id = 1), current_stage TEXT DEFAULT 'preliminaries', preliminaries_start TEXT, preliminaries_end TEXT, semifinals_start TEXT, semifinals_end TEXT, finals_start TEXT, finals_end TEXT, last_advanced_at TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
   ];
 
   let created = 0;
@@ -438,7 +444,22 @@ async function ensureRemoteSchema() {
     }
   }
 
-  // Ensure free_votes has all required columns on remote (older DBs may lack these)
+  // Ensure nominees has stage columns on remote
+  for (const col of [
+    "stage TEXT DEFAULT 'preliminaries'",
+    "eliminated INTEGER DEFAULT 0",
+    "eliminated_stage TEXT",
+    "qualified_at TEXT",
+    "final_rank INTEGER",
+  ]) {
+    try {
+      await remote.execute(`ALTER TABLE nominees ADD COLUMN ${col}`);
+    } catch (e) {
+      // column exists - ignore
+    }
+  }
+
+  // Ensure free_votes has all columns on remote
   for (const col of [
     "device_hash TEXT",
     "ip TEXT",
@@ -450,12 +471,11 @@ async function ensureRemoteSchema() {
     try {
       await remote.execute(`ALTER TABLE free_votes ADD COLUMN ${col}`);
     } catch (e) {
-      // Column already exists — expected
+      // column exists - ignore
     }
   }
 
-  // Device/category uniqueness must EXCLUDE appeal votes so approved
-  // re-votes succeed even when the original device vote exists.
+  // Ensure idx_fv_device_cat excludes appeal votes
   try {
     await remote.execute(`DROP INDEX IF EXISTS idx_fv_device_cat`);
     await remote.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
