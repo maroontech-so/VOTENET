@@ -328,16 +328,17 @@ async function pull() {
 
 async function reconcileVotes() {
   try {
+    // ✅ Use SUM(votes_added) so multi-boost counts are respected
     const mismatched = local
       .prepare(
         `
       SELECT n.id,
         (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0) AS expected
+        COALESCE((SELECT SUM(votes_added) FROM nominee_boosts WHERE nominee_id = n.id), 0) AS expected
       FROM nominees n
       WHERE COALESCE(n.votes, -1) !=
         (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
-        COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = n.id), 0)
+        COALESCE((SELECT SUM(votes_added) FROM nominee_boosts WHERE nominee_id = n.id), 0)
     `,
       )
       .all();
@@ -424,7 +425,8 @@ async function ensureRemoteSchema() {
     `CREATE TABLE IF NOT EXISTS free_votes (id TEXT PRIMARY KEY, voter_token TEXT NOT NULL, nominee_id TEXT NOT NULL, device_hash TEXT, ip TEXT, category_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(voter_token, nominee_id))`,
     `CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, data BLOB NOT NULL, mime TEXT NOT NULL, size INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'admin', created_by TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, revoked INTEGER DEFAULT 0, revoked_at TEXT, revoked_by TEXT)`,
-    `CREATE TABLE IF NOT EXISTS nominee_boosts (id TEXT PRIMARY KEY, nominee_id TEXT UNIQUE NOT NULL, reference TEXT NOT NULL, votes_added INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    // ✅ nominee_boosts WITHOUT UNIQUE — supports multiple boosts per nominee
+    `CREATE TABLE IF NOT EXISTS nominee_boosts (id TEXT PRIMARY KEY, nominee_id TEXT NOT NULL, reference TEXT NOT NULL, votes_added INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS vote_reports (id TEXT PRIMARY KEY, report_code TEXT UNIQUE NOT NULL, reported_at TEXT DEFAULT CURRENT_TIMESTAMP, ip TEXT, user_agent TEXT, voter_token TEXT, device_hash TEXT, fingerprint_details TEXT, report_description TEXT, reporter_name TEXT, reporter_contact TEXT, verdict TEXT NOT NULL, matched_votes TEXT, geo_info TEXT)`,
     `CREATE TABLE IF NOT EXISTS ip_lookup_cache (ip TEXT PRIMARY KEY, country TEXT, region TEXT, city TEXT, isp TEXT, org TEXT, asn TEXT, fetched_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS vote_appeals (id TEXT PRIMARY KEY, appeal_code TEXT UNIQUE NOT NULL, report_code TEXT NOT NULL, device_hash TEXT NOT NULL, voter_token TEXT NOT NULL, category_id TEXT NOT NULL, category_name TEXT, reason TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, decided_at TEXT, decided_by TEXT, decision_note TEXT, UNIQUE(report_code, category_id))`,
@@ -484,6 +486,38 @@ async function ensureRemoteSchema() {
   } catch (e) {
     if (!e.message.includes("already exists")) {
       console.warn(`[Remote Schema] idx_fv_device_cat: ${e.message}`);
+    }
+  }
+
+  // ✅ MIGRATION: remove UNIQUE constraint from remote nominee_boosts
+  try {
+    const t = await remote.execute(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='nominee_boosts'",
+    );
+    const oldSql = t.rows && t.rows.length ? String(t.rows[0].sql || "") : "";
+    if (/nominee_id\s+TEXT\s+UNIQUE/i.test(oldSql)) {
+      console.log(
+        "[Remote Schema] Migrating nominee_boosts → multi-boost (removing UNIQUE)",
+      );
+      await remote.execute(
+        "ALTER TABLE nominee_boosts RENAME TO nominee_boosts_old",
+      );
+      await remote.execute(`CREATE TABLE nominee_boosts (
+        id TEXT PRIMARY KEY, nominee_id TEXT NOT NULL,
+        reference TEXT NOT NULL, votes_added INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
+      await remote.execute(
+        "INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added, created_at) SELECT id, nominee_id, reference, votes_added, created_at FROM nominee_boosts_old",
+      );
+      await remote.execute("DROP TABLE nominee_boosts_old");
+      await remote.execute(
+        "CREATE INDEX IF NOT EXISTS idx_boosts_nominee ON nominee_boosts(nominee_id)",
+      );
+      console.log("[Remote Schema] ✓ nominee_boosts migration complete");
+    }
+  } catch (e) {
+    if (!/no such table/i.test(e.message)) {
+      console.warn("[Remote Schema] nominee_boosts migration:", e.message);
     }
   }
 

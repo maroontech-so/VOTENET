@@ -352,8 +352,6 @@
                 background: #f3f4f6;
                 color: #9ca3af;
             }
-
-            /* ===== STAGE SYSTEM (NEW) ===== */
             .stage-hero {
                 background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
                 border-radius: 20px;
@@ -544,7 +542,6 @@
         </style>
     </head>
     <body>
-        <!-- LOGIN -->
         <div
             id="login-view"
             class="min-h-screen flex items-center justify-center p-4"
@@ -588,7 +585,6 @@
             </div>
         </div>
 
-        <!-- DASHBOARD -->
         <div id="dash-view" class="hidden min-h-screen flex flex-col">
             <header
                 class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 shrink-0 sticky top-0 z-20"
@@ -726,7 +722,6 @@
                 </aside>
 
                 <main class="flex-1 overflow-y-auto p-4 lg:p-8">
-                    <!-- ===================== OVERVIEW ===================== -->
                     <section id="tab-overview">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -768,7 +763,6 @@
                             </div>
                         </div>
 
-                        <!-- STAGE HERO (NEW) -->
                         <div id="overview-stage-hero" class="stage-hero mb-6">
                             <div
                                 class="flex flex-wrap items-start justify-between gap-3 mb-4 relative z-10"
@@ -1151,7 +1145,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== CATEGORIES ===================== -->
                     <section id="tab-categories" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Categories</h1>
@@ -1185,7 +1178,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== NOMINEES ===================== -->
                     <section id="tab-nominees" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -1240,7 +1232,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== STAGES (NEW) ===================== -->
                     <section id="tab-stages" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -1264,7 +1255,6 @@
                             </button>
                         </div>
 
-                        <!-- Current stage card -->
                         <div class="stage-hero mb-6">
                             <div
                                 class="flex flex-wrap items-start justify-between gap-3 mb-4 relative z-10"
@@ -1304,7 +1294,6 @@
                         </div>
 
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                            <!-- Timeline -->
                             <div class="stage-card lg:col-span-1">
                                 <h3
                                     class="font-bold text-sm mb-4 flex items-center gap-2"
@@ -1314,12 +1303,12 @@
                                     ></i>
                                     Stage Timeline
                                 </h3>
-                                <div class="stage-timeline" id="stg-timeline">
-                                    <!-- Populated by JS -->
-                                </div>
+                                <div
+                                    class="stage-timeline"
+                                    id="stg-timeline"
+                                ></div>
                             </div>
 
-                            <!-- Config form -->
                             <div class="stage-card lg:col-span-2">
                                 <div
                                     class="flex items-center justify-between mb-4"
@@ -1465,7 +1454,7 @@
                             </div>
                         </div>
 
-                        <!-- Cutoff rules -->
+                        <!-- ✅ Advancement Rules card — updated to 10/5/1 -->
                         <div class="stage-card mb-6">
                             <h3
                                 class="font-bold text-sm mb-4 flex items-center gap-2"
@@ -1487,7 +1476,7 @@
                                     <div
                                         class="text-2xl font-extrabold text-blue-900"
                                     >
-                                        Top 5
+                                        Top 10
                                     </div>
                                     <div class="text-xs text-blue-700 mt-1">
                                         Per category advance
@@ -1504,7 +1493,7 @@
                                     <div
                                         class="text-2xl font-extrabold text-purple-900"
                                     >
-                                        Top 2
+                                        Top 5
                                     </div>
                                     <div class="text-xs text-purple-700 mt-1">
                                         Per category advance
@@ -1530,7 +1519,6 @@
                             </div>
                         </div>
 
-                        <!-- Per-category counts -->
                         <div class="stage-card">
                             <div class="flex items-center justify-between mb-4">
                                 <h3
@@ -1562,7 +1550,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== TRANSACTIONS ===================== -->
                     <section id="tab-transactions" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -1615,7 +1602,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== ADMINS ===================== -->
                     <section id="tab-admins" class="hidden">
                         <div
                             class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
@@ -1640,7 +1626,6 @@
                         </div>
                     </section>
 
-                    <!-- ===================== LOGS ===================== -->
                     <section id="tab-logs" class="hidden">
                         <div class="mb-6">
                             <h1 class="text-2xl font-bold">Payment Logs</h1>
@@ -1681,7 +1666,6 @@
             </div>
         </div>
 
-        <!-- MODAL: ADD NOMINEE -->
         <div id="add-nominee-modal" class="modal">
             <div
                 class="bg-white rounded-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto"
@@ -1815,7 +1799,6 @@
             </div>
         </div>
 
-        <!-- MODAL: CREDENTIALS -->
         <div id="creds-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -1887,7 +1870,6 @@
             </div>
         </div>
 
-        <!-- MODAL: ADD ADMIN -->
         <div id="add-admin-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -1929,7 +1911,6 @@
             </div>
         </div>
 
-        <!-- MODAL: ADVANCE STAGE (NEW) -->
         <div id="advance-stage-modal" class="modal">
             <div class="bg-white rounded-2xl w-full max-w-md p-6 relative">
                 <button
@@ -2025,9 +2006,10 @@
                 finals: "completed",
                 completed: null,
             };
+            // ✅ Updated per event: prelims→semis top 10, semis→finals top 5, finals→winner top 1
             const STAGE_CUTOFF = {
-                preliminaries: 5,
-                semi_finals: 2,
+                preliminaries: 10,
+                semi_finals: 5,
                 finals: 1,
                 completed: 0,
             };
@@ -2356,7 +2338,6 @@
                     toast("Stats: " + e.message, false);
                 }
 
-                // Load stage hero
                 await loadOverviewStageHero();
 
                 try {
@@ -2403,7 +2384,6 @@
                     $("ov-stage-cutoff").innerText =
                         cur === "completed" ? "—" : `Top ${cutoff}`;
 
-                    // Active + eliminated counts
                     const activeCount = NOMINEES.filter(
                         (n) => !n.eliminated,
                     ).length;
@@ -3068,7 +3048,6 @@
                 }
             }
 
-            /* ===== STAGE MANAGEMENT (NEW) ===== */
             function toLocalInput(isoStr) {
                 if (!isoStr) return "";
                 try {
@@ -3116,7 +3095,6 @@
                     $("stg-current-desc").innerText = desc;
 
                     const voteState = $("stg-vote-state");
-                    // Compute votingOpen from window boundaries
                     const now = Date.now();
                     const starts = {
                         preliminaries: s.preliminaries_start,
@@ -3152,7 +3130,6 @@
                         ? `<i class="ph ph-arrow-right"></i> Next: ${STAGE_LABELS[next] || next}`
                         : `<i class="ph-fill ph-check-circle"></i> Final stage`;
 
-                    // Populate config inputs
                     $("cfg-prelim-start").value = toLocalInput(
                         s.preliminaries_start,
                     );
@@ -3166,10 +3143,8 @@
                     $("cfg-final-start").value = toLocalInput(s.finals_start);
                     $("cfg-final-end").value = toLocalInput(s.finals_end);
 
-                    // Timeline
                     renderStageTimeline(s);
 
-                    // Advance button state
                     const advBtn = $("advance-stage-btn");
                     if (cur === "completed") {
                         advBtn.disabled = true;
@@ -3183,7 +3158,6 @@
                             '<i class="ph ph-fast-forward"></i> Advance Stage';
                     }
 
-                    // Per-category counts
                     const counts = d.counts || [];
                     const grid = $("stg-counts");
                     if (!counts.length) {
@@ -3376,8 +3350,6 @@
                 }
             }
 
-            /* ===== END STAGE MANAGEMENT ===== */
-
             async function loadTransactions() {
                 try {
                     const txs = await api("/api/admin/transactions");
@@ -3396,7 +3368,7 @@
                             leaderboard_12h: "Leaderboard (12 h)",
                             leaderboard_24h: "Leaderboard (1 day)",
                             leaderboard_2h: "Leaderboard (2 h · legacy)",
-                            boost_50: "Power Boost (+100)",
+                            boost_50: "Power Boost",
                         })[t] || t;
                     tbody.innerHTML = txs
                         .map(

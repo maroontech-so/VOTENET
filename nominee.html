@@ -513,7 +513,6 @@
                 }
             }
 
-            /* === Stage / zone banner — soft, encouraging palette === */
             .zone-banner {
                 border-radius: 16px;
                 padding: 20px 22px;
@@ -636,7 +635,6 @@
     <body class="min-h-screen">
         <canvas id="confetti-canvas"></canvas>
 
-        <!-- AUTH -->
         <section
             id="view-auth"
             class="view active min-h-screen items-center justify-center p-4"
@@ -850,7 +848,6 @@
             </div>
         </section>
 
-        <!-- ONBOARD -->
         <section id="view-onboard" class="view min-h-screen py-10 px-4">
             <div class="max-w-5xl mx-auto card p-8 sm:p-10">
                 <div class="text-center mb-8">
@@ -958,7 +955,6 @@
             </div>
         </section>
 
-        <!-- DASHBOARD -->
         <section id="view-dash" class="view min-h-screen">
             <header
                 class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-gray-200/70"
@@ -1002,7 +998,6 @@
                     </button>
                 </div>
 
-                <!-- STAGE / ZONE BANNER (NEW) -->
                 <div id="zone-banner" class="zone-banner green hidden">
                     <div class="zone-icon">
                         <i class="ph-fill ph-shield-check"></i>
@@ -1364,7 +1359,6 @@
             </main>
         </section>
 
-        <!-- EDIT MODAL -->
         <div id="edit-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1444,7 +1438,6 @@
             </div>
         </div>
 
-        <!-- CHANGE CATEGORY MODAL -->
         <div id="change-cat-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1554,7 +1547,6 @@
             </div>
         </div>
 
-        <!-- UNLOCK MODAL -->
         <div id="unlock-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1774,7 +1766,7 @@
             </div>
         </div>
 
-        <!-- BOOST MODAL -->
+        <!-- ✅ BOOST MODAL — content adapts dynamically in openBoost() -->
         <div id="boost-modal" class="modal">
             <div
                 class="modal-panel w-full max-w-md relative overflow-hidden rounded-2xl"
@@ -1829,11 +1821,13 @@
                                         Power Boost
                                     </h3>
                                     <span
+                                        id="boost-one-time-badge"
                                         class="text-[9px] font-bold bg-yellow-400/25 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider"
                                         >One-time</span
                                     >
                                 </div>
                                 <p
+                                    id="boost-intro"
                                     class="text-gray-300 text-xs leading-relaxed"
                                 >
                                     Instantly add
@@ -1853,6 +1847,7 @@
                                 "
                             >
                                 <div
+                                    id="boost-votes-num"
                                     class="text-2xl font-black text-white leading-none"
                                 >
                                     +100
@@ -1871,6 +1866,7 @@
                                 "
                             >
                                 <div
+                                    id="boost-price-num"
                                     class="text-2xl font-black leading-none"
                                     style="color: #facc15"
                                 >
@@ -1911,12 +1907,13 @@
                                     rgba(250, 204, 21, 0.7);
                             "
                         >
-                            <i class="ph-fill ph-rocket-launch"></i> Activate
-                            Boost · KES 250
+                            <i class="ph-fill ph-rocket-launch"></i>
+                            <span id="boost-btn-label"
+                                >Activate Boost · KES 250</span
+                            >
                         </button>
                         <p class="text-[10px] text-gray-500 text-center mt-3">
-                            Secure M-Pesa payment via PayHero · Limit 1 per
-                            nominee
+                            Secure M-Pesa payment via PayHero
                         </p>
                     </div>
                     <div id="boost-loading" class="hidden text-center py-8">
@@ -1949,7 +1946,10 @@
                         <h4 class="text-xl font-bold mb-1 text-white">
                             Boost Activated!
                         </h4>
-                        <p class="text-sm text-gray-300 mb-4">
+                        <p
+                            id="boost-success-text"
+                            class="text-sm text-gray-300 mb-4"
+                        >
                             +100 votes added to your campaign.
                         </p>
                         <button
@@ -2016,7 +2016,6 @@
             </div>
         </div>
 
-        <!-- QR MODAL -->
         <div id="qr-modal" class="modal">
             <div
                 class="modal-panel card w-full max-w-sm p-6 relative text-center"
@@ -2112,6 +2111,13 @@
                 semi_finals: "Semi Finals",
                 finals: "Finals",
                 completed: "Completed",
+            };
+            // ✅ Updated cutoff
+            const STAGE_CUTOFF = {
+                preliminaries: 10,
+                semi_finals: 5,
+                finals: 1,
+                completed: 0,
             };
 
             function toast(msg, ok = true) {
@@ -2876,7 +2882,7 @@
                             } else if (evt.type === "category_change") {
                                 toast("Category updated ✓");
                             } else if (evt.type === "boost_50") {
-                                toast("Power Boost activated · +100 votes 🚀");
+                                toast("Power Boost activated 🚀");
                                 _confettiBurst({
                                     count: 300,
                                     spread: Math.PI * 2,
@@ -2997,10 +3003,9 @@
                 const z = currentZone.zone;
                 const rank = currentZone.rank || 0;
                 const total = currentZone.total || 0;
-                const cutoff = currentZone.cutoff || 5;
+                const cutoff = currentZone.cutoff || 10;
                 const gap = currentZone.gap || 0;
 
-                // Show the "Share" shortcut for anyone still in the running
                 if (actions) actions.style.display = "";
 
                 if (z === "green") {
@@ -3286,6 +3291,7 @@
                 list.innerHTML = eventRows + summary;
             }
 
+            // ✅ Boost card: "One-time" ad for first boost, "Add +25 votes" for repeat
             function renderBoostCard() {
                 const wrap = $("boost-card-wrap");
                 if (!wrap || !nominee) return;
@@ -3295,75 +3301,86 @@
                     return;
                 }
 
-                if (nominee.boosted) {
-                    const dateStr = nominee.boostPurchasedAt
-                        ? new Date(nominee.boostPurchasedAt).toLocaleDateString(
-                              "en-US",
-                              { month: "short", day: "numeric" },
-                          )
-                        : "";
+                const count = nominee.boostCount || 0;
+                const total = nominee.boostVotesTotal || 0;
+
+                if (count === 0) {
+                    // First-boost ad (unchanged — shows "One-time" + 100 / 250)
+                    wrap.innerHTML = `
+                        <div class="card overflow-hidden relative"
+                             style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
+                            <div class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none" style="background: rgba(250,204,21,0.15);"></div>
+                            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style="background: rgba(249,115,22,0.15);"></div>
+                            <div class="relative p-6">
+                                <div class="flex items-start gap-4 mb-4">
+                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+                                         style="background: linear-gradient(135deg, #facc15 0%, #f97316 100%); box-shadow: 0 8px 24px -8px rgba(249,115,22,0.6);">
+                                        <i class="ph-fill ph-rocket-launch text-white text-2xl"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <h3 class="text-white text-xl font-extrabold tracking-tight">Power Boost</h3>
+                                            <span class="text-[10px] font-bold bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider">One-time</span>
+                                        </div>
+                                        <p class="text-gray-300 text-sm leading-relaxed">Instantly add <strong class="text-yellow-300">+100 verified votes</strong> to your campaign.</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 mb-5">
+                                    <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
+                                        <div class="text-2xl font-black text-white leading-none">+100</div>
+                                        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Votes added</div>
+                                    </div>
+                                    <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
+                                        <div class="text-2xl font-black leading-none" style="color:#facc15;">250</div>
+                                        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">KES only</div>
+                                    </div>
+                                </div>
+                                <ul class="text-xs text-gray-300 space-y-1.5 mb-5">
+                                    <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Applied instantly after payment</li>
+                                    <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Counts toward your final ranking</li>
+                                    <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Limit: 1 per nominee</li>
+                                </ul>
+                                <button onclick="openBoost()"
+                                        class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all"
+                                        style="background: linear-gradient(90deg, #facc15 0%, #fde047 100%); box-shadow: 0 8px 24px -10px rgba(250,204,21,0.7);">
+                                    <i class="ph-fill ph-rocket-launch"></i> Activate Boost · KES 250
+                                </button>
+                                <p class="text-[10px] text-gray-500 text-center mt-3">M-Pesa payment · Secure via PayHero</p>
+                            </div>
+                        </div>`;
+                } else {
+                    // Repeat-boost card — user has already purchased ≥1 boost
                     wrap.innerHTML = `
                         <div class="card p-6 overflow-hidden relative"
                              style="background: linear-gradient(135deg, #0f5132 0%, #052e16 100%); border: 1px solid rgba(34,197,94,0.4);">
-                            <div class="flex items-center gap-4">
+                            <div class="flex items-start gap-4 mb-4">
                                 <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
                                      style="background: rgba(34,197,94,0.2);">
-                                    <i class="ph-fill ph-rocket-launch text-3xl" style="color: #4ade80;"></i>
+                                    <i class="ph-fill ph-rocket-launch text-3xl" style="color:#4ade80;"></i>
                                 </div>
                                 <div class="flex-1">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h3 class="text-green-300 font-extrabold text-lg tracking-tight">Power Boost Active</h3>
-                                        <span class="text-[10px] font-bold bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full uppercase tracking-wider">+100 votes</span>
-                                    </div>
-                                    <p class="text-green-400/80 text-xs">Activated${dateStr ? " on " + dateStr : ""} · Counts toward your final total.</p>
+                                    <h3 class="text-green-300 font-extrabold text-base tracking-tight">Boost active · +${total.toLocaleString()} votes added</h3>
+                                    <p class="text-green-400/80 text-xs mt-1">You've purchased ${count} boost${count === 1 ? "" : "s"}. Add more votes anytime.</p>
                                 </div>
                             </div>
-                        </div>`;
-                    return;
-                }
-
-                wrap.innerHTML = `
-                    <div class="card overflow-hidden relative"
-                         style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
-                        <div class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none" style="background: rgba(250,204,21,0.15);"></div>
-                        <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style="background: rgba(249,115,22,0.15);"></div>
-                        <div class="relative p-6">
-                            <div class="flex items-start gap-4 mb-4">
-                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
-                                     style="background: linear-gradient(135deg, #facc15 0%, #f97316 100%); box-shadow: 0 8px 24px -8px rgba(249,115,22,0.6);">
-                                    <i class="ph-fill ph-rocket-launch text-white text-2xl"></i>
+                            <div class="grid grid-cols-2 gap-3 mb-4">
+                                <div class="rounded-xl p-3" style="background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.25);">
+                                    <div class="text-2xl font-black text-green-300 leading-none">+25</div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-green-400/70 mt-1">Votes per boost</div>
                                 </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h3 class="text-white text-xl font-extrabold tracking-tight">Power Boost</h3>
-                                        <span class="text-[10px] font-bold bg-yellow-400/20 text-yellow-300 px-2 py-0.5 rounded-full uppercase tracking-wider">One-time</span>
-                                    </div>
-                                    <p class="text-gray-300 text-sm leading-relaxed">Instantly add <strong class="text-yellow-300">+100 verified votes</strong> to your campaign.</p>
+                                <div class="rounded-xl p-3" style="background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.25);">
+                                    <div class="text-2xl font-black text-green-300 leading-none">150</div>
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-green-400/70 mt-1">KES per boost</div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-3 mb-5">
-                                <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
-                                    <div class="text-2xl font-black text-white leading-none">+100</div>
-                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Votes added</div>
-                                </div>
-                                <div class="rounded-xl p-3" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">
-                                    <div class="text-2xl font-black leading-none" style="color:#facc15;">250</div>
-                                    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">KES only</div>
-                                </div>
-                            </div>
-                            <ul class="text-xs text-gray-300 space-y-1.5 mb-5">
-                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Applied instantly after payment</li>
-                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Counts toward your final ranking</li>
-                                <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Limit: 1 per nominee</li>
-                            </ul>
                             <button onclick="openBoost()"
-                                    class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all"
-                                    style="background: linear-gradient(90deg, #facc15 0%, #fde047 100%); box-shadow: 0 8px 24px -10px rgba(250,204,21,0.7);">
-                                <i class="ph-fill ph-rocket-launch"></i> Activate Boost · KES 250
+                                    class="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                                    style="background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%); color:#052e16; box-shadow: 0 8px 24px -10px rgba(34,197,94,0.7);">
+                                <i class="ph-fill ph-plus-circle"></i> Add +25 votes · KES 150
                             </button>
-                            <p class="text-[10px] text-gray-500 text-center mt-3">M-Pesa payment · Secure via PayHero</p>
-                        </div>
-                    </div>`;
+                            <p class="text-[10px] text-green-400/50 text-center mt-3">Boost votes are cumulative</p>
+                        </div>`;
+                }
             }
 
             function openShareShortcut() {
@@ -3373,6 +3390,7 @@
                 });
             }
 
+            // ✅ openBoost: adapts modal content based on boostCount
             function openBoost() {
                 if (!nominee) return;
                 if (nominee.eliminated)
@@ -3380,8 +3398,31 @@
                         "You cannot purchase a boost after elimination",
                         false,
                     );
-                if (nominee.boosted)
-                    return toast("Boost already active", false);
+
+                const count = nominee.boostCount || 0;
+                const isFirst = count === 0;
+
+                // Update modal content dynamically
+                $("boost-one-time-badge").style.display = isFirst ? "" : "none";
+
+                if (isFirst) {
+                    $("boost-votes-num").innerText = "+100";
+                    $("boost-price-num").innerText = "250";
+                    $("boost-intro").innerHTML =
+                        'Instantly add <strong class="text-yellow-300">+100 verified votes</strong> to your campaign.';
+                    $("boost-btn-label").innerText = "Activate Boost · KES 250";
+                    $("boost-success-text").innerText =
+                        "+100 votes added to your campaign.";
+                } else {
+                    $("boost-votes-num").innerText = "+25";
+                    $("boost-price-num").innerText = "150";
+                    $("boost-intro").innerHTML =
+                        'Add <strong class="text-yellow-300">+25 verified votes</strong> to your campaign.';
+                    $("boost-btn-label").innerText = "Add Boost · KES 150";
+                    $("boost-success-text").innerText =
+                        "+25 votes added to your campaign.";
+                }
+
                 $("boost-phone").value = "";
                 $("boost-form").classList.remove("hidden");
                 $("boost-loading").classList.add("hidden");

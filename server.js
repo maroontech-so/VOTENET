@@ -45,12 +45,16 @@ const PRICES = {
   leaderboard_24h: 100,
   boost_50: 250,
 };
+const BOOST_FIRST_VOTES = 100;
+const BOOST_FIRST_PRICE = 250;
+const BOOST_REPEAT_VOTES = 25;
+const BOOST_REPEAT_PRICE = 150;
+const BOOST_VOTES = BOOST_FIRST_VOTES;
 const LEADERBOARD_ONCE_MS = 60 * 1000;
 const LEADERBOARD_1H_MS = 60 * 60 * 1000;
 const LEADERBOARD_12H_MS = 12 * 60 * 60 * 1000;
 const LEADERBOARD_24H_MS = 24 * 60 * 60 * 1000;
 const LEADERBOARD_2H_MS = 2 * 60 * 60 * 1000;
-const BOOST_VOTES = 100;
 const STALE_TX_MINUTES = 15;
 const SYNC_PUSH_INTERVAL_MS = 30_000;
 const SYNC_PULL_INTERVAL_MS = 60_000;
@@ -66,7 +70,6 @@ const IMG_ORPHAN_GRACE_MS = 60 * 60 * 1000;
 const REPORT_SECRET =
   process.env.REPORT_SECRET || JWT_SECRET || "voteus-report-secret";
 
-// ─── Stage system constants ───
 const STAGE_ORDER = ["preliminaries", "semi_finals", "finals", "completed"];
 const STAGE_LABELS = {
   preliminaries: "Preliminaries",
@@ -80,11 +83,10 @@ const NEXT_STAGE = {
   finals: "completed",
   completed: null,
 };
-// Number that advance FROM the current stage TO the next
 const STAGE_CUTOFF = {
-  preliminaries: 5, // Top 5 advance to semis
-  semi_finals: 2, // Top 2 advance to finals
-  finals: 1, // Top 1 wins
+  preliminaries: 10,
+  semi_finals: 5,
+  finals: 1,
 };
 
 app.use(
@@ -240,7 +242,6 @@ function parseFingerprint(fpJson) {
   }
 }
 
-// ─── Stage helpers ───
 async function getStages() {
   try {
     const row = await db
@@ -321,7 +322,6 @@ async function advanceStage() {
   const results = [];
 
   for (const cat of categories) {
-    // Active nominees in this category, ranked by current cumulative votes
     const rows = await db
       .prepare(
         `SELECT id, name, votes FROM nominees
@@ -333,7 +333,6 @@ async function advanceStage() {
     const cutoff = STAGE_CUTOFF[current] || 999;
 
     if (next === "completed") {
-      // Finalize winner (rank 1) and rank all others
       for (let i = 0; i < rows.length; i++) {
         const n = rows[i];
         if (i === 0) {
@@ -427,7 +426,7 @@ async function getNomineeZone(nominee) {
     };
   }
 
-  const cutoff = STAGE_CUTOFF[current] || 5;
+  const cutoff = STAGE_CUTOFF[current] || 10;
   const active = await db
     .prepare(
       `SELECT id, votes FROM nominees
@@ -537,7 +536,6 @@ async function initSchema() {
     );
   `);
 
-  // Add stage columns to nominees
   for (const col of [
     "stage TEXT DEFAULT 'preliminaries'",
     "eliminated INTEGER DEFAULT 0",
@@ -599,7 +597,6 @@ async function initSchema() {
     console.warn("[Schema] votes backfill:", e.message);
   }
 
-  // Seed election_stages
   try {
     const existing = await db
       .prepare("SELECT COUNT(*) AS c FROM election_stages")
@@ -619,7 +616,7 @@ async function initSchema() {
 
   try {
     await db.exec(`CREATE TABLE IF NOT EXISTS nominee_boosts (
-      id TEXT PRIMARY KEY, nominee_id TEXT UNIQUE NOT NULL,
+      id TEXT PRIMARY KEY, nominee_id TEXT NOT NULL,
       reference TEXT NOT NULL, votes_added INTEGER NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
     await db.exec(
@@ -627,6 +624,34 @@ async function initSchema() {
     );
   } catch (e) {
     console.warn("[Schema] nominee_boosts:", e.message);
+  }
+
+  try {
+    const info = await db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='nominee_boosts'",
+      )
+      .get();
+    if (info && info.sql && /nominee_id\s+TEXT\s+UNIQUE/i.test(info.sql)) {
+      console.log(
+        "[Schema] Migrating nominee_boosts → multi-boost (removing UNIQUE)",
+      );
+      await db.exec("ALTER TABLE nominee_boosts RENAME TO nominee_boosts_old");
+      await db.exec(`CREATE TABLE nominee_boosts (
+        id TEXT PRIMARY KEY, nominee_id TEXT NOT NULL,
+        reference TEXT NOT NULL, votes_added INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP)`);
+      await db.exec(
+        "INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added, created_at) SELECT id, nominee_id, reference, votes_added, created_at FROM nominee_boosts_old",
+      );
+      await db.exec("DROP TABLE nominee_boosts_old");
+      await db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_boosts_nominee ON nominee_boosts(nominee_id)",
+      );
+      console.log("[Schema] ✓ nominee_boosts migration complete");
+    }
+  } catch (e) {
+    console.warn("[Schema] nominee_boosts migration:", e.message);
   }
 
   try {
@@ -1252,19 +1277,15 @@ async function completeTransaction(reference, receipt) {
           LEADERBOARD_2H_MS,
         );
       } else if (txRow.type === "boost_50") {
-        const already = await t.get(
-          "SELECT id FROM nominee_boosts WHERE nominee_id = ?",
-          [txRow.nominee_id],
-        );
-        if (already) throw new Error("ALREADY_BOOSTED");
+        const votesToAdd = Number(meta.votes) || BOOST_FIRST_VOTES;
         await t.execute({
           sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
-          args: [uuidv4(), txRow.nominee_id, reference, BOOST_VOTES],
+          args: [uuidv4(), txRow.nominee_id, reference, votesToAdd],
         });
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
-                (SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?)
+                (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?)
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
@@ -1274,11 +1295,12 @@ async function completeTransaction(reference, receipt) {
         extra.votes = upd?.votes || 0;
         extra.nomineeId = txRow.nominee_id;
         extra.boosted = true;
+        extra.votesAdded = votesToAdd;
       } else if (txRow.type === "vote") {
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
-                COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?)
                 WHERE id = ?`,
           args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
         });
@@ -1585,7 +1607,6 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-// ── Public stages endpoint ──
 app.get("/api/stages", async (req, res) => {
   const s = await getStages();
   const open = await votingOpen();
@@ -1594,7 +1615,7 @@ app.get("/api/stages", async (req, res) => {
     label: STAGE_LABELS[s.current_stage] || s.current_stage,
     next: NEXT_STAGE[s.current_stage] || null,
     nextLabel: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
-    cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+    cutoff: STAGE_CUTOFF[s.current_stage] || 10,
     votingOpen: open,
     preliminaries_start: s.preliminaries_start,
     preliminaries_end: s.preliminaries_end,
@@ -1633,7 +1654,7 @@ app.get("/api/config", async (req, res) => {
       finalsEnd: s.finals_end,
       next: NEXT_STAGE[s.current_stage] || null,
       nextLabel: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
-      cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+      cutoff: STAGE_CUTOFF[s.current_stage] || 10,
     },
     payheroConfigured: !!(
       PAYHERO_API_KEY &&
@@ -1647,6 +1668,10 @@ app.get("/api/config", async (req, res) => {
       leaderboard12h: PRICES.leaderboard_12h,
       leaderboard24h: PRICES.leaderboard_24h,
       boost50: PRICES.boost_50,
+      boostFirstVotes: BOOST_FIRST_VOTES,
+      boostFirstPrice: BOOST_FIRST_PRICE,
+      boostRepeatVotes: BOOST_REPEAT_VOTES,
+      boostRepeatPrice: BOOST_REPEAT_PRICE,
     },
   });
 });
@@ -1733,28 +1758,20 @@ app.get("/api/nominees", async (req, res) => {
     .all();
   for (const r of rows)
     if (r.votes === null || r.votes === undefined) r.votes = 0;
-  if (voterToken || deviceHash) {
+
+  if (voterToken) {
     try {
-      const conditions = [];
-      const params = [];
-      if (voterToken) {
-        conditions.push("fv.voter_token = ?");
-        params.push(voterToken);
-      }
-      if (deviceHash) {
-        conditions.push("fv.device_hash = ?");
-        params.push(deviceHash);
-      }
       const voterVotes = await db
         .prepare(
           `SELECT fv.nominee_id, n2.category_id, n2.name, n2.code,
                 fv.is_appeal, fv.created_at
          FROM free_votes fv
          JOIN nominees n2 ON fv.nominee_id = n2.id
-         WHERE ${conditions.join(" OR ")}
+         WHERE fv.voter_token = ?
          ORDER BY fv.is_appeal DESC, fv.created_at DESC`,
         )
-        .all(...params);
+        .all(voterToken);
+
       const votedByNominee = new Set();
       const votedByCategory = {};
       for (const v of voterVotes) {
@@ -1767,6 +1784,7 @@ app.get("/api/nominees", async (req, res) => {
           };
         }
       }
+
       const allowanceConditions = [];
       const allowanceParams = [];
       if (deviceHash) {
@@ -1793,6 +1811,7 @@ app.get("/api/nominees", async (req, res) => {
           console.warn("[Nominees allowances]", ae.message);
         }
       }
+
       for (const r of rows) {
         const hasAllowance = allowanceCategories.has(r.category_id);
         if (hasAllowance) {
@@ -2063,7 +2082,6 @@ app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   }
 });
 
-// ─── Admin: Stage management (super only) ───
 app.get("/api/admin/stages/status", superAuth, async (req, res) => {
   try {
     const s = await getStages();
@@ -2090,7 +2108,7 @@ app.get("/api/admin/stages/status", superAuth, async (req, res) => {
         label: STAGE_LABELS[s.current_stage] || s.current_stage,
         next: NEXT_STAGE[s.current_stage] || null,
         next_label: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
-        cutoff: STAGE_CUTOFF[s.current_stage] || 5,
+        cutoff: STAGE_CUTOFF[s.current_stage] || 10,
         preliminaries_start: s.preliminaries_start,
         preliminaries_end: s.preliminaries_end,
         semifinals_start: s.semifinals_start,
@@ -2118,7 +2136,7 @@ app.post("/api/admin/stages/config", superAuth, async (req, res) => {
       finals_start,
       finals_end,
     } = req.body || {};
-    await getStages(); // ensure row exists
+    await getStages();
     await db
       .prepare(
         `UPDATE election_stages SET
@@ -2193,13 +2211,16 @@ app.get("/api/nominee/me", auth, async (req, res) => {
     )
     .get(req.user.id);
   if (!nominee) return res.status(404).json({ error: "Not a nominee yet" });
-  const boostRow = await db
+
+  const boostAgg = await db
     .prepare(
-      "SELECT votes_added, created_at FROM nominee_boosts WHERE nominee_id = ?",
+      `SELECT COUNT(*) AS count,
+              COALESCE(SUM(votes_added), 0) AS total,
+              MAX(created_at) AS last_at
+       FROM nominee_boosts WHERE nominee_id = ?`,
     )
     .get(nominee.id);
 
-  // Leaderboard: active nominees only (eliminated ones are out of competition)
   const activeRows = await db
     .prepare(
       `SELECT id, COALESCE(votes, 0) AS votes FROM nominees
@@ -2233,20 +2254,24 @@ app.get("/api/nominee/me", auth, async (req, res) => {
   res.json({
     nominee: {
       ...nominee,
-      boosted: !!boostRow,
-      boostVotesAdded: boostRow?.votes_added || 0,
-      boostPurchasedAt: boostRow?.created_at || null,
+      boosted: (boostAgg?.count || 0) > 0,
+      boostCount: boostAgg?.count || 0,
+      boostVotesTotal: boostAgg?.total || 0,
+      boostVotesAdded: boostAgg?.total || 0,
+      boostPurchasedAt: boostAgg?.last_at || null,
     },
     leaderboard,
     leaderboardAccess: await getLeaderboardAccess(req.user.id),
-    boostPrice: PRICES.boost_50,
-    boostVotes: BOOST_VOTES,
+    boostTiers: {
+      first: { votes: BOOST_FIRST_VOTES, price: BOOST_FIRST_PRICE },
+      repeat: { votes: BOOST_REPEAT_VOTES, price: BOOST_REPEAT_PRICE },
+    },
     stage: {
       current: stages.current_stage,
       label: STAGE_LABELS[stages.current_stage] || stages.current_stage,
       next: NEXT_STAGE[stages.current_stage] || null,
       nextLabel: STAGE_LABELS[NEXT_STAGE[stages.current_stage]] || null,
-      cutoff: STAGE_CUTOFF[stages.current_stage] || 5,
+      cutoff: STAGE_CUTOFF[stages.current_stage] || 10,
       preliminariesStart: stages.preliminaries_start,
       preliminariesEnd: stages.preliminaries_end,
       semifinalsStart: stages.semifinals_start,
@@ -2462,7 +2487,7 @@ app.post(
 app.post(
   "/api/nominee/boost",
   auth,
-  rateLimit({ key: "boost", max: 5 }),
+  rateLimit({ key: "boost", max: 10 }),
   async (req, res) => {
     const { phone } = req.body || {};
     if (!phone) return res.status(400).json({ error: "Phone required" });
@@ -2474,24 +2499,32 @@ app.post(
       return res
         .status(400)
         .json({ error: "You cannot purchase a boost after elimination" });
-    const existing = await db
-      .prepare("SELECT id FROM nominee_boosts WHERE nominee_id = ?")
-      .get(nominee.id);
-    if (existing)
-      return res.status(400).json({
-        error: "Boost already purchased — one per nominee.",
-        code: "ALREADY_BOOSTED",
-      });
+
+    const boostCount = (
+      await db
+        .prepare(
+          "SELECT COUNT(*) AS c FROM nominee_boosts WHERE nominee_id = ?",
+        )
+        .get(nominee.id)
+    ).c;
+    const isFirstBoost = Number(boostCount) === 0;
+    const votesToAdd = isFirstBoost ? BOOST_FIRST_VOTES : BOOST_REPEAT_VOTES;
+    const price = isFirstBoost ? BOOST_FIRST_PRICE : BOOST_REPEAT_PRICE;
+
     try {
       const r = await initiatePayment({
         type: "boost_50",
         userId: req.user.id,
         nomineeId: nominee.id,
-        amount: PRICES.boost_50,
+        amount: price,
         phone,
-        metadata: { votes: BOOST_VOTES },
+        metadata: {
+          votes: votesToAdd,
+          boostIndex: boostCount,
+          isFirstBoost,
+        },
       });
-      res.json(r);
+      res.json({ ...r, isFirstBoost, votesToAdd, price });
     } catch (err) {
       res.status(502).json({
         error:
@@ -2536,7 +2569,6 @@ app.post(
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
 
-    // Reject votes for eliminated nominees
     if (nominee.eliminated) {
       return res.status(403).json({
         error: `${nominee.name} was eliminated from the ${STAGE_LABELS[nominee.eliminated_stage] || "competition"}.`,
@@ -2605,7 +2637,7 @@ app.post(
           await t.execute({
             sql: `UPDATE nominees SET votes =
                   (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
-                  COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                  (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?)
                   WHERE id = ?`,
             args: [nominee.id, nominee.id, nominee.id],
           });
@@ -2651,7 +2683,7 @@ app.post(
         await t.execute({
           sql: `UPDATE nominees SET votes =
                 (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) +
-                COALESCE((SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?), 0)
+                (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?)
                 WHERE id = ?`,
           args: [nominee.id, nominee.id, nominee.id],
         });
@@ -2692,9 +2724,11 @@ app.post(
         .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
         .get(nominee.id);
       const b = await db
-        .prepare("SELECT votes_added FROM nominee_boosts WHERE nominee_id = ?")
+        .prepare(
+          "SELECT COALESCE(SUM(votes_added), 0) AS total FROM nominee_boosts WHERE nominee_id = ?",
+        )
         .get(nominee.id);
-      const total = (c?.c || 0) + (b?.votes_added || 0);
+      const total = (c?.c || 0) + (b?.total || 0);
       await db
         .prepare("UPDATE nominees SET votes = ? WHERE id = ?")
         .run(total, nominee.id);
@@ -3459,19 +3493,36 @@ app.post("/api/admin/appeals/:code/decide", superAuth, async (req, res) => {
       for (const { category_id } of blockedCategories) {
         const existing = await db
           .prepare(
-            "SELECT id FROM vote_allowances WHERE device_hash = ? AND category_id = ?",
+            `SELECT id, status FROM vote_allowances
+             WHERE device_hash = ? AND category_id = ?`,
           )
           .get(appeal.device_hash, category_id);
-        if (existing) {
+
+        if (existing && existing.status === "active") {
           allowancesSkipped++;
+          continue;
+        }
+
+        if (existing && existing.status === "used") {
+          await db
+            .prepare(
+              `UPDATE vote_allowances
+               SET status = 'active',
+                   used_at = NULL,
+                   used_vote_id = NULL,
+                   appeal_code = ?
+               WHERE id = ?`,
+            )
+            .run(appeal.appeal_code, existing.id);
+          allowancesCreated++;
           continue;
         }
 
         await db
           .prepare(
             `INSERT INTO vote_allowances
-           (id, appeal_code, device_hash, voter_token, category_id, status)
-           VALUES (?,?,?,?,?,'active')`,
+             (id, appeal_code, device_hash, voter_token, category_id, status)
+             VALUES (?,?,?,?,?,'active')`,
           )
           .run(
             uuidv4(),
@@ -3938,8 +3989,14 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       `https://gala.voteus.xyz/verify?` +
       `r=${encodeURIComponent(r.reportId)}&s=${r.signature}` +
       `&v=${r.totalVotes}&c=${r.categories.length}&n=${r.nominees.length}&t=${Date.parse(r.generatedAt)}`;
+
+    // ✅ QR generation — logs clearly if package is missing or generation fails
     let qrBuf = null;
-    if (QRCode) {
+    if (!QRCode) {
+      console.warn(
+        "[PDF] QR skipped — 'qrcode' package not installed. Run: npm install qrcode",
+      );
+    } else {
       try {
         qrBuf = await QRCode.toBuffer(verifyUrl, {
           errorCorrectionLevel: "M",
@@ -3947,16 +4004,21 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           width: 240,
           color: { dark: "#1d1d1f", light: "#ffffff" },
         });
+        console.log(
+          `[PDF] ✓ QR generated (${qrBuf.length} bytes) for ${r.reportId}`,
+        );
       } catch (e) {
         console.warn("[PDF] QR generation failed:", e.message);
       }
     }
+
     const filename = `votenet-report-${r.reportId}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("X-Report-Id", r.reportId);
     res.setHeader("X-Report-Signature", r.signature);
 
+    // ✅ Footer is drawn at FOOTER_Y=775, maxY=798 → never auto-paginates.
     const doc = new PDFDocument({ size: "A4", margin: 44 });
     doc.pipe(res);
 
@@ -3969,28 +4031,41 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     const PAGE_W = 507,
       LEFT = 44,
       RIGHT = 551,
-      BOTTOM = 780;
+      BOTTOM = 745;
+    const FOOTER_Y = 775;
 
-    const footer = () => {
-      const y = doc.page.height - 26;
-      doc
-        .fontSize(6.5)
-        .fillColor(GRAY)
-        .text(
-          `Voteus.io  ·  Report ${r.reportId}  ·  Sig ${r.signature.slice(0, 14)}…`,
-          LEFT,
-          y,
-          { width: PAGE_W, align: "left", lineBreak: false },
-        );
+    let pageHasContent = false;
+
+    // ✅ Footer includes emojistudios attribution
+    const drawFooter = () => {
+      const savedY = doc.y;
+      const maxY = doc.page.maxY();
+      const safeY = Math.min(FOOTER_Y, maxY - 15);
+      doc.fontSize(6.5).fillColor(GRAY);
+      doc.text(
+        `Voteus.io  ·  Report ${r.reportId}  ·  Managed by emojistudios`,
+        LEFT,
+        safeY,
+        { width: PAGE_W, align: "left", lineBreak: false },
+      );
+      doc.y = savedY;
     };
+
+    const addPageIfNeeded = () => {
+      if (!pageHasContent) return;
+      drawFooter();
+      doc.addPage();
+      pageHasContent = false;
+    };
+
     const ensureSpace = (needed) => {
       if (doc.y + needed > BOTTOM - 20) {
-        footer();
-        doc.addPage();
+        addPageIfNeeded();
         return true;
       }
       return false;
     };
+
     const drawColHeaders = () => {
       const hy = doc.y;
       doc.fillColor(GRAY).fontSize(7).font("Helvetica-Bold");
@@ -4008,8 +4083,10 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .lineTo(RIGHT, doc.y)
         .stroke();
       doc.y += 3;
+      pageHasContent = true;
     };
 
+    // ---- PAGE 1: COVER ----
     doc.rect(0, 0, doc.page.width, 6).fill(INDIGO);
     doc.moveDown(1.2);
     doc
@@ -4023,6 +4100,15 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .fontSize(8)
       .font("Helvetica")
       .text("Official Event Voting Platform", { align: "center" });
+    doc.moveDown(0.2);
+    doc
+      .fillColor(INDIGO)
+      .fontSize(8)
+      .font("Helvetica")
+      .text("Powered by emojistudios", {
+        align: "center",
+        characterSpacing: 1,
+      });
     doc.moveDown(1);
     doc
       .fillColor(DARK)
@@ -4038,6 +4124,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         `Gala Awards 2026  ·  MKUPLC  ·  ${STAGE_LABELS[stages.current_stage] || stages.current_stage}`,
         { align: "center" },
       );
+    pageHasContent = true;
 
     doc.moveDown(1);
     const metaBoxY = doc.y,
@@ -4144,9 +4231,9 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .text(String(value), x + 12, y + 22, { width: cardW - 24 });
     }
     doc.y = gridStartY + Math.ceil(summaryItems.length / 2) * (cardH + 8) + 14;
-    footer();
 
-    doc.addPage();
+    // ---- PAGE 2+: RESULTS ----
+    addPageIfNeeded();
     doc
       .fillColor(INDIGO)
       .fontSize(14)
@@ -4160,6 +4247,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .lineTo(LEFT + 50, doc.y)
       .stroke();
     doc.moveDown(0.7);
+    pageHasContent = true;
 
     if (!r.perCategory.length) {
       doc
@@ -4171,7 +4259,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
     }
 
     for (const cat of r.perCategory) {
-      ensureSpace(110);
+      ensureSpace(67);
       const headY = doc.y;
       doc.roundedRect(LEFT, headY, PAGE_W, 28, 5).fill(INDIGO_LT);
       doc
@@ -4188,6 +4276,8 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           align: "right",
         });
       doc.y = headY + 36;
+      pageHasContent = true;
+
       if (!cat.nominees.length) {
         doc
           .fillColor(GRAY)
@@ -4197,9 +4287,14 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         doc.moveDown(0.7);
         continue;
       }
+
       drawColHeaders();
+
       for (const n of cat.nominees) {
-        if (ensureSpace(24)) drawColHeaders();
+        if (doc.y + 31 > BOTTOM - 20) {
+          addPageIfNeeded();
+          drawColHeaders();
+        }
         const yy = doc.y;
         const rankColor =
           n.rank === 1
@@ -4252,7 +4347,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
             width: 55,
             align: "right",
           });
-        // Stage column
         const stageLabel = n.eliminated
           ? "Elim."
           : n.stage === "winner"
@@ -4266,7 +4360,9 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           .font("Helvetica-Bold")
           .text(stageLabel, LEFT + 445, yy + 1, { width: 62 });
         doc.y = yy + 18;
+        pageHasContent = true;
       }
+
       doc.moveDown(0.3);
       doc
         .strokeColor(BORDER)
@@ -4276,9 +4372,9 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .stroke();
       doc.moveDown(0.8);
     }
-    footer();
 
-    doc.addPage();
+    // ---- FINAL PAGE: VERIFICATION ----
+    addPageIfNeeded();
     doc
       .fillColor(INDIGO)
       .fontSize(18)
@@ -4289,10 +4385,14 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .fillColor(GRAY)
       .fontSize(9)
       .font("Helvetica")
-      .text("Scan the QR code to verify this report online.", {
-        align: "center",
-      });
+      .text(
+        qrBuf
+          ? "Scan the QR code to verify this report online."
+          : "Open the verification URL below to verify this report online.",
+        { align: "center" },
+      );
     doc.moveDown(1);
+    pageHasContent = true;
 
     if (qrBuf) {
       const qrSize = 190;
@@ -4312,18 +4412,47 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         .text("Scan to verify", { align: "center" });
       doc.moveDown(1);
     } else {
+      // Fallback box when QR isn't available
+      const boxY = doc.y;
+      doc
+        .roundedRect(LEFT + 60, boxY, PAGE_W - 120, 80, 10)
+        .lineWidth(1.5)
+        .strokeColor(BORDER)
+        .stroke();
       doc
         .fillColor(GRAY)
-        .fontSize(10)
+        .fontSize(8)
         .font("Helvetica")
-        .text("QR code unavailable — use the verification block below.", {
+        .text("VERIFICATION URL", LEFT + 60, boxY + 12, {
+          width: PAGE_W - 120,
+          align: "center",
+          characterSpacing: 1,
+        });
+      doc
+        .fillColor(INDIGO)
+        .fontSize(8)
+        .font("Helvetica-Bold")
+        .text(verifyUrl, LEFT + 70, boxY + 30, {
+          width: PAGE_W - 140,
           align: "center",
         });
-      doc.moveDown(1);
+      doc
+        .fillColor(GRAY)
+        .fontSize(7)
+        .font("Helvetica")
+        .text(
+          "Install QR support: npm install qrcode  (then re-export)",
+          LEFT + 60,
+          boxY + 60,
+          { width: PAGE_W - 120, align: "center" },
+        );
+      doc.y = boxY + 92;
+      doc.moveDown(0.6);
     }
 
+    // ---- VERIFICATION BLOCK (with Managed By row) ----
     const sigBoxY = doc.y,
-      sigBoxH = 190;
+      sigBoxH = 218;
     doc
       .roundedRect(LEFT + 20, sigBoxY, PAGE_W - 40, sigBoxH, 10)
       .lineWidth(1.5)
@@ -4348,6 +4477,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       ["Signature", r.signature],
       ["Generated", formatDateTime(r.generatedAt)],
       ["Prepared By", `${r.generatedBy} (${r.generatedByRole})`],
+      ["Managed By", "emojistudios"],
       ["Status", "\u2713 VERIFIED AUTHENTIC"],
     ];
     for (const [k, v] of sigItems) {
@@ -4367,7 +4497,7 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
           width: PAGE_W - 170,
           ellipsis: true,
         });
-      sy += 28;
+      sy += 26;
     }
     doc.y = sigBoxY + sigBoxH + 14;
     doc
@@ -4391,6 +4521,8 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
         ellipsis: true,
       });
     doc.moveDown(1.2);
+
+    // ---- SIGN-OFF with emojistudios ----
     doc
       .fillColor(GRAY)
       .fontSize(9)
@@ -4404,11 +4536,18 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
       .text("Voteus.io Automated Reporting System", { align: "center" });
     doc.moveDown(0.2);
     doc
+      .fillColor(INDIGO)
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("Managed by emojistudios", { align: "center" });
+    doc.moveDown(0.2);
+    doc
       .fillColor(GRAY)
       .fontSize(8)
       .font("Helvetica")
       .text(formatDateTime(r.generatedAt), { align: "center" });
-    footer();
+
+    drawFooter();
     doc.end();
   } catch (e) {
     console.error("[Export PDF]", e);
@@ -4778,7 +4917,10 @@ const server = app.listen(PORT, async () => {
   console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
   console.log(`  Voting:      FREE · one per device per category`);
   console.log(
-    `  Stages:      preliminaries → semi_finals (top 5) → finals (top 2) → completed`,
+    `  Stages:      preliminaries → semi_finals (top 10) → finals (top 5) → completed`,
+  );
+  console.log(
+    `  Boosts:      first +${BOOST_FIRST_VOTES} / KES ${BOOST_FIRST_PRICE} · repeat +${BOOST_REPEAT_VOTES} / KES ${BOOST_REPEAT_PRICE}`,
   );
   console.log(
     `  Live SSE:    /api/nominee/stream · /api/live/votes · /api/live/admin`,

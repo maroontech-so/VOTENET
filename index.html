@@ -183,7 +183,7 @@
                 }
             }
 
-            /* ============ STAGE BANNER (NEW) ============ */
+            /* ============ STAGE BANNER ============ */
             .stage-banner {
                 width: 100%;
                 background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
@@ -403,7 +403,6 @@
                 transform: translateY(-6px) scale(1.02);
                 box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.3);
             }
-            /* Eliminated card style */
             .card.eliminated {
                 cursor: not-allowed;
                 filter: grayscale(0.85);
@@ -452,7 +451,6 @@
                 color: white;
                 z-index: 2;
             }
-            /* Eliminated badge overlay */
             .card .elim-badge {
                 position: absolute;
                 top: 8px;
@@ -535,6 +533,14 @@
                 background: rgba(107, 114, 128, 0.35);
                 border-color: rgba(107, 114, 128, 0.5);
             }
+            .card .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.45);
+                border-color: rgba(16, 185, 129, 0.65);
+            }
+            .card:hover .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.7);
+                border-color: rgba(16, 185, 129, 0.85);
+            }
             @media (min-width: 640px) {
                 .card .overlay {
                     padding: 12px;
@@ -612,7 +618,6 @@
                 background: rgba(220, 252, 231, 0.8);
                 border-color: rgba(134, 239, 172, 0.6);
             }
-            /* Stage-info pill in category header */
             .cat-badge.stage-info {
                 color: #6d28d9;
                 background: rgba(237, 233, 254, 0.85);
@@ -778,14 +783,13 @@
     </head>
     <body>
         <div class="top-wrap">
-            <!-- STAGE BANNER (NEW) -->
             <div id="stage-banner" class="stage-banner">
                 <span class="stage-pill" id="stage-pill">
                     <span class="stage-dot"></span>
                     <span id="stage-pill-label">Loading stage…</span>
                 </span>
                 <span class="stage-text" id="stage-text">
-                    <strong>Top 5</strong> from each category advance to Semi
+                    <strong>Top 10</strong> from each category advance to Semi
                     Finals
                 </span>
             </div>
@@ -1163,9 +1167,10 @@
                 finals: "completed",
                 completed: null,
             };
+            // ✅ Updated per event: prelims→semis top 10, semis→finals top 5, finals→winner top 1
             const STAGE_CUTOFF = {
-                preliminaries: 5,
-                semi_finals: 2,
+                preliminaries: 10,
+                semi_finals: 5,
                 finals: 1,
                 completed: 0,
             };
@@ -1198,6 +1203,9 @@
                 return t;
             }
 
+            // ✅ Fingerprint v2 — removed window.innerWidth/Height (collision
+            //    source), added font-detection entropy, upgraded fallback hash
+            //    from 32-bit djb2 → 53-bit cyrb53
             async function getDeviceFingerprint() {
                 if (window.__voteus_fp) return window.__voteus_fp;
                 const parts = [];
@@ -1215,8 +1223,10 @@
                     parts.push(String(navigator.maxTouchPoints || 0));
                     parts.push(String(screen.availWidth || 0));
                     parts.push(String(screen.availHeight || 0));
-                    parts.push(String(window.innerWidth));
-                    parts.push(String(window.innerHeight));
+                    // ⚠ Intentionally NOT using window.innerWidth/innerHeight —
+                    //    those change on resize/URL-bar show-hide and caused
+                    //    device_hash collisions that made fresh voters appear
+                    //    to have "already voted".
                     parts.push(String(navigator.cookieEnabled));
                     parts.push(String(navigator.doNotTrack));
                     parts.push(String(navigator.plugins.length));
@@ -1266,27 +1276,79 @@
                             }
                         }
                     } catch {}
+
+                    // ✅ Font-detection entropy — unique per device fingerprint
+                    try {
+                        const fonts = [
+                            "Arial",
+                            "Verdana",
+                            "Times New Roman",
+                            "Courier New",
+                            "Georgia",
+                            "Comic Sans MS",
+                            "Trebuchet MS",
+                            "Impact",
+                            "Helvetica",
+                            "Tahoma",
+                            "Segoe UI",
+                            "Roboto",
+                        ];
+                        const cv = document.createElement("canvas");
+                        const cx = cv.getContext("2d");
+                        if (cx) {
+                            const detected = [];
+                            for (const f of fonts) {
+                                cx.font = `72px "${f}", monospace`;
+                                const w1 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
+                                cx.font = "72px monospace";
+                                const w2 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
+                                if (w1 !== w2) detected.push(f[0]);
+                            }
+                            parts.push(detected.join(""));
+                        }
+                    } catch {}
                 } catch {}
 
                 const raw = parts.join("||");
                 let hash;
                 try {
-                    const buf = await crypto.subtle.digest(
-                        "SHA-256",
-                        new TextEncoder().encode(raw),
-                    );
-                    hash = Array.from(new Uint8Array(buf))
-                        .map((b) => b.toString(16).padStart(2, "0"))
-                        .join("");
+                    if (
+                        window.crypto &&
+                        window.crypto.subtle &&
+                        window.crypto.subtle.digest
+                    ) {
+                        const buf = await crypto.subtle.digest(
+                            "SHA-256",
+                            new TextEncoder().encode(raw),
+                        );
+                        hash = Array.from(new Uint8Array(buf))
+                            .map((b) => b.toString(16).padStart(2, "0"))
+                            .join("");
+                    } else {
+                        throw new Error("subtle unavailable");
+                    }
                 } catch {
-                    let h = 0;
-                    for (let i = 0; i < raw.length; i++)
-                        h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+                    // ✅ 53-bit cyrb53 fallback (much stronger than djb2)
+                    let h1 = 0xdeadbeef,
+                        h2 = 0x41c6ce57;
+                    for (let i = 0; i < raw.length; i++) {
+                        const ch = raw.charCodeAt(i);
+                        h1 = Math.imul(h1 ^ ch, 2654435761);
+                        h2 = Math.imul(h2 ^ ch, 1597334677);
+                    }
+                    h1 =
+                        Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+                        Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+                    h2 =
+                        Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+                        Math.imul(h1 ^ (h1 >>> 13), 3266489909);
                     hash =
                         "fp_" +
-                        Math.abs(h).toString(16).padStart(8, "0") +
-                        "_" +
-                        raw.length.toString(16);
+                        (4294967296 * (2097151 & h2) + (h1 >>> 0))
+                            .toString(16)
+                            .padStart(16, "0");
                 }
                 window.__voteus_fp = hash;
                 return hash;
@@ -1410,7 +1472,7 @@
                 }
                 const next = NEXT_STAGE[cur];
                 const nextLabel = STAGE_LABELS[next] || next;
-                const cutoff = STAGE_CUTOFF[cur] || 5;
+                const cutoff = STAGE_CUTOFF[cur] || 10;
                 txt.innerHTML = `<strong>Top ${cutoff}</strong> from each category advance to ${nextLabel}`;
                 if (!stageInfo.votingOpen) {
                     pill.style.background = "rgba(220,38,38,0.25)";
@@ -1650,7 +1712,7 @@
                 c.innerHTML = "";
                 let cardIndex = 0;
                 const cur = stageInfo?.current || "preliminaries";
-                const cutoff = STAGE_CUTOFF[cur] || 5;
+                const cutoff = STAGE_CUTOFF[cur] || 10;
                 const curLabel = STAGE_LABELS[cur] || cur;
 
                 categories.forEach((cat) => {
@@ -1660,7 +1722,6 @@
                     if (!list.length) return;
                     const active = list.filter((n) => !n.eliminated);
                     const eliminated = list.filter((n) => n.eliminated);
-                    // Sort: active first (by votes), then eliminated (by votes)
                     const sorted = [
                         ...active.sort(
                             (a, b) => (b.votes || 0) - (a.votes || 0),
@@ -1694,7 +1755,6 @@
                         badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${activeTotal.toLocaleString()} votes</div>`;
                     }
 
-                    // Stage info badge
                     const stageBadge =
                         cur !== "completed"
                             ? `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`
@@ -1892,7 +1952,7 @@
                     return;
                 }
                 if (currentNom.appealAllowed) {
-                    // Allow re-vote
+                    // Appeal re-vote — allow
                 } else if (currentNom.voted) {
                     toast("You've already voted for " + currentNom.name, false);
                     return;

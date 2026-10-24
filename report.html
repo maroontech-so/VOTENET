@@ -183,9 +183,8 @@
                     <div>
                         <label
                             class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
+                            >What happened?</label
                         >
-                            What happened?
-                        </label>
                         <textarea
                             id="r-desc"
                             class="input resize-none"
@@ -249,12 +248,40 @@
             const VOTER_TOKEN_KEY = "vn_voter_token";
             let ALL_CATEGORIES = [];
 
+            // ✅ FIX: ALWAYS generate a voter_token if not present.
+            //    Previously returned null → report.voter_token = null →
+            //    appeal INSERT failed (NOT NULL constraint) OR allowance
+            //    couldn't match by voter_token on revote.
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
-                if (!t || typeof t !== "string" || t.length < 10) return null;
+                if (
+                    !t ||
+                    typeof t !== "string" ||
+                    t.length < 10 ||
+                    t.length > 100
+                ) {
+                    let raw;
+                    if (
+                        typeof crypto !== "undefined" &&
+                        typeof crypto.randomUUID === "function"
+                    ) {
+                        raw = crypto.randomUUID();
+                    } else {
+                        raw =
+                            Date.now().toString(36) +
+                            "-" +
+                            Math.random().toString(36).slice(2) +
+                            "-" +
+                            Math.random().toString(36).slice(2);
+                    }
+                    t = "vt_" + raw;
+                    localStorage.setItem(VOTER_TOKEN_KEY, t);
+                }
                 return t;
             }
 
+            // ✅ Fingerprint v2 (identical to index.html) — prevents
+            //    device_hash collisions caused by window.innerWidth/Height.
             async function getDeviceFingerprint() {
                 if (window.__voteus_fp) return window.__voteus_fp;
                 const parts = [];
@@ -272,8 +299,6 @@
                     parts.push(String(navigator.maxTouchPoints || 0));
                     parts.push(String(screen.availWidth || 0));
                     parts.push(String(screen.availHeight || 0));
-                    parts.push(String(window.innerWidth));
-                    parts.push(String(window.innerHeight));
                     parts.push(String(navigator.cookieEnabled));
                     parts.push(String(navigator.doNotTrack));
                     parts.push(String(navigator.plugins.length));
@@ -321,26 +346,74 @@
                             }
                         }
                     } catch {}
+                    try {
+                        const fonts = [
+                            "Arial",
+                            "Verdana",
+                            "Times New Roman",
+                            "Courier New",
+                            "Georgia",
+                            "Comic Sans MS",
+                            "Trebuchet MS",
+                            "Impact",
+                            "Helvetica",
+                            "Tahoma",
+                            "Segoe UI",
+                            "Roboto",
+                        ];
+                        const cv = document.createElement("canvas");
+                        const cx = cv.getContext("2d");
+                        if (cx) {
+                            const detected = [];
+                            for (const f of fonts) {
+                                cx.font = `72px "${f}", monospace`;
+                                const w1 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
+                                cx.font = "72px monospace";
+                                const w2 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
+                                if (w1 !== w2) detected.push(f[0]);
+                            }
+                            parts.push(detected.join(""));
+                        }
+                    } catch {}
                 } catch {}
+
                 const raw = parts.join("||");
                 let hash;
                 try {
-                    const buf = await crypto.subtle.digest(
-                        "SHA-256",
-                        new TextEncoder().encode(raw),
-                    );
-                    hash = Array.from(new Uint8Array(buf))
-                        .map((b) => b.toString(16).padStart(2, "0"))
-                        .join("");
+                    if (
+                        window.crypto &&
+                        window.crypto.subtle &&
+                        window.crypto.subtle.digest
+                    ) {
+                        const buf = await crypto.subtle.digest(
+                            "SHA-256",
+                            new TextEncoder().encode(raw),
+                        );
+                        hash = Array.from(new Uint8Array(buf))
+                            .map((b) => b.toString(16).padStart(2, "0"))
+                            .join("");
+                    } else throw new Error("subtle unavailable");
                 } catch {
-                    let h = 0;
-                    for (let i = 0; i < raw.length; i++)
-                        h = ((h << 5) - h + raw.charCodeAt(i)) | 0;
+                    let h1 = 0xdeadbeef,
+                        h2 = 0x41c6ce57;
+                    for (let i = 0; i < raw.length; i++) {
+                        const ch = raw.charCodeAt(i);
+                        h1 = Math.imul(h1 ^ ch, 2654435761);
+                        h2 = Math.imul(h2 ^ ch, 1597334677);
+                    }
+                    h1 =
+                        Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+                        Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+                    h2 =
+                        Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+                        Math.imul(h1 ^ (h1 >>> 13), 3266489909);
                     hash =
                         "fp_" +
-                        Math.abs(h).toString(16).padStart(8, "0") +
-                        "_" +
-                        raw.length.toString(16);
+                        (4294967296 * (2097151 & h2) + (h1 >>> 0))
+                            .toString(16)
+                            .padStart(16, "0");
                 }
                 window.__voteus_fp = hash;
                 return hash;
@@ -421,19 +494,16 @@
                 const name = $("r-name").value.trim();
                 const contact = $("r-contact").value.trim();
                 const description = $("r-desc").value.trim();
-
                 if (description.length < 10) {
                     alert(
                         "Please describe what happened (at least 10 characters).",
                     );
                     return;
                 }
-
                 const btn = $("submit-btn");
                 btn.disabled = true;
                 btn.innerHTML =
                     '<i class="ph ph-spinner animate-spin"></i> Analyzing your device…';
-
                 try {
                     const deviceHash = await getDeviceFingerprint();
                     const voterToken = getVoterToken();
@@ -578,7 +648,6 @@
                                           : m.match_strength === "medium"
                                             ? "bg-amber-100 text-amber-700"
                                             : "bg-gray-100 text-gray-600";
-
                                   const deviceCard = m.details_available
                                       ? renderDeviceCard(
                                             "This is what was recorded for that vote",
@@ -587,11 +656,9 @@
                                             false,
                                         )
                                       : `<div class="bg-gray-100 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">${escapeHtml(m.unavailable_reason || "No device details available")}</div>`;
-
                                   const appealBadge = m.is_appeal
                                       ? '<span class="badge bg-purple-100 text-purple-700 ml-2">Appeal vote</span>'
                                       : "";
-
                                   return `
                         <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
                             <div class="flex items-start justify-between gap-2 mb-3">
@@ -635,7 +702,6 @@
                     d.yourFingerprint,
                     true,
                 );
-
                 const categoriesAvailable =
                     ALL_CATEGORIES.length > 0
                         ? ALL_CATEGORIES.map(
@@ -680,7 +746,6 @@
                         </div>
                         <p class="text-sm text-gray-700 leading-relaxed">${escapeHtml(d.message)}</p>
                     </div>
-
                     <div class="card p-5 mb-4">
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Your Connection</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm mb-4">
@@ -696,21 +761,17 @@
                         </div>
                         ${yourDeviceCard}
                     </div>
-
                     <div class="card p-5 mb-4">
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
                             Records found (${d.matchCount})
                         </h3>
                         ${matchRows}
                     </div>
-
                     ${appealSection}
-
                     <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-xs text-gray-600 leading-relaxed">
                         <strong>Save your report code:</strong> <span class="font-mono font-bold text-gray-900">${escapeHtml(d.reportCode)}</span>
                         — you can use it to check this report later, or to cross-reference with admin.
                     </div>
-
                     <div class="flex gap-2 flex-wrap">
                         <button onclick="window.print()" class="btn btn-outline flex-1">
                             <i class="ph ph-printer"></i> Print / Save PDF
@@ -727,7 +788,6 @@
             async function submitAppeal(reportCode) {
                 const categoryId = $("appeal-category").value;
                 const reason = $("appeal-reason").value.trim();
-
                 if (!categoryId) {
                     alert("Select a category");
                     return;
@@ -738,12 +798,10 @@
                     );
                     return;
                 }
-
                 const btn = $("appeal-btn");
                 btn.disabled = true;
                 btn.innerHTML =
                     '<i class="ph ph-spinner animate-spin"></i> Sending…';
-
                 try {
                     const res = await fetch("/api/report-appeal", {
                         method: "POST",
@@ -756,7 +814,6 @@
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || "Appeal failed");
-
                     const appealBox = btn.closest(".bg-amber-50");
                     appealBox.innerHTML = `
                         <div class="text-center py-4">
@@ -803,14 +860,7 @@
                                 <div class="font-bold mb-1">Appeal ${escapeHtml(data.appealCode)}</div>
                                 <div class="text-xs text-gray-500 mb-2">Category: ${escapeHtml(data.category)}</div>
                                 <div class="mb-2"><span class="badge ${data.status === "approved" ? "bg-emerald-100 text-emerald-700" : data.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}">${escapeHtml(data.status)}</span></div>
-                                ${
-                                    data.status === "approved" &&
-                                    data.allowanceStatus
-                                        ? `
-                                    <div class="text-xs text-gray-700">Allowance: ${escapeHtml(data.allowanceStatus)}${data.usedForNominee ? " · used for " + escapeHtml(data.usedForNominee) : ""}</div>
-                                `
-                                        : ""
-                                }
+                                ${data.status === "approved" && data.allowanceStatus ? `<div class="text-xs text-gray-700">Allowance: ${escapeHtml(data.allowanceStatus)}${data.usedForNominee ? " · used for " + escapeHtml(data.usedForNominee) : ""}</div>` : ""}
                                 ${data.decisionNote ? `<div class="text-xs text-gray-500 mt-2 italic">${escapeHtml(data.decisionNote)}</div>` : ""}
                             </div>`;
                     } else {
