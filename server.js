@@ -47,8 +47,8 @@ const PRICES = {
 };
 const BOOST_FIRST_VOTES = 100;
 const BOOST_FIRST_PRICE = 250;
-const BOOST_REPEAT_VOTES = 25;
-const BOOST_REPEAT_PRICE = 150;
+const BOOST_REPEAT_VOTES = 20;
+const BOOST_REPEAT_PRICE = 250;
 const BOOST_VOTES = BOOST_FIRST_VOTES;
 const LEADERBOARD_ONCE_MS = 60 * 1000;
 const LEADERBOARD_1H_MS = 60 * 60 * 1000;
@@ -2128,16 +2128,25 @@ app.get("/api/admin/stages/status", superAuth, async (req, res) => {
 
 app.post("/api/admin/stages/config", superAuth, async (req, res) => {
   try {
-    const {
-      preliminaries_start,
-      preliminaries_end,
-      semifinals_start,
-      semifinals_end,
-      finals_start,
-      finals_end,
-    } = req.body || {};
-    await getStages();
+    const body = req.body || {};
+    const fields = {
+      preliminaries_start: body.preliminaries_start || null,
+      preliminaries_end: body.preliminaries_end || null,
+      semifinals_start: body.semifinals_start || null,
+      semifinals_end: body.semifinals_end || null,
+      finals_start: body.finals_start || null,
+      finals_end: body.finals_end || null,
+    };
+
+    // ✅ Ensure the row exists before updating — makes save idempotent even
+    //    if the startup seed somehow missed it.
     await db
+      .prepare(
+        `INSERT OR IGNORE INTO election_stages (id, current_stage) VALUES (1, 'preliminaries')`,
+      )
+      .run();
+
+    const r = await db
       .prepare(
         `UPDATE election_stages SET
           preliminaries_start = ?,
@@ -2150,14 +2159,37 @@ app.post("/api/admin/stages/config", superAuth, async (req, res) => {
          WHERE id = 1`,
       )
       .run(
-        preliminaries_start || null,
-        preliminaries_end || null,
-        semifinals_start || null,
-        semifinals_end || null,
-        finals_start || null,
-        finals_end || null,
+        fields.preliminaries_start,
+        fields.preliminaries_end,
+        fields.semifinals_start,
+        fields.semifinals_end,
+        fields.finals_start,
+        fields.finals_end,
       );
+
+    // ✅ Verify the write actually landed. Previously this returned ok:true
+    //    even when 0 rows were updated.
+    if (Number(r.changes || 0) !== 1) {
+      console.error(
+        "[Stage config] ✗ UPDATE affected",
+        r.changes,
+        "rows (expected 1)",
+      );
+      return res.status(500).json({
+        error: `Save failed — ${r.changes} rows affected. Check server logs.`,
+      });
+    }
+
     const s = await getStages();
+    console.log("[Stage config] ✓ Saved stages:", {
+      preliminaries_start: s.preliminaries_start,
+      preliminaries_end: s.preliminaries_end,
+      semifinals_start: s.semifinals_start,
+      semifinals_end: s.semifinals_end,
+      finals_start: s.finals_start,
+      finals_end: s.finals_end,
+    });
+
     db.push().catch((e) =>
       console.warn("[Push after stage config]", e.message),
     );
