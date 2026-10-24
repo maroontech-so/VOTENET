@@ -1766,7 +1766,6 @@
             </div>
         </div>
 
-        <!-- ✅ BOOST MODAL — content adapts dynamically in openBoost() -->
         <div id="boost-modal" class="modal">
             <div
                 class="modal-panel w-full max-w-md relative overflow-hidden rounded-2xl"
@@ -2112,7 +2111,6 @@
                 finals: "Finals",
                 completed: "Completed",
             };
-            // ✅ Updated cutoff
             const STAGE_CUTOFF = {
                 preliminaries: 10,
                 semi_finals: 5,
@@ -2983,6 +2981,8 @@
 
             let _hasBooted = false;
 
+            // ✅ SECURITY: no rank or category-total displayed — only my total
+            //    votes and the gap remaining to reach the top cutoff.
             function renderZoneBanner() {
                 const b = $("zone-banner");
                 if (!b || !currentZone) return;
@@ -3001,10 +3001,9 @@
                 const actions = b.querySelector(".zone-actions");
 
                 const z = currentZone.zone;
-                const rank = currentZone.rank || 0;
-                const total = currentZone.total || 0;
                 const cutoff = currentZone.cutoff || 10;
                 const gap = currentZone.gap || 0;
+                const myVotes = Number(nominee?.votes || 0);
 
                 if (actions) actions.style.display = "";
 
@@ -3013,25 +3012,23 @@
                     icon.className = "ph-fill ph-seal-check";
                     title.innerText = "You're in a strong position";
                     msg.innerText =
-                        "You're inside the group that advances. Keep sharing your link — every vote helps you climb higher.";
+                        "You're inside the top group that advances. Keep sharing your link — every vote helps you stay ahead.";
                     prog.innerHTML = `
-                        <span class="zone-pill"><i class="ph-fill ph-hash"></i> Rank #${rank}</span>
-                        <span class="zone-pill"><i class="ph-fill ph-users-three"></i> ${total} in category</span>
-                        <span class="zone-pill"><i class="ph-fill ph-flag-checkered"></i> Top ${cutoff} advance</span>
+                        <span class="zone-pill"><i class="ph-fill ph-vote"></i> ${myVotes.toLocaleString()} votes</span>
+                        <span class="zone-pill"><i class="ph-fill ph-flag-checkered"></i> Inside top ${cutoff}</span>
                     `;
                 } else if (z === "danger") {
                     b.classList.add("momentum");
                     icon.className = "ph-fill ph-trend-up";
-                    title.innerText = "You're climbing";
+                    title.innerText = "Keep pushing for the top " + cutoff;
                     if (gap > 0) {
-                        msg.innerText = `You're #${rank} of ${total}. Just ${gap} more ${gap === 1 ? "vote" : "votes"} to reach the top ${cutoff} — keep going, you're close!`;
+                        msg.innerText = `You have ${myVotes.toLocaleString()} votes. Just ${gap} more ${gap === 1 ? "vote" : "votes"} to reach the top ${cutoff} — keep going, you're close!`;
                     } else {
-                        msg.innerText = `You're #${rank} of ${total}. A small push will take you to the top ${cutoff}. Keep sharing your link!`;
+                        msg.innerText = `You have ${myVotes.toLocaleString()} votes. Keep sharing your link to stay in the top ${cutoff}.`;
                     }
                     prog.innerHTML = `
-                        <span class="zone-pill"><i class="ph-fill ph-hash"></i> Rank #${rank}</span>
+                        <span class="zone-pill"><i class="ph-fill ph-vote"></i> ${myVotes.toLocaleString()} votes</span>
                         <span class="zone-pill"><i class="ph-fill ph-target"></i> ${gap} ${gap === 1 ? "vote" : "votes"} to top ${cutoff}</span>
-                        <span class="zone-pill"><i class="ph-fill ph-users-three"></i> ${total} in category</span>
                     `;
                 } else if (z === "winner") {
                     b.classList.add("winner");
@@ -3291,7 +3288,6 @@
                 list.innerHTML = eventRows + summary;
             }
 
-            // ✅ Boost card: "One-time" ad for first boost, "Add +25 votes" for repeat
             function renderBoostCard() {
                 const wrap = $("boost-card-wrap");
                 if (!wrap || !nominee) return;
@@ -3305,7 +3301,6 @@
                 const total = nominee.boostVotesTotal || 0;
 
                 if (count === 0) {
-                    // First-boost ad (unchanged — shows "One-time" + 100 / 250)
                     wrap.innerHTML = `
                         <div class="card overflow-hidden relative"
                              style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
@@ -3349,7 +3344,6 @@
                             </div>
                         </div>`;
                 } else {
-                    // Repeat-boost card — user has already purchased ≥1 boost
                     wrap.innerHTML = `
                         <div class="card p-6 overflow-hidden relative"
                              style="background: linear-gradient(135deg, #0f5132 0%, #052e16 100%); border: 1px solid rgba(34,197,94,0.4);">
@@ -3365,18 +3359,18 @@
                             </div>
                             <div class="grid grid-cols-2 gap-3 mb-4">
                                 <div class="rounded-xl p-3" style="background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.25);">
-                                    <div class="text-2xl font-black text-green-300 leading-none">+25</div>
+                                    <div class="text-2xl font-black text-green-300 leading-none">+20</div>
                                     <div class="text-[10px] font-bold uppercase tracking-wider text-green-400/70 mt-1">Votes per boost</div>
                                 </div>
                                 <div class="rounded-xl p-3" style="background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.25);">
-                                    <div class="text-2xl font-black text-green-300 leading-none">150</div>
+                                    <div class="text-2xl font-black text-green-300 leading-none">250</div>
                                     <div class="text-[10px] font-bold uppercase tracking-wider text-green-400/70 mt-1">KES per boost</div>
                                 </div>
                             </div>
                             <button onclick="openBoost()"
                                     class="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
                                     style="background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%); color:#052e16; box-shadow: 0 8px 24px -10px rgba(34,197,94,0.7);">
-                                <i class="ph-fill ph-plus-circle"></i> Add +25 votes · KES 150
+                                <i class="ph-fill ph-plus-circle"></i> Add +20 votes · KES 250
                             </button>
                             <p class="text-[10px] text-green-400/50 text-center mt-3">Boost votes are cumulative</p>
                         </div>`;
@@ -3390,7 +3384,6 @@
                 });
             }
 
-            // ✅ openBoost: adapts modal content based on boostCount
             function openBoost() {
                 if (!nominee) return;
                 if (nominee.eliminated)
@@ -3402,7 +3395,6 @@
                 const count = nominee.boostCount || 0;
                 const isFirst = count === 0;
 
-                // Update modal content dynamically
                 $("boost-one-time-badge").style.display = isFirst ? "" : "none";
 
                 if (isFirst) {
@@ -3414,13 +3406,13 @@
                     $("boost-success-text").innerText =
                         "+100 votes added to your campaign.";
                 } else {
-                    $("boost-votes-num").innerText = "+25";
-                    $("boost-price-num").innerText = "150";
+                    $("boost-votes-num").innerText = "+20";
+                    $("boost-price-num").innerText = "250";
                     $("boost-intro").innerHTML =
-                        'Add <strong class="text-yellow-300">+25 verified votes</strong> to your campaign.';
-                    $("boost-btn-label").innerText = "Add Boost · KES 150";
+                        'Add <strong class="text-yellow-300">+20 verified votes</strong> to your campaign.';
+                    $("boost-btn-label").innerText = "Add Boost · KES 250";
                     $("boost-success-text").innerText =
-                        "+25 votes added to your campaign.";
+                        "+20 votes added to your campaign.";
                 }
 
                 $("boost-phone").value = "";
