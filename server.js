@@ -81,7 +81,7 @@ const PRICES = {
   leaderboard_24h: 100,
   boost_50: 250,
 };
-const BOOST_FIRST_VOTES = 100,
+const BOOST_FIRST_VOTES = 50,
   BOOST_FIRST_PRICE = 250;
 const BOOST_REPEAT_VOTES = 20,
   BOOST_REPEAT_PRICE = 250;
@@ -2635,16 +2635,14 @@ app.get("/api/admin/stages/status", superAuth, async (req, res) => {
 });
 
 app.post("/api/admin/stages/config", superAuth, async (req, res) => {
-  res
-    .status(400)
-    .json({
-      error:
-        "Stage dates are hardcoded for the 2026 election and cannot be modified.",
-      note: "Automatic elimination and email notifications are driven by these fixed windows.",
-      windows: STAGE_WINDOWS,
-      current_stage: (await getStages()).current_stage,
-      required_stage_now: requiredStageAt(),
-    });
+  res.status(400).json({
+    error:
+      "Stage dates are hardcoded for the 2026 election and cannot be modified.",
+    note: "Automatic elimination and email notifications are driven by these fixed windows.",
+    windows: STAGE_WINDOWS,
+    current_stage: (await getStages()).current_stage,
+    required_stage_now: requiredStageAt(),
+  });
 });
 
 app.post("/api/admin/stages/advance", superAuth, async (req, res) => {
@@ -2723,13 +2721,10 @@ app.get(
     try {
       const ctx = await resolveIdentifier(req.params.identifier);
       if (!ctx.user && !ctx.nominee)
-        return res
-          .status(404)
-          .json({
-            error:
-              "No user or nominee found for identifier: " +
-              req.params.identifier,
-          });
+        return res.status(404).json({
+          error:
+            "No user or nominee found for identifier: " + req.params.identifier,
+        });
       const out = {
         identifier: req.params.identifier,
         matched: { user: !!ctx.user, nominee: !!ctx.nominee },
@@ -3219,12 +3214,9 @@ app.post(
       fingerprintDetails,
     } = req.body || {};
     if (!nomineeCode || !voterToken || !deviceHash)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Nominee code, voter token, and device fingerprint are required",
-        });
+      return res.status(400).json({
+        error: "Nominee code, voter token, and device fingerprint are required",
+      });
     if (
       typeof deviceHash !== "string" ||
       deviceHash.length < 8 ||
@@ -3242,13 +3234,11 @@ app.post(
       .get(nomineeCode);
     if (!nominee) return res.status(404).json({ error: "Nominee not found" });
     if (nominee.eliminated)
-      return res
-        .status(403)
-        .json({
-          error: `${nominee.name} was eliminated from the ${STAGE_LABELS[nominee.eliminated_stage] || "competition"}.`,
-          code: "NOMINEE_ELIMINATED",
-          eliminatedStage: nominee.eliminated_stage,
-        });
+      return res.status(403).json({
+        error: `${nominee.name} was eliminated from the ${STAGE_LABELS[nominee.eliminated_stage] || "competition"}.`,
+        code: "NOMINEE_ELIMINATED",
+        eliminatedStage: nominee.eliminated_stage,
+      });
     const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     const ua = String(userAgent || req.headers["user-agent"] || "").slice(
       0,
@@ -3342,12 +3332,10 @@ app.post(
           .toLowerCase()
           .includes("unique")
       )
-        return res
-          .status(409)
-          .json({
-            error: "This device has already voted in this category.",
-            code: "DEVICE_ALREADY_VOTED",
-          });
+        return res.status(409).json({
+          error: "This device has already voted in this category.",
+          code: "DEVICE_ALREADY_VOTED",
+        });
       return res.status(500).json({ error: "Vote failed. Please try again." });
     }
     if (!result.ok) {
@@ -3358,13 +3346,11 @@ app.post(
         message = "You have already voted for this nominee.";
       else
         message = `You've already voted in this category (for ${result.votedName}).`;
-      return res
-        .status(409)
-        .json({
-          error: message,
-          code: "ALREADY_VOTED",
-          votedNominee: { name: result.votedName, code: result.votedCode },
-        });
+      return res.status(409).json({
+        error: message,
+        code: "ALREADY_VOTED",
+        votedNominee: { name: result.votedName, code: result.votedCode },
+      });
     }
     db.push().catch(() => {});
     const absoluteVotes = await (async () => {
@@ -3443,11 +3429,9 @@ app.post(
         fingerprintDetails,
       } = req.body || {};
       if (!description || String(description).trim().length < 10)
-        return res
-          .status(400)
-          .json({
-            error: "Please describe what happened (at least 10 characters)",
-          });
+        return res.status(400).json({
+          error: "Please describe what happened (at least 10 characters)",
+        });
       const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
       const ua = String(req.headers["user-agent"] || "").slice(0, 500);
       const currentDevice = parseUA(ua);
@@ -3684,11 +3668,9 @@ app.post(
           .status(400)
           .json({ error: "reportCode, categoryId, and reason are required" });
       if (String(reason).trim().length < 20)
-        return res
-          .status(400)
-          .json({
-            error: "Please explain in at least 20 characters why you disagree",
-          });
+        return res.status(400).json({
+          error: "Please explain in at least 20 characters why you disagree",
+        });
       const code = String(reportCode).trim().toUpperCase();
       const report = await db
         .prepare("SELECT * FROM vote_reports WHERE report_code = ?")
@@ -3704,12 +3686,10 @@ app.post(
         )
         .get(code, categoryId);
       if (existing)
-        return res
-          .status(409)
-          .json({
-            error: "You already filed an appeal for this category",
-            appealCode: existing.appeal_code,
-          });
+        return res.status(409).json({
+          error: "You already filed an appeal for this category",
+          appealCode: existing.appeal_code,
+        });
       const appealCode = `APL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
       const id = uuidv4();
       await db
