@@ -2,134 +2,748 @@
 <html lang="en" itemscope itemtype="https://schema.org/WebSite">
     <head>
         <meta charset="UTF-8" />
-        <meta name="google-site-verification" content="4kuD4XLz8IJv8Ee99Azl9AySrzuqBXZjohig5F2jS18" />
+        <meta
+            name="google-site-verification"
+            content="4kuD4XLz8IJv8Ee99Azl9AySrzuqBXZjohig5F2jS18"
+        />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#0071e3" />
         <meta name="color-scheme" content="light" />
-        <title>Voteus — Gala Awards 2026 | Vote for MKUPLC Nominees | Mount Kenya University Parklands Law Campus</title>
-        <meta name="description" content="Voteus is the official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Vote FREE — one vote per device per category. Organized by the sitting MKUSA Council. Built by emojistudios." />
+        <title>
+            Voteus — Gala Awards 2026 | Vote for MKUPLC Nominees | Mount Kenya
+            University Parklands Law Campus
+        </title>
+        <meta
+            name="description"
+            content="Voteus is the official voting platform for Gala Awards 2026 at Mount Kenya University Parklands Law Campus (MKUPLC). Vote FREE — one vote per device per category. Organized by the sitting MKUSA Council. Built by emojistudios."
+        />
         <meta name="author" content="emojistudios" />
-        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+        <meta
+            name="robots"
+            content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        />
         <link rel="canonical" href="https://gala.voteus.xyz/" />
         <meta name="generator" content="Voteus v1.0" />
-        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>" />
+        <link
+            rel="icon"
+            type="image/svg+xml"
+            href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>"
+        />
         <link rel="apple-touch-icon" href="/hero-mobile.jpeg" />
         <link rel="manifest" href="/manifest.json" />
-        <link rel="preload" as="image" href="/hero-mobile.jpeg" media="(max-width: 639px)" fetchpriority="high" />
-        <link rel="preload" as="image" href="/hero.jpeg" media="(min-width: 640px)" fetchpriority="high" />
+        <link
+            rel="preload"
+            as="image"
+            href="/hero-mobile.jpeg"
+            media="(max-width: 639px)"
+            fetchpriority="high"
+        />
+        <link
+            rel="preload"
+            as="image"
+            href="/hero.jpeg"
+            media="(min-width: 640px)"
+            fetchpriority="high"
+        />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://gala.voteus.xyz/" />
-        <meta property="og:title" content="Voteus — Gala Awards 2026 | MKUPLC" />
-        <meta property="og:description" content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. One vote per device per category." />
-        <meta property="og:image" content="https://gala.voteus.xyz/hero-mobile.jpeg" />
+        <meta
+            property="og:title"
+            content="Voteus — Gala Awards 2026 | MKUPLC"
+        />
+        <meta
+            property="og:description"
+            content="Vote FREE for the Gala Awards 2026 at Mount Kenya University Parklands Law Campus. One vote per device per category."
+        />
+        <meta
+            property="og:image"
+            content="https://gala.voteus.xyz/hero-mobile.jpeg"
+        />
         <meta property="og:site_name" content="Voteus" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Voteus — Gala Awards 2026 | MKUPLC" />
-        <meta name="twitter:description" content="Vote FREE for the Gala Awards 2026 at MKUPLC. One vote per device per category." />
-        <meta name="twitter:image" content="https://gala.voteus.xyz/hero-mobile.jpeg" />
+        <meta
+            name="twitter:title"
+            content="Voteus — Gala Awards 2026 | MKUPLC"
+        />
+        <meta
+            name="twitter:description"
+            content="Vote FREE for the Gala Awards 2026 at MKUPLC. One vote per device per category."
+        />
+        <meta
+            name="twitter:image"
+            content="https://gala.voteus.xyz/hero-mobile.jpeg"
+        />
         <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
         <script src="https://unpkg.com/@phosphor-icons/web"></script>
         <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
         <style>
-            * { font-family: "Inter", sans-serif; }
-            html, body { overflow-x: hidden; }
-            body { background: #f5f5f7; color: #1d1d1f; }
-            .glass { background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 24px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07); }
-            .top-wrap { display: flex; flex-direction: column; }
-            .top-wrap .hero { order: 1; }
-            .top-wrap .event-bar { order: 2; }
-            .event-bar { width: 100%; padding: clamp(20px, 3vw, 44px) clamp(16px, 3vw, 40px) clamp(18px, 2.5vw, 36px); }
-            .event-bar-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: clamp(16px, 2.5vw, 40px); flex-wrap: wrap; }
-            .event-bar-text { flex: 1 1 480px; min-width: 0; text-align: left; }
-            .event-bar-cta { flex: 0 0 auto; display: flex; align-items: center; }
-            .event-title { font-size: clamp(24px, 4vw, 48px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin: 0 0 10px; color: #1d1d1f; }
-            .event-sub { font-size: clamp(12px, 1.1vw, 16px); color: #6b7280; line-height: 1.55; margin: 0; max-width: 56ch; }
-            .register-cta { display: inline-flex; align-items: center; gap: 6px; background: #0071e3; color: white; padding: 10px 22px; border-radius: 980px; font-weight: 600; font-size: clamp(12px, 1vw, 14px); text-decoration: none; white-space: nowrap; box-shadow: 0 8px 20px -6px rgba(0, 113, 227, 0.5); transition: all 0.2s; }
-            .register-cta:hover { background: #0077ed; transform: translateY(-2px); }
-            @media (max-width: 520px) { .event-bar-cta { width: 100%; } .register-cta { width: 100%; justify-content: center; } }
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            html,
+            body {
+                overflow-x: hidden;
+            }
+            body {
+                background: #f5f5f7;
+                color: #1d1d1f;
+            }
+            .glass {
+                background: rgba(255, 255, 255, 0.78);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.55);
+                border-radius: 24px;
+                box-shadow: 0 8px 32px rgba(31, 38, 135, 0.07);
+            }
+            .top-wrap {
+                display: flex;
+                flex-direction: column;
+            }
+            .top-wrap .hero {
+                order: 1;
+            }
+            .top-wrap .event-bar {
+                order: 2;
+            }
+            .event-bar {
+                width: 100%;
+                padding: clamp(20px, 3vw, 44px) clamp(16px, 3vw, 40px)
+                    clamp(18px, 2.5vw, 36px);
+            }
+            .event-bar-inner {
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: clamp(16px, 2.5vw, 40px);
+                flex-wrap: wrap;
+            }
+            .event-bar-text {
+                flex: 1 1 480px;
+                min-width: 0;
+                text-align: left;
+            }
+            .event-bar-cta {
+                flex: 0 0 auto;
+                display: flex;
+                align-items: center;
+            }
+            .event-title {
+                font-size: clamp(24px, 4vw, 48px);
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                line-height: 1.05;
+                margin: 0 0 10px;
+                color: #1d1d1f;
+            }
+            .event-sub {
+                font-size: clamp(12px, 1.1vw, 16px);
+                color: #6b7280;
+                line-height: 1.55;
+                margin: 0;
+                max-width: 56ch;
+            }
+            .register-cta {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: #0071e3;
+                color: white;
+                padding: 10px 22px;
+                border-radius: 980px;
+                font-weight: 600;
+                font-size: clamp(12px, 1vw, 14px);
+                text-decoration: none;
+                white-space: nowrap;
+                box-shadow: 0 8px 20px -6px rgba(0, 113, 227, 0.5);
+                transition: all 0.2s;
+            }
+            .register-cta:hover {
+                background: #0077ed;
+                transform: translateY(-2px);
+            }
+            @media (max-width: 520px) {
+                .event-bar-cta {
+                    width: 100%;
+                }
+                .register-cta {
+                    width: 100%;
+                    justify-content: center;
+                }
+            }
 
-            .stage-banner { width: 100%; background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%); color: white; padding: clamp(10px, 1.4vw, 16px) clamp(16px, 3vw, 40px); display: flex; align-items: center; justify-content: center; gap: clamp(8px, 1.5vw, 16px); flex-wrap: wrap; text-align: center; }
-            .stage-pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); padding: 4px 12px; border-radius: 980px; font-size: clamp(10px, 1.2vw, 12px); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
-            .stage-banner .stage-text { font-size: clamp(12px, 1.3vw, 15px); font-weight: 500; opacity: 0.95; }
-            .stage-banner .stage-text strong { font-weight: 800; color: #fbbf24; }
-            .stage-dot { width: 7px; height: 7px; border-radius: 999px; background: #22c55e; animation: stagePulse 1.8s infinite; }
-            @keyframes stagePulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+            .stage-banner {
+                width: 100%;
+                background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+                color: white;
+                padding: clamp(10px, 1.4vw, 16px) clamp(16px, 3vw, 40px);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: clamp(8px, 1.5vw, 16px);
+                flex-wrap: wrap;
+                text-align: center;
+            }
+            .stage-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                padding: 4px 12px;
+                border-radius: 980px;
+                font-size: clamp(10px, 1.2vw, 12px);
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .stage-banner .stage-text {
+                font-size: clamp(12px, 1.3vw, 15px);
+                font-weight: 500;
+                opacity: 0.95;
+            }
+            .stage-banner .stage-text strong {
+                font-weight: 800;
+                color: #fbbf24;
+            }
+            .stage-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 999px;
+                background: #22c55e;
+                animation: stagePulse 1.8s infinite;
+            }
+            @keyframes stagePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
+            }
 
-            .hero { position: relative; width: 100%; aspect-ratio: 4 / 5; max-height: 85vh; background-image: url("/hero-mobile.jpeg"); background-size: cover; background-position: 25% center; background-repeat: no-repeat; color: white; overflow: hidden; display: flex; align-items: center; justify-content: center; text-align: center; box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4); }
-            @media (min-width: 640px) { .hero { aspect-ratio: 16 / 9; max-height: 90vh; background-image: url("/hero.jpeg"); background-position: center; } }
-            .hero-content { position: relative; z-index: 2; width: 100%; max-width: 1200px; padding: 0 clamp(16px, 3vw, 40px); }
-            .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0.75) 100%); z-index: 1; }
-            .countdown-container { display: flex; justify-content: center; gap: clamp(6px, 1.5vw, 20px); margin-bottom: clamp(16px, 3vw, 32px); flex-wrap: nowrap; }
-            .countdown-box { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: clamp(10px, 1.5vw, 20px); padding: clamp(8px, 1.4vw, 18px) clamp(10px, 1.6vw, 22px); min-width: clamp(58px, 16vw, 100px); text-align: center; line-height: 1; }
-            .countdown-value { font-size: clamp(20px, 5vw, 40px); font-weight: 800; font-variant-numeric: tabular-nums; display: block; }
-            .countdown-label { font-size: clamp(8px, 1.6vw, 12px); text-transform: uppercase; letter-spacing: clamp(1px, 0.15vw, 2.5px); opacity: 0.78; font-weight: 600; margin-top: clamp(4px, 0.8vw, 8px); display: block; }
-            .hero h1 { font-size: clamp(28px, 7vw, 72px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; margin: 0 0 clamp(6px, 1vw, 16px); }
-            .hero p.sub { font-size: clamp(13px, 3vw, 22px); opacity: 0.9; margin: 0 auto clamp(20px, 3.5vw, 36px); max-width: 60ch; }
-            .hero-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(6px, 1.5vw, 18px); max-width: clamp(300px, 80vw, 720px); margin: 0 auto; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(18px); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: clamp(14px, 2vw, 28px); padding: clamp(12px, 2vw, 24px); }
-            .hero-stats .label { font-size: clamp(8px, 1.6vw, 12px); text-transform: uppercase; opacity: 0.65; font-weight: 700; margin-bottom: clamp(3px, 0.5vw, 6px); }
-            .hero-stats .value { font-size: clamp(15px, 3.2vw, 30px); font-weight: 800; line-height: 1; }
-            .hero-stats > div + div { border-left: 1px solid rgba(255, 255, 255, 0.12); padding-left: clamp(6px, 1vw, 14px); }
+            .hero {
+                position: relative;
+                width: 100%;
+                aspect-ratio: 4 / 5;
+                max-height: 85vh;
+                background-image: url("/hero-mobile.jpeg");
+                background-size: cover;
+                background-position: 25% center;
+                background-repeat: no-repeat;
+                color: white;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.4);
+            }
+            @media (min-width: 640px) {
+                .hero {
+                    aspect-ratio: 16 / 9;
+                    max-height: 90vh;
+                    background-image: url("/hero.jpeg");
+                    background-position: center;
+                }
+            }
+            .hero-content {
+                position: relative;
+                z-index: 2;
+                width: 100%;
+                max-width: 1200px;
+                padding: 0 clamp(16px, 3vw, 40px);
+            }
+            .hero::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(
+                    to bottom,
+                    rgba(0, 0, 0, 0.2) 0%,
+                    rgba(0, 0, 0, 0.4) 50%,
+                    rgba(0, 0, 0, 0.75) 100%
+                );
+                z-index: 1;
+            }
+            .countdown-container {
+                display: flex;
+                justify-content: center;
+                gap: clamp(6px, 1.5vw, 20px);
+                margin-bottom: clamp(16px, 3vw, 32px);
+                flex-wrap: nowrap;
+            }
+            .countdown-box {
+                background: rgba(255, 255, 255, 0.08);
+                backdrop-filter: blur(14px);
+                border: 1px solid rgba(255, 255, 255, 0.22);
+                border-radius: clamp(10px, 1.5vw, 20px);
+                padding: clamp(8px, 1.4vw, 18px) clamp(10px, 1.6vw, 22px);
+                min-width: clamp(58px, 16vw, 100px);
+                text-align: center;
+                line-height: 1;
+            }
+            .countdown-value {
+                font-size: clamp(20px, 5vw, 40px);
+                font-weight: 800;
+                font-variant-numeric: tabular-nums;
+                display: block;
+            }
+            .countdown-label {
+                font-size: clamp(8px, 1.6vw, 12px);
+                text-transform: uppercase;
+                letter-spacing: clamp(1px, 0.15vw, 2.5px);
+                opacity: 0.78;
+                font-weight: 600;
+                margin-top: clamp(4px, 0.8vw, 8px);
+                display: block;
+            }
+            .hero h1 {
+                font-size: clamp(28px, 7vw, 72px);
+                font-weight: 800;
+                letter-spacing: -0.02em;
+                line-height: 1.05;
+                margin: 0 0 clamp(6px, 1vw, 16px);
+            }
+            .hero p.sub {
+                font-size: clamp(13px, 3vw, 22px);
+                opacity: 0.9;
+                margin: 0 auto clamp(20px, 3.5vw, 36px);
+                max-width: 60ch;
+            }
+            .hero-stats {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: clamp(6px, 1.5vw, 18px);
+                max-width: clamp(300px, 80vw, 720px);
+                margin: 0 auto;
+                background: rgba(0, 0, 0, 0.45);
+                backdrop-filter: blur(18px);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: clamp(14px, 2vw, 28px);
+                padding: clamp(12px, 2vw, 24px);
+            }
+            .hero-stats .label {
+                font-size: clamp(8px, 1.6vw, 12px);
+                text-transform: uppercase;
+                opacity: 0.65;
+                font-weight: 700;
+                margin-bottom: clamp(3px, 0.5vw, 6px);
+            }
+            .hero-stats .value {
+                font-size: clamp(15px, 3.2vw, 30px);
+                font-weight: 800;
+                line-height: 1;
+            }
+            .hero-stats > div + div {
+                border-left: 1px solid rgba(255, 255, 255, 0.12);
+                padding-left: clamp(6px, 1vw, 14px);
+            }
 
-            .grid-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
-            @media (min-width: 480px) { .grid-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-            @media (min-width: 640px) { .grid-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; } }
-            @media (min-width: 1024px) { .grid-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; } }
+            .grid-tiles {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                width: 100%;
+            }
+            @media (min-width: 480px) {
+                .grid-tiles {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
+            }
+            @media (min-width: 640px) {
+                .grid-tiles {
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 12px;
+                }
+            }
+            @media (min-width: 1024px) {
+                .grid-tiles {
+                    grid-template-columns: repeat(6, minmax(0, 1fr));
+                    gap: 14px;
+                }
+            }
 
-            .card { position: relative; aspect-ratio: 1 / 1; width: 100%; overflow: hidden; cursor: pointer; background: #e5e7eb; border-radius: 12px; box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.15); transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.35s; transform: translateZ(0); will-change: transform; }
-            @media (min-width: 640px) { .card { border-radius: 16px; } }
-            .card:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.3); }
-            .card img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; transition: transform 0.7s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s; opacity: 0; }
-            .card img.loaded { opacity: 1; }
-            .card:hover img { transform: scale(1.09); }
-            .card .overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0.05) 75%, transparent 100%); padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; color: white; z-index: 2; }
-            .card .winner-badge { position: absolute; top: 8px; left: 8px; background: rgba(22, 163, 74, 0.95); color: white; font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 4px 8px; border-radius: 6px; z-index: 3; display: flex; align-items: center; gap: 3px; }
-            .card .code { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #93c5fd; margin-bottom: 3px; }
-            .card .name { font-size: 15px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-            .card .cta { width: 100%; padding: 9px 8px; background: rgba(255, 255, 255, 0.18); border: 1px solid rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px); color: white; border-radius: 8px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.2s; }
-            .card:hover .cta { background: #0071e3; border-color: #0071e3; }
-            .card .cta.voted { background: rgba(34, 197, 94, 0.35); border-color: rgba(34, 197, 94, 0.55); }
-            .card:hover .cta.voted { background: rgba(34, 197, 94, 0.55); border-color: rgba(34, 197, 94, 0.7); }
-            .card .cta.category-voted { background: rgba(107, 114, 128, 0.35); border-color: rgba(107, 114, 128, 0.5); }
-            .card:hover .cta.category-voted { background: rgba(107, 114, 128, 0.55); border-color: rgba(107, 114, 128, 0.7); }
-            .card .cta.appeal-allowed { background: rgba(16, 185, 129, 0.45); border-color: rgba(16, 185, 129, 0.65); }
-            .card:hover .cta.appeal-allowed { background: rgba(16, 185, 129, 0.7); border-color: rgba(16, 185, 129, 0.85); }
-            @media (min-width: 640px) { .card .overlay { padding: 12px; } .card .name { font-size: 15px; } .card .cta { font-size: 12px; padding: 8px; } }
-            @media (min-width: 1024px) { .card .overlay { padding: 14px; } .card .name { font-size: 17px; } .card .cta { padding: 9px; } }
+            .card {
+                position: relative;
+                aspect-ratio: 1 / 1;
+                width: 100%;
+                overflow: hidden;
+                cursor: pointer;
+                background: #e5e7eb;
+                border-radius: 12px;
+                box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.15);
+                transition:
+                    transform 0.35s cubic-bezier(0.25, 1, 0.5, 1),
+                    box-shadow 0.35s;
+                transform: translateZ(0);
+                will-change: transform;
+            }
+            @media (min-width: 640px) {
+                .card {
+                    border-radius: 16px;
+                }
+            }
+            .card:hover {
+                transform: translateY(-6px) scale(1.02);
+                box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.3);
+            }
+            .card img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                position: absolute;
+                inset: 0;
+                transition:
+                    transform 0.7s cubic-bezier(0.25, 1, 0.5, 1),
+                    opacity 0.3s;
+                opacity: 0;
+            }
+            .card img.loaded {
+                opacity: 1;
+            }
+            .card:hover img {
+                transform: scale(1.09);
+            }
+            .card .overlay {
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(
+                    to top,
+                    rgba(0, 0, 0, 0.96) 0%,
+                    rgba(0, 0, 0, 0.45) 45%,
+                    rgba(0, 0, 0, 0.05) 75%,
+                    transparent 100%
+                );
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+                color: white;
+                z-index: 2;
+            }
+            .card .winner-badge {
+                position: absolute;
+                top: 8px;
+                left: 8px;
+                background: rgba(22, 163, 74, 0.95);
+                color: white;
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                padding: 4px 8px;
+                border-radius: 6px;
+                z-index: 3;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
+            .card .code {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                color: #93c5fd;
+                margin-bottom: 3px;
+            }
+            .card .name {
+                font-size: 15px;
+                font-weight: 700;
+                line-height: 1.2;
+                margin-bottom: 6px;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            .card .cta {
+                width: 100%;
+                padding: 9px 8px;
+                background: rgba(255, 255, 255, 0.18);
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                backdrop-filter: blur(10px);
+                color: white;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                transition: all 0.2s;
+            }
+            .card:hover .cta {
+                background: #0071e3;
+                border-color: #0071e3;
+            }
+            .card .cta.voted {
+                background: rgba(34, 197, 94, 0.35);
+                border-color: rgba(34, 197, 94, 0.55);
+            }
+            .card:hover .cta.voted {
+                background: rgba(34, 197, 94, 0.55);
+                border-color: rgba(34, 197, 94, 0.7);
+            }
+            .card .cta.category-voted {
+                background: rgba(107, 114, 128, 0.35);
+                border-color: rgba(107, 114, 128, 0.5);
+            }
+            .card:hover .cta.category-voted {
+                background: rgba(107, 114, 128, 0.55);
+                border-color: rgba(107, 114, 128, 0.7);
+            }
+            .card .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.45);
+                border-color: rgba(16, 185, 129, 0.65);
+            }
+            .card:hover .cta.appeal-allowed {
+                background: rgba(16, 185, 129, 0.7);
+                border-color: rgba(16, 185, 129, 0.85);
+            }
+            @media (min-width: 640px) {
+                .card .overlay {
+                    padding: 12px;
+                }
+                .card .name {
+                    font-size: 15px;
+                }
+                .card .cta {
+                    font-size: 12px;
+                    padding: 8px;
+                }
+            }
+            @media (min-width: 1024px) {
+                .card .overlay {
+                    padding: 14px;
+                }
+                .card .name {
+                    font-size: 17px;
+                }
+                .card .cta {
+                    padding: 9px;
+                }
+            }
 
-            .cat-header { padding: 22px 0 10px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-            .cat-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: #1d1d1f; margin: 0; }
-            @media (min-width: 640px) { .cat-header h2 { font-size: 22px; } }
-            .cat-badge { font-size: 11px; font-weight: 600; color: #1d4ed8; background: rgba(219, 234, 254, 0.7); border: 1px solid rgba(147, 197, 253, 0.5); padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; transition: all 0.3s; }
-            .cat-badge.bump { animation: bump 0.4s ease; }
-            @keyframes bump { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); background: rgba(147, 197, 253, 0.9); } }
-            .cat-badge.voted { color: #166534; background: rgba(220, 252, 231, 0.8); border-color: rgba(134, 239, 172, 0.6); }
-            .cat-badge.stage-info { color: #6d28d9; background: rgba(237, 233, 254, 0.85); border-color: rgba(196, 181, 253, 0.6); }
-            .cat-header .rule { flex: 1; height: 1px; background: #e5e7eb; min-width: 40px; }
+            .cat-header {
+                padding: 22px 0 10px;
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .cat-header h2 {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+                color: #1d1d1f;
+                margin: 0;
+            }
+            @media (min-width: 640px) {
+                .cat-header h2 {
+                    font-size: 22px;
+                }
+            }
+            .cat-badge {
+                font-size: 11px;
+                font-weight: 600;
+                color: #1d4ed8;
+                background: rgba(219, 234, 254, 0.7);
+                border: 1px solid rgba(147, 197, 253, 0.5);
+                padding: 4px 10px;
+                border-radius: 6px;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                transition: all 0.3s;
+            }
+            .cat-badge.bump {
+                animation: bump 0.4s ease;
+            }
+            @keyframes bump {
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.12);
+                    background: rgba(147, 197, 253, 0.9);
+                }
+            }
+            .cat-badge.voted {
+                color: #166534;
+                background: rgba(220, 252, 231, 0.8);
+                border-color: rgba(134, 239, 172, 0.6);
+            }
+            .cat-badge.stage-info {
+                color: #6d28d9;
+                background: rgba(237, 233, 254, 0.85);
+                border-color: rgba(196, 181, 253, 0.6);
+            }
+            .cat-header .rule {
+                flex: 1;
+                height: 1px;
+                background: #e5e7eb;
+                min-width: 40px;
+            }
 
-            .btn { background: #0071e3; color: white; border-radius: 980px; padding: 12px 24px; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; cursor: pointer; }
-            .btn:hover { background: #0077ed; }
-            .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-            .btn.voted { background: #6b7280; }
-            .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); z-index: 100; display: none; align-items: center; justify-content: center; padding: 16px; }
-            .modal.show { display: flex; animation: modalFadeIn 0.3s ease; }
-            @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
-            #toast { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.9); color: white; padding: 12px 24px; border-radius: 980px; transition: bottom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 200; display: flex; gap: 10px; align-items: center; font-weight: 500; max-width: 92vw; }
-            #toast.show { bottom: 30px; }
+            .btn {
+                background: #0071e3;
+                color: white;
+                border-radius: 980px;
+                padding: 12px 24px;
+                font-weight: 500;
+                transition: all 0.2s;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                border: none;
+                cursor: pointer;
+            }
+            .btn:hover {
+                background: #0077ed;
+            }
+            .btn:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+            .btn.voted {
+                background: #6b7280;
+            }
+            .modal {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(8px);
+                z-index: 100;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 16px;
+            }
+            .modal.show {
+                display: flex;
+                animation: modalFadeIn 0.3s ease;
+            }
+            @keyframes modalFadeIn {
+                from {
+                    opacity: 0;
+                }
+                to {
+                    opacity: 1;
+                }
+            }
+            #toast {
+                position: fixed;
+                bottom: -100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 980px;
+                transition: bottom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                z-index: 200;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                font-weight: 500;
+                max-width: 92vw;
+            }
+            #toast.show {
+                bottom: 30px;
+            }
 
-            .live-pill { display: inline-flex; align-items: center; gap: 4px; font-size: clamp(7px, 1.2vw, 10px); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #86efac; opacity: 0.9; margin-left: 6px; }
-            .live-dot { width: 5px; height: 5px; border-radius: 999px; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: livePulse 1.8s infinite; }
-            @keyframes livePulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+            .live-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: clamp(7px, 1.2vw, 10px);
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #86efac;
+                opacity: 0.9;
+                margin-left: 6px;
+            }
+            .live-dot {
+                width: 5px;
+                height: 5px;
+                border-radius: 999px;
+                background: #22c55e;
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                animation: livePulse 1.8s infinite;
+            }
+            @keyframes livePulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+                }
+            }
 
-            .success-card { text-align: center; padding: 4px 8px; }
-            .success-badge { width: 88px; height: 88px; border-radius: 999px; background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-            .success-badge i { font-size: 46px; color: #16a34a; }
-            .success-title { font-size: 26px; font-weight: 800; color: #15803d; margin: 0 0 6px; }
-            .success-sub { font-size: 14px; color: #6b7280; margin: 0 0 24px; line-height: 1.5; }
-            .success-sub strong { color: #15803d; font-weight: 700; }
-            @keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 60% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-
-            .report-context { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 12px; padding: 12px; font-size: 13px; line-height: 1.5; }
+            .success-card {
+                text-align: center;
+                padding: 4px 8px;
+            }
+            .success-badge {
+                width: 88px;
+                height: 88px;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 20px;
+                animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+            }
+            .success-badge i {
+                font-size: 46px;
+                color: #16a34a;
+            }
+            .success-title {
+                font-size: 26px;
+                font-weight: 800;
+                color: #15803d;
+                margin: 0 0 6px;
+            }
+            .success-sub {
+                font-size: 14px;
+                color: #6b7280;
+                margin: 0 0 24px;
+                line-height: 1.5;
+            }
+            .success-sub strong {
+                color: #15803d;
+                font-weight: 700;
+            }
+            @keyframes popIn {
+                0% {
+                    transform: scale(0.3);
+                    opacity: 0;
+                }
+                60% {
+                    transform: scale(1.1);
+                    opacity: 1;
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
         </style>
     </head>
     <body>
@@ -140,33 +754,62 @@
                     <span id="stage-pill-label">Loading stage…</span>
                 </span>
                 <span class="stage-text" id="stage-text">
-                    <strong>Top 10</strong> from each category advance to Semi Finals
+                    <strong>Top 10</strong> from each category advance to Semi
+                    Finals
                 </span>
             </div>
 
             <section class="hero">
                 <div class="hero-content">
                     <div class="countdown-container">
-                        <div class="countdown-box"><span class="countdown-value" id="cd-d">00</span><span class="countdown-label">Days</span></div>
-                        <div class="countdown-box"><span class="countdown-value" id="cd-h">00</span><span class="countdown-label">Hours</span></div>
-                        <div class="countdown-box"><span class="countdown-value" id="cd-m">00</span><span class="countdown-label">Minutes</span></div>
-                        <div class="countdown-box"><span class="countdown-value" id="cd-s">00</span><span class="countdown-label">Seconds</span></div>
+                        <div class="countdown-box">
+                            <span class="countdown-value" id="cd-d">00</span
+                            ><span class="countdown-label">Days</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-value" id="cd-h">00</span
+                            ><span class="countdown-label">Hours</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-value" id="cd-m">00</span
+                            ><span class="countdown-label">Minutes</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-value" id="cd-s">00</span
+                            ><span class="countdown-label">Seconds</span>
+                        </div>
                     </div>
                     <h1>Cast Your Vote</h1>
-                    <p class="sub">Support your favourite nominees. Every vote is free — one vote per device per category.</p>
+                    <p class="sub">
+                        Support your favourite nominees. Every vote is free —
+                        one vote per device per category.
+                    </p>
                     <div class="hero-stats">
-                        <div><div class="label">Vote</div><div class="value">Free</div></div>
-                        <div><div class="label">Categories</div><div class="value" id="stat-cats">—</div></div>
+                        <div>
+                            <div class="label">Vote</div>
+                            <div class="value">Free</div>
+                        </div>
+                        <div>
+                            <div class="label">Categories</div>
+                            <div class="value" id="stat-cats">—</div>
+                        </div>
                         <div>
                             <div class="label">
                                 Nominees
-                                <span id="live-pill" class="live-pill hidden" title="Live vote counts">
+                                <span
+                                    id="live-pill"
+                                    class="live-pill hidden"
+                                    title="Live vote counts"
+                                >
                                     <span class="live-dot"></span>Live
                                 </span>
                             </div>
                             <div class="value" id="stat-noms">—</div>
                         </div>
-                        <div><div class="label">Closes</div><div class="value" id="stat-close">—</div></div>
+                        <div>
+                            <div class="label">Closes</div>
+                            <div class="value" id="stat-close">—</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -176,7 +819,10 @@
                     <div class="event-bar-text">
                         <h1 class="event-title">GALA AWARDS 2026</h1>
                         <p class="event-sub">
-                            The annual celebration of Africa's brightest innovators, creators, and changemakers. Cast your free vote — one per device, per category — and help crown this year's winners.
+                            The annual celebration of Africa's brightest
+                            innovators, creators, and changemakers. Cast your
+                            free vote — one per device, per category — and help
+                            crown this year's winners.
                         </p>
                     </div>
                     <div class="event-bar-cta">
@@ -191,7 +837,9 @@
         <main class="w-full pb-10 pt-4 px-3 sm:px-6 lg:px-8">
             <div id="nominees-container" class="w-full space-y-6">
                 <div class="text-center py-20 text-gray-400">
-                    <div class="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <div
+                        class="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"
+                    ></div>
                     Loading…
                 </div>
             </div>
@@ -199,33 +847,76 @@
 
         <!-- Profile modal -->
         <div id="profile-modal" class="modal">
-            <div class="glass !bg-white max-w-4xl w-full max-h-[90vh] overflow-y-auto relative flex flex-col md:flex-row">
-                <button onclick="closeModal('profile-modal')" class="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center z-10">
+            <div
+                class="glass !bg-white max-w-4xl w-full max-h-[90vh] overflow-y-auto relative flex flex-col md:flex-row"
+            >
+                <button
+                    onclick="closeModal('profile-modal')"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center z-10"
+                >
                     <i class="ph ph-x"></i>
                 </button>
                 <div class="md:w-1/2 h-64 md:h-auto">
-                    <img id="pm-img" class="w-full h-full object-cover" alt="" onerror="this.onerror=null;this.src='https://placehold.co/600x600/1e293b/ffffff?text=?';" />
+                    <img
+                        id="pm-img"
+                        class="w-full h-full object-cover"
+                        alt=""
+                        onerror="
+                            this.onerror = null;
+                            this.src =
+                                'https://placehold.co/600x600/1e293b/ffffff?text=?';
+                        "
+                    />
                 </div>
                 <div class="md:w-1/2 p-8 flex flex-col">
-                    <div class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-2" id="pm-cat"></div>
+                    <div
+                        class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-2"
+                        id="pm-cat"
+                    ></div>
                     <h2 class="text-3xl font-extrabold mb-2" id="pm-name"></h2>
-                    <div class="inline-flex items-center gap-1 mb-5 bg-gray-100 px-3 py-1 rounded-md text-sm font-mono font-bold w-max">
-                        <i class="ph ph-hash text-gray-400 text-xs"></i><span id="pm-code"></span>
+                    <div
+                        class="inline-flex items-center gap-1 mb-5 bg-gray-100 px-3 py-1 rounded-md text-sm font-mono font-bold w-max"
+                    >
+                        <i class="ph ph-hash text-gray-400 text-xs"></i
+                        ><span id="pm-code"></span>
                     </div>
-                    <div id="pm-elim-note" class="hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium">
+                    <div
+                        id="pm-elim-note"
+                        class="hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium"
+                    >
                         <i class="ph-fill ph-warning-circle inline mr-1"></i>
-                        <span id="pm-elim-text">This nominee has been eliminated.</span>
+                        <span id="pm-elim-text"
+                            >This nominee has been eliminated.</span
+                        >
                     </div>
-                    <p class="text-gray-600 leading-relaxed mb-6 flex-grow" id="pm-desc"></p>
-                    <div class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full bg-green-50 border border-green-200/60 w-max">
-                        <i class="ph-fill ph-check-circle text-green-600 text-xs"></i>
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-green-700">Free Vote · One per device per category</span>
+                    <p
+                        class="text-gray-600 leading-relaxed mb-6 flex-grow"
+                        id="pm-desc"
+                    ></p>
+                    <div
+                        class="inline-flex items-center gap-1.5 mb-3 px-3 py-1 rounded-full bg-green-50 border border-green-200/60 w-max"
+                    >
+                        <i
+                            class="ph-fill ph-check-circle text-green-600 text-xs"
+                        ></i>
+                        <span
+                            class="text-[10px] font-bold uppercase tracking-wider text-green-700"
+                            >Free Vote · One per device per category</span
+                        >
                     </div>
-                    <button id="profile-vote-btn" class="btn w-full py-4 text-lg" onclick="proceedToVote()">
+                    <button
+                        id="profile-vote-btn"
+                        class="btn w-full py-4 text-lg"
+                        onclick="proceedToVote()"
+                    >
                         Vote Now <i class="ph-fill ph-check-circle"></i>
                     </button>
-                    <button id="profile-report-btn" class="hidden mt-3 text-xs text-red-600 hover:text-red-700 font-medium underline w-full py-2">
-                        <i class="ph ph-warning-circle inline mr-1"></i>Report suspicious activity
+                    <button
+                        id="profile-report-btn"
+                        class="hidden mt-3 text-xs text-red-600 hover:text-red-700 font-medium underline w-full py-2"
+                    >
+                        <i class="ph ph-warning-circle inline mr-1"></i>Report
+                        suspicious activity
                     </button>
                 </div>
             </div>
@@ -233,139 +924,161 @@
 
         <!-- Vote modal -->
         <div id="vote-modal" class="modal">
-            <div class="glass !bg-white max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
-                <button onclick="closeVoteModal()" class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center z-20">
+            <div
+                class="glass !bg-white max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto"
+            >
+                <button
+                    onclick="closeVoteModal()"
+                    class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center z-20"
+                >
                     <i class="ph ph-x"></i>
                 </button>
 
-                <div id="vm-header" class="flex gap-4 mb-6 pb-6 border-b border-gray-100">
-                    <img id="vm-img" class="w-20 h-20 rounded-2xl object-cover bg-gray-100" alt="" onerror="this.onerror=null;this.src='https://placehold.co/200x200/1e293b/ffffff?text=?';" />
+                <div
+                    id="vm-header"
+                    class="flex gap-4 mb-6 pb-6 border-b border-gray-100"
+                >
+                    <img
+                        id="vm-img"
+                        class="w-20 h-20 rounded-2xl object-cover bg-gray-100"
+                        alt=""
+                        onerror="
+                            this.onerror = null;
+                            this.src =
+                                'https://placehold.co/200x200/1e293b/ffffff?text=?';
+                        "
+                    />
                     <div class="flex-1">
-                        <div class="text-xs font-bold uppercase text-blue-600" id="vm-cat"></div>
-                        <h3 class="text-xl font-bold leading-tight" id="vm-name"></h3>
-                        <div class="text-xs font-mono text-gray-500 mt-1" id="vm-code"></div>
+                        <div
+                            class="text-xs font-bold uppercase text-blue-600"
+                            id="vm-cat"
+                        ></div>
+                        <h3
+                            class="text-xl font-bold leading-tight"
+                            id="vm-name"
+                        ></h3>
+                        <div
+                            class="text-xs font-mono text-gray-500 mt-1"
+                            id="vm-code"
+                        ></div>
                     </div>
                 </div>
 
                 <div id="vote-confirm">
                     <div class="p-4 bg-blue-50 rounded-xl mb-5">
                         <div class="flex items-start gap-3">
-                            <i class="ph-fill ph-info text-blue-600 text-xl mt-0.5"></i>
+                            <i
+                                class="ph-fill ph-info text-blue-600 text-xl mt-0.5"
+                            ></i>
                             <div>
-                                <div class="font-semibold text-blue-900 text-sm">Free Vote · One per device per category</div>
-                                <div class="text-xs text-blue-700 mt-1 leading-relaxed">
-                                    Voting is free. You may cast <strong>one vote per device, per category</strong>. You'll still be able to vote in other categories.
+                                <div
+                                    class="font-semibold text-blue-900 text-sm"
+                                >
+                                    Free Vote · One per device per category
+                                </div>
+                                <div
+                                    class="text-xs text-blue-700 mt-1 leading-relaxed"
+                                >
+                                    Voting is free. You may cast
+                                    <strong
+                                        >one vote per device, per
+                                        category</strong
+                                    >. You'll still be able to vote in other
+                                    categories.
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <button id="vote-btn" class="btn w-full py-4 text-lg" onclick="castVote()">
+                    <button
+                        id="vote-btn"
+                        class="btn w-full py-4 text-lg"
+                        onclick="castVote()"
+                    >
                         <i class="ph-fill ph-check-circle"></i> Cast My Vote
                     </button>
                 </div>
 
                 <div id="vote-loading" class="hidden text-center py-8">
-                    <div class="w-14 h-14 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                    <div
+                        class="w-14 h-14 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"
+                    ></div>
                     <p class="font-semibold text-lg">Recording your vote…</p>
                 </div>
 
                 <div id="vote-success" class="hidden">
                     <div class="success-card">
-                        <div class="success-badge"><i class="ph-fill ph-check"></i></div>
+                        <div class="success-badge">
+                            <i class="ph-fill ph-check"></i>
+                        </div>
                         <h3 class="success-title">Vote Recorded!</h3>
                         <p class="success-sub">
-                            Your vote for <strong id="success-nominee"></strong> has been counted.<br />
-                            <span class="text-xs">You can still vote in other categories.</span>
+                            Your vote for
+                            <strong id="success-nominee"></strong> has been
+                            counted.<br />
+                            <span class="text-xs"
+                                >You can still vote in other categories.</span
+                            >
                         </p>
-                        <button onclick="closeVoteModal()" class="btn w-full py-3">Done</button>
+                        <button
+                            onclick="closeVoteModal()"
+                            class="btn w-full py-3"
+                        >
+                            Done
+                        </button>
                     </div>
                 </div>
 
                 <div id="vote-error" class="hidden text-center py-4">
-                    <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-5">
-                        <i class="ph-fill ph-x-circle text-red-600 text-5xl"></i>
+                    <div
+                        class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-5"
+                    >
+                        <i
+                            class="ph-fill ph-x-circle text-red-600 text-5xl"
+                        ></i>
                     </div>
-                    <h3 class="text-2xl font-extrabold mb-2">Vote Not Recorded</h3>
-                    <p class="text-gray-600 mb-5 px-4" id="vote-error-msg">Something went wrong. Please try again.</p>
+                    <h3 class="text-2xl font-extrabold mb-2">
+                        Vote Not Recorded
+                    </h3>
+                    <p class="text-gray-600 mb-5 px-4" id="vote-error-msg">
+                        Something went wrong. Please try again.
+                    </p>
                     <div class="flex gap-2 px-4">
-                        <button id="vote-error-retry" onclick="castVote()" class="btn w-full py-3">
+                        <button
+                            id="vote-error-retry"
+                            onclick="castVote()"
+                            class="btn w-full py-3"
+                        >
                             <i class="ph ph-arrow-clockwise"></i> Retry
                         </button>
-                        <button onclick="closeVoteModal()" class="btn w-full py-3" style="background: #e5e7eb; color: #1d1d1f">
+                        <button
+                            onclick="closeVoteModal()"
+                            class="btn w-full py-3"
+                            style="background: #e5e7eb; color: #1d1d1f"
+                        >
                             Close
                         </button>
                     </div>
-                    <button id="vote-error-report" class="hidden mt-3 text-xs text-red-600 hover:text-red-700 font-medium underline w-full py-2 px-4">
-                        <i class="ph ph-warning-circle inline mr-1"></i>Report suspicious activity
+                    <button
+                        id="vote-error-report"
+                        class="hidden mt-3 text-xs text-red-600 hover:text-red-700 font-medium underline w-full py-2 px-4"
+                    >
+                        <i class="ph ph-warning-circle inline mr-1"></i>Report
+                        suspicious activity
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Report modal -->
-        <div id="report-modal" class="modal">
-            <div class="glass !bg-white max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
-                <button onclick="closeReportModal()" class="absolute top-3 right-3 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center z-20">
-                    <i class="ph ph-x"></i>
-                </button>
-
-                <div id="report-form">
-                    <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-red-100 flex items-center justify-center">
-                        <i class="ph-fill ph-warning-circle text-red-600 text-3xl"></i>
-                    </div>
-                    <h3 class="text-2xl font-extrabold text-gray-900 mb-2 text-center">Report Suspicious Activity</h3>
-                    <p class="text-sm text-gray-500 mb-5 text-center">If you didn't cast the vote below, please let us know. Your report helps keep the election fair.</p>
-                    <div id="report-context" class="report-context mb-4"></div>
-                    <label for="report-desc" class="block text-sm font-semibold mb-2 text-gray-700">What happened?</label>
-                    <textarea id="report-desc" rows="4" maxlength="2000" class="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="e.g., I never voted for this nominee but the system says I did…"></textarea>
-                    <div class="text-[11px] text-gray-400 mt-1 mb-4">Minimum 10 characters. Your IP and device fingerprint will be attached automatically.</div>
-                    <button onclick="submitReport()" class="btn w-full py-3.5 text-base">
-                        <i class="ph-fill ph-paper-plane-tilt"></i> Submit Report
-                    </button>
-                </div>
-
-                <div id="report-loading" class="hidden text-center py-8">
-                    <div class="w-14 h-14 border-4 border-red-100 border-t-red-600 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p class="font-semibold text-lg">Submitting report…</p>
-                </div>
-
-                <div id="report-success" class="hidden text-center py-4">
-                    <div class="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
-                        <i class="ph-fill ph-check-circle text-emerald-600 text-5xl"></i>
-                    </div>
-                    <h3 class="text-2xl font-extrabold text-emerald-700 mb-2">Report Submitted</h3>
-                    <p class="text-sm text-gray-600 mb-1">Reference:</p>
-                    <p class="font-mono font-bold text-lg mb-4" id="report-code">—</p>
-                    <p class="text-sm text-gray-600 mb-5 px-2" id="report-verdict">—</p>
-                    <button onclick="closeReportModal()" class="btn w-full py-3">Done</button>
-                </div>
-
-                <div id="report-error" class="hidden text-center py-4">
-                    <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-5">
-                        <i class="ph-fill ph-x-circle text-red-600 text-5xl"></i>
-                    </div>
-                    <h3 class="text-2xl font-extrabold mb-2">Report Failed</h3>
-                    <p class="text-gray-600 mb-5 px-4" id="report-error-msg">Something went wrong.</p>
-                    <div class="flex gap-2 px-4">
-                        <button id="report-retry-btn" onclick="submitReport()" class="btn w-full py-3">
-                            <i class="ph ph-arrow-clockwise"></i> Retry
-                        </button>
-                        <button onclick="closeReportModal()" class="btn w-full py-3" style="background: #e5e7eb; color: #1d1d1f">
-                            Close
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
 
         <div id="toast">
-            <i class="ph ph-check-circle text-green-400 text-xl"></i><span id="toast-msg"></span>
+            <i class="ph ph-check-circle text-green-400 text-xl"></i
+            ><span id="toast-msg"></span>
         </div>
 
         <footer class="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
             <div class="flex justify-center pb-3 pointer-events-auto">
                 <p class="text-[10px] text-gray-400 select-none">
-                    Built with <span class="text-red-500">♥</span> by <span class="font-medium">emojistudios</span>
+                    Built with <span class="text-red-500">♥</span> by
+                    <span class="font-medium">emojistudios</span>
                 </p>
             </div>
         </footer>
@@ -375,8 +1088,7 @@
             let categories = [],
                 nominees = [],
                 currentNom = null,
-                stageInfo = null,
-                currentReportContext = null;
+                stageInfo = null;
             const EAGER_COUNT = 12;
             const VOTER_TOKEN_KEY = "vn_voter_token";
 
@@ -405,10 +1117,25 @@
 
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
-                if (!t || typeof t !== "string" || t.length < 10 || t.length > 100) {
+                if (
+                    !t ||
+                    typeof t !== "string" ||
+                    t.length < 10 ||
+                    t.length > 100
+                ) {
                     let raw;
-                    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") raw = crypto.randomUUID();
-                    else raw = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2) + "-" + Math.random().toString(36).slice(2);
+                    if (
+                        typeof crypto !== "undefined" &&
+                        typeof crypto.randomUUID === "function"
+                    )
+                        raw = crypto.randomUUID();
+                    else
+                        raw =
+                            Date.now().toString(36) +
+                            "-" +
+                            Math.random().toString(36).slice(2) +
+                            "-" +
+                            Math.random().toString(36).slice(2);
                     t = "vt_" + raw;
                     localStorage.setItem(VOTER_TOKEN_KEY, t);
                 }
@@ -423,7 +1150,9 @@
                     parts.push(navigator.language || "");
                     parts.push((navigator.languages || []).join(","));
                     parts.push(String(navigator.platform || ""));
-                    parts.push(`${screen.width}x${screen.height}x${screen.colorDepth}`);
+                    parts.push(
+                        `${screen.width}x${screen.height}x${screen.colorDepth}`,
+                    );
                     parts.push(String(new Date().getTimezoneOffset()));
                     parts.push(String(navigator.hardwareConcurrency || 0));
                     parts.push(String(navigator.deviceMemory || 0));
@@ -435,7 +1164,8 @@
                     parts.push(String(navigator.plugins.length));
                     try {
                         const canvas = document.createElement("canvas");
-                        canvas.width = 240; canvas.height = 60;
+                        canvas.width = 240;
+                        canvas.height = 60;
                         const ctx = canvas.getContext("2d");
                         if (ctx) {
                             ctx.textBaseline = "top";
@@ -451,26 +1181,57 @@
                     } catch {}
                     try {
                         const canvas = document.createElement("canvas");
-                        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                        const gl =
+                            canvas.getContext("webgl") ||
+                            canvas.getContext("experimental-webgl");
                         if (gl) {
-                            const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+                            const dbg = gl.getExtension(
+                                "WEBGL_debug_renderer_info",
+                            );
                             if (dbg) {
-                                parts.push(String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || ""));
-                                parts.push(String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || ""));
+                                parts.push(
+                                    String(
+                                        gl.getParameter(
+                                            dbg.UNMASKED_VENDOR_WEBGL,
+                                        ) || "",
+                                    ),
+                                );
+                                parts.push(
+                                    String(
+                                        gl.getParameter(
+                                            dbg.UNMASKED_RENDERER_WEBGL,
+                                        ) || "",
+                                    ),
+                                );
                             }
                         }
                     } catch {}
                     try {
-                        const fonts = ["Arial","Verdana","Times New Roman","Courier New","Georgia","Comic Sans MS","Trebuchet MS","Impact","Helvetica","Tahoma","Segoe UI","Roboto"];
+                        const fonts = [
+                            "Arial",
+                            "Verdana",
+                            "Times New Roman",
+                            "Courier New",
+                            "Georgia",
+                            "Comic Sans MS",
+                            "Trebuchet MS",
+                            "Impact",
+                            "Helvetica",
+                            "Tahoma",
+                            "Segoe UI",
+                            "Roboto",
+                        ];
                         const cv = document.createElement("canvas");
                         const cx = cv.getContext("2d");
                         if (cx) {
                             const detected = [];
                             for (const f of fonts) {
                                 cx.font = `72px "${f}", monospace`;
-                                const w1 = cx.measureText("mmmmmmmmmmlli").width;
+                                const w1 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
                                 cx.font = "72px monospace";
-                                const w2 = cx.measureText("mmmmmmmmmmlli").width;
+                                const w2 =
+                                    cx.measureText("mmmmmmmmmmlli").width;
                                 if (w1 !== w2) detected.push(f[0]);
                             }
                             parts.push(detected.join(""));
@@ -480,20 +1241,38 @@
                 const raw = parts.join("||");
                 let hash;
                 try {
-                    if (window.crypto && window.crypto.subtle && window.crypto.subtle.digest) {
-                        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-                        hash = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+                    if (
+                        window.crypto &&
+                        window.crypto.subtle &&
+                        window.crypto.subtle.digest
+                    ) {
+                        const buf = await crypto.subtle.digest(
+                            "SHA-256",
+                            new TextEncoder().encode(raw),
+                        );
+                        hash = Array.from(new Uint8Array(buf))
+                            .map((b) => b.toString(16).padStart(2, "0"))
+                            .join("");
                     } else throw new Error("subtle unavailable");
                 } catch {
-                    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+                    let h1 = 0xdeadbeef,
+                        h2 = 0x41c6ce57;
                     for (let i = 0; i < raw.length; i++) {
                         const ch = raw.charCodeAt(i);
                         h1 = Math.imul(h1 ^ ch, 2654435761);
                         h2 = Math.imul(h2 ^ ch, 1597334677);
                     }
-                    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-                    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-                    hash = "fp_" + (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(16, "0");
+                    h1 =
+                        Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+                        Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+                    h2 =
+                        Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+                        Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+                    hash =
+                        "fp_" +
+                        (4294967296 * (2097151 & h2) + (h1 >>> 0))
+                            .toString(16)
+                            .padStart(16, "0");
                 }
                 window.__voteus_fp = hash;
                 return hash;
@@ -520,10 +1299,17 @@
                     maxTouchPoints: navigator.maxTouchPoints,
                     cookieEnabled: navigator.cookieEnabled,
                     doNotTrack: navigator.doNotTrack,
-                    plugins: Array.from(navigator.plugins || []).map((p) => p.name).slice(0, 20),
+                    plugins: Array.from(navigator.plugins || [])
+                        .map((p) => p.name)
+                        .slice(0, 20),
                     capturedAt: new Date().toISOString(),
                 };
-                if (navigator.connection) details.connection = { type: navigator.connection.effectiveType, downlink: navigator.connection.downlink, rtt: navigator.connection.rtt };
+                if (navigator.connection)
+                    details.connection = {
+                        type: navigator.connection.effectiveType,
+                        downlink: navigator.connection.downlink,
+                        rtt: navigator.connection.rtt,
+                    };
                 return details;
             }
 
@@ -531,27 +1317,59 @@
                 if (typeof confetti !== "function") return;
                 const duration = 1800;
                 const end = Date.now() + duration;
-                confetti({ particleCount: 90, spread: 75, startVelocity: 45, origin: { y: 0.55 }, colors: ["#16a34a","#22c55e","#4ade80","#86efac","#bbf7d0"], scalar: 1.1 });
+                confetti({
+                    particleCount: 90,
+                    spread: 75,
+                    startVelocity: 45,
+                    origin: { y: 0.55 },
+                    colors: [
+                        "#16a34a",
+                        "#22c55e",
+                        "#4ade80",
+                        "#86efac",
+                        "#bbf7d0",
+                    ],
+                    scalar: 1.1,
+                });
                 (function frame() {
-                    confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors: ["#16a34a","#22c55e","#4ade80"] });
-                    confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: ["#16a34a","#22c55e","#4ade80"] });
+                    confetti({
+                        particleCount: 3,
+                        angle: 60,
+                        spread: 55,
+                        origin: { x: 0, y: 0.7 },
+                        colors: ["#16a34a", "#22c55e", "#4ade80"],
+                    });
+                    confetti({
+                        particleCount: 3,
+                        angle: 120,
+                        spread: 55,
+                        origin: { x: 1, y: 0.7 },
+                        colors: ["#16a34a", "#22c55e", "#4ade80"],
+                    });
                     if (Date.now() < end) requestAnimationFrame(frame);
                 })();
             }
 
             function toast(msg, ok = true) {
                 const t = $("toast");
-                t.querySelector("i").className = ok ? "ph-fill ph-check-circle text-green-400 text-xl" : "ph-fill ph-warning-circle text-red-400 text-xl";
+                t.querySelector("i").className = ok
+                    ? "ph-fill ph-check-circle text-green-400 text-xl"
+                    : "ph-fill ph-warning-circle text-red-400 text-xl";
                 $("toast-msg").innerText = msg;
                 t.classList.add("show");
                 setTimeout(() => t.classList.remove("show"), 3000);
             }
 
             async function api(url, opts = {}) {
-                const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
+                const res = await fetch(url, {
+                    headers: { "Content-Type": "application/json" },
+                    ...opts,
+                });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    const err = new Error(data.error || `Request failed (${res.status})`);
+                    const err = new Error(
+                        data.error || `Request failed (${res.status})`,
+                    );
                     err.status = res.status;
                     err.code = data.code;
                     err.votedNominee = data.votedNominee;
@@ -570,7 +1388,8 @@
                 label.innerText = curLabel + " Stage";
                 if (cur === "completed") {
                     pill.style.background = "rgba(34,197,94,0.25)";
-                    txt.innerHTML = "<strong>Election Complete</strong> · Winners announced below";
+                    txt.innerHTML =
+                        "<strong>Election Complete</strong> · Winners announced below";
                     return;
                 }
                 const next = NEXT_STAGE[cur];
@@ -588,7 +1407,10 @@
             async function init() {
                 try {
                     const deviceHash = await getDeviceFingerprint();
-                    const qs = new URLSearchParams({ voterToken: getVoterToken(), deviceHash }).toString();
+                    const qs = new URLSearchParams({
+                        voterToken: getVoterToken(),
+                        deviceHash,
+                    }).toString();
                     const [cfg, cats, noms, stages] = await Promise.all([
                         api("/api/config"),
                         api("/api/categories"),
@@ -601,7 +1423,10 @@
                     $("stat-cats").innerText = cats.length;
                     $("stat-noms").innerText = noms.length;
                     const d = new Date(cfg.deadline);
-                    $("stat-close").innerText = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    $("stat-close").innerText = d.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                    });
                     startCountdown(cfg.deadline);
                     renderStageBanner();
                     preloadFirstImages();
@@ -615,61 +1440,94 @@
 
             async function refreshNominees() {
                 const deviceHash = await getDeviceFingerprint();
-                const qs = new URLSearchParams({ voterToken: getVoterToken(), deviceHash }).toString();
+                const qs = new URLSearchParams({
+                    voterToken: getVoterToken(),
+                    deviceHash,
+                }).toString();
                 nominees = await api("/api/nominees?" + qs);
             }
 
             async function refreshStage() {
-                try { stageInfo = await api("/api/stages"); renderStageBanner(); } catch {}
+                try {
+                    stageInfo = await api("/api/stages");
+                    renderStageBanner();
+                } catch {}
             }
 
             function startLiveUpdates() {
                 if (livePollTimer) clearInterval(livePollTimer);
                 livePollTimer = setInterval(() => {
                     if (document.hidden) return;
-                    Promise.all([refreshNominees().then(render).catch(() => {}), refreshStage().catch(() => {})]);
+                    Promise.all([
+                        refreshNominees()
+                            .then(render)
+                            .catch(() => {}),
+                        refreshStage().catch(() => {}),
+                    ]);
                 }, 45_000);
                 connectLiveStream();
             }
 
             function connectLiveStream() {
                 if (typeof EventSource === "undefined") return;
-                if (liveStream) { try { liveStream.close(); } catch {} }
+                if (liveStream) {
+                    try {
+                        liveStream.close();
+                    } catch {}
+                }
                 try {
                     liveStream = new EventSource("/api/live/votes");
                     liveStream.addEventListener("vote", (e) => {
                         sseRetries = 0;
                         $("live-pill").classList.remove("hidden");
-                        try { const { nomineeId, votes } = JSON.parse(e.data); applyLiveVote(nomineeId, votes); } catch {}
+                        try {
+                            const { nomineeId, votes } = JSON.parse(e.data);
+                            applyLiveVote(nomineeId, votes);
+                        } catch {}
                     });
                     liveStream.addEventListener("stage", (e) => {
                         try {
                             const { stage } = JSON.parse(e.data);
                             stageInfo = { ...stageInfo, current: stage };
                             renderStageBanner();
-                            refreshNominees().then(render).catch(() => {});
+                            refreshNominees()
+                                .then(render)
+                                .catch(() => {});
                         } catch {}
                     });
                     liveStream.onerror = () => {
-                        try { liveStream.close(); } catch {}
+                        try {
+                            liveStream.close();
+                        } catch {}
                         liveStream = null;
                         $("live-pill").classList.add("hidden");
                         sseRetries++;
                         if (sseRetries < 4) setTimeout(connectLiveStream, 5000);
                     };
-                } catch (err) { console.warn("[SSE]", err.message); }
+                } catch (err) {
+                    console.warn("[SSE]", err.message);
+                }
             }
 
             function applyLiveVote(nomineeId, votes) {
                 const n = nominees.find((x) => x.id === nomineeId);
-                if (!n) { refreshNominees().then(render).catch(() => {}); return; }
+                if (!n) {
+                    refreshNominees()
+                        .then(render)
+                        .catch(() => {});
+                    return;
+                }
                 if (n.votes === votes) return;
                 n.votes = votes;
-                const sec = document.querySelector(`#nominees-container > div[data-cat-id="${n.category_id}"]`);
+                const sec = document.querySelector(
+                    `#nominees-container > div[data-cat-id="${n.category_id}"]`,
+                );
                 if (!sec) return;
                 const badge = sec.querySelector(".cat-badge");
                 if (!badge || badge.classList.contains("voted")) return;
-                const catList = nominees.filter((x) => x.category_id === n.category_id);
+                const catList = nominees.filter(
+                    (x) => x.category_id === n.category_id,
+                );
                 const total = catList.reduce((s, x) => s + (x.votes || 0), 0);
                 badge.innerHTML = `<i class="ph-fill ph-chart-pie-slice"></i> ${total.toLocaleString()} votes`;
                 badge.classList.remove("bump");
@@ -681,13 +1539,25 @@
                 const params = new URLSearchParams(location.search);
                 const code = params.get("c");
                 if (!code) return;
-                const match = nominees.find((n) => n.code.toLowerCase() === code.toLowerCase());
-                if (match) { setTimeout(() => openProfile(match), 400); return; }
+                const match = nominees.find(
+                    (n) => n.code.toLowerCase() === code.toLowerCase(),
+                );
+                if (match) {
+                    setTimeout(() => openProfile(match), 400);
+                    return;
+                }
                 try {
-                    const nom = await api(`/api/nominees/${encodeURIComponent(code)}`);
+                    const nom = await api(
+                        `/api/nominees/${encodeURIComponent(code)}`,
+                    );
                     if (nom && nom.eliminated) {
-                        const stageLabel = STAGE_LABELS[nom.eliminated_stage] || "the competition";
-                        toast(`${nom.name} was eliminated in ${stageLabel}.`, false);
+                        const stageLabel =
+                            STAGE_LABELS[nom.eliminated_stage] ||
+                            "the competition";
+                        toast(
+                            `${nom.name} was eliminated in ${stageLabel}.`,
+                            false,
+                        );
                         return;
                     }
                 } catch {}
@@ -710,29 +1580,55 @@
                 const target = new Date(deadline).getTime();
                 const tick = () => {
                     const diff = target - Date.now();
-                    if (diff < 0) { ["cd-d","cd-h","cd-m","cd-s"].forEach((i) => ($(i).innerText = "00")); return; }
-                    $("cd-d").innerText = String(Math.floor(diff / 86400000)).padStart(2, "0");
-                    $("cd-h").innerText = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, "0");
-                    $("cd-m").innerText = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
-                    $("cd-s").innerText = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+                    if (diff < 0) {
+                        ["cd-d", "cd-h", "cd-m", "cd-s"].forEach(
+                            (i) => ($(i).innerText = "00"),
+                        );
+                        return;
+                    }
+                    $("cd-d").innerText = String(
+                        Math.floor(diff / 86400000),
+                    ).padStart(2, "0");
+                    $("cd-h").innerText = String(
+                        Math.floor((diff % 86400000) / 3600000),
+                    ).padStart(2, "0");
+                    $("cd-m").innerText = String(
+                        Math.floor((diff % 3600000) / 60000),
+                    ).padStart(2, "0");
+                    $("cd-s").innerText = String(
+                        Math.floor((diff % 60000) / 1000),
+                    ).padStart(2, "0");
                 };
                 tick();
                 setInterval(tick, 1000);
             }
 
             function placeholderImg(name) {
-                const i = encodeURIComponent((name || "XX").split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase());
+                const i = encodeURIComponent(
+                    (name || "XX")
+                        .split(" ")
+                        .map((x) => x[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase(),
+                );
                 return `https://placehold.co/600x600/1e293b/ffffff?text=${i}`;
             }
 
             function escapeHtml(str) {
-                return String(str == null ? "" : str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+                return String(str == null ? "" : str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
             }
 
             function render() {
                 const c = $("nominees-container");
                 if (!nominees.length) {
-                    c.innerHTML = '<div class="glass p-12 text-center text-gray-500"><i class="ph ph-user-list text-5xl mb-4 opacity-50"></i><p>No nominees yet. Check back soon!</p></div>';
+                    c.innerHTML =
+                        '<div class="glass p-12 text-center text-gray-500"><i class="ph ph-user-list text-5xl mb-4 opacity-50"></i><p>No nominees yet. Check back soon!</p></div>';
                     return;
                 }
                 c.innerHTML = "";
@@ -742,28 +1638,41 @@
                 const curLabel = STAGE_LABELS[cur] || cur;
 
                 categories.forEach((cat) => {
-                    const list = nominees.filter((n) => n.category_id === cat.id && !n.eliminated);
+                    const list = nominees.filter(
+                        (n) => n.category_id === cat.id && !n.eliminated,
+                    );
                     if (!list.length) return;
-                    const sorted = [...list].sort((a, b) => (b.votes || 0) - (a.votes || 0));
-                    const activeTotal = list.reduce((s, n) => s + (n.votes || 0), 0);
+                    const sorted = [...list].sort(
+                        (a, b) => (b.votes || 0) - (a.votes || 0),
+                    );
+                    const activeTotal = list.reduce(
+                        (s, n) => s + (n.votes || 0),
+                        0,
+                    );
                     const categoryVoted = list.some((n) => n.categoryVoted);
                     const votedNominee = list.find((n) => n.voted);
                     const appealAllowed = list.some((n) => n.appealAllowed);
 
                     let badge;
-                    if (cur === "completed") badge = `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Final Results</div>`;
-                    else if (appealAllowed) badge = `<div class="cat-badge" style="background:rgba(16,185,129,0.15);color:#065f46;border-color:rgba(16,185,129,0.4);"><i class="ph-fill ph-arrow-clockwise"></i> Appeal approved — vote again</div>`;
-                    else if (votedNominee) badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(votedNominee.name)}</div>`;
+                    if (cur === "completed")
+                        badge = `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Final Results</div>`;
+                    else if (appealAllowed)
+                        badge = `<div class="cat-badge" style="background:rgba(16,185,129,0.15);color:#065f46;border-color:rgba(16,185,129,0.4);"><i class="ph-fill ph-arrow-clockwise"></i> Appeal approved — vote again</div>`;
+                    else if (votedNominee)
+                        badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(votedNominee.name)}</div>`;
                     else if (categoryVoted) {
-                        const votedFor = list.find((n) => n.categoryVoted)?.categoryVoteFor?.name || "another nominee";
+                        const votedFor =
+                            list.find((n) => n.categoryVoted)?.categoryVoteFor
+                                ?.name || "another nominee";
                         badge = `<div class="cat-badge voted"><i class="ph-fill ph-lock"></i> Voted (${escapeHtml(votedFor)})</div>`;
                     } else {
                         badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${activeTotal.toLocaleString()} votes</div>`;
                     }
 
-                    const stageBadge = cur !== "completed"
-                        ? `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`
-                        : `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Winners declared</div>`;
+                    const stageBadge =
+                        cur !== "completed"
+                            ? `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`
+                            : `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Winners declared</div>`;
 
                     const sec = document.createElement("div");
                     sec.className = "w-full";
@@ -782,18 +1691,36 @@
                         cardIndex++;
                         const src = n.img || placeholderImg(n.name);
                         const fallbackSrc = escapeHtml(placeholderImg(n.name));
-                        const isWinner = n.stage === "winner" || n.final_rank === 1;
+                        const isWinner =
+                            n.stage === "winner" || n.final_rank === 1;
                         const isVoted = !!n.voted;
                         const isCategoryVoted = !isVoted && !!n.categoryVoted;
                         const appealRow = !!n.appealAllowed;
 
-                        let ctaClass = "", ctaIcon = "ph-check-circle", ctaText = "Cast Vote";
-                        if (isWinner) { ctaClass = "voted"; ctaIcon = "ph-trophy"; ctaText = "Winner 🏆"; }
-                        else if (appealRow) { ctaClass = "appeal-allowed"; ctaIcon = "ph-arrow-clockwise"; ctaText = "Vote Again"; }
-                        else if (isVoted) { ctaClass = "voted"; ctaIcon = "ph-check"; ctaText = "Voted"; }
-                        else if (isCategoryVoted) { ctaClass = "category-voted"; ctaIcon = "ph-lock"; ctaText = "Category Voted"; }
+                        let ctaClass = "",
+                            ctaIcon = "ph-check-circle",
+                            ctaText = "Cast Vote";
+                        if (isWinner) {
+                            ctaClass = "voted";
+                            ctaIcon = "ph-trophy";
+                            ctaText = "Winner 🏆";
+                        } else if (appealRow) {
+                            ctaClass = "appeal-allowed";
+                            ctaIcon = "ph-arrow-clockwise";
+                            ctaText = "Vote Again";
+                        } else if (isVoted) {
+                            ctaClass = "voted";
+                            ctaIcon = "ph-check";
+                            ctaText = "Voted";
+                        } else if (isCategoryVoted) {
+                            ctaClass = "category-voted";
+                            ctaIcon = "ph-lock";
+                            ctaText = "Category Voted";
+                        }
 
-                        const winnerBadge = isWinner ? `<div class="winner-badge"><i class="ph-fill ph-trophy"></i> Winner</div>` : "";
+                        const winnerBadge = isWinner
+                            ? `<div class="winner-badge"><i class="ph-fill ph-trophy"></i> Winner</div>`
+                            : "";
 
                         const el = document.createElement("div");
                         el.className = "card";
@@ -810,7 +1737,12 @@
                             </div>`;
                         const img = el.querySelector("img");
                         if (img.complete) img.classList.add("loaded");
-                        else img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
+                        else
+                            img.addEventListener(
+                                "load",
+                                () => img.classList.add("loaded"),
+                                { once: true },
+                            );
                         el.onclick = () => openProfile(n);
                         grid.appendChild(el);
                     });
@@ -833,58 +1765,90 @@
                     elimText.innerText = `Eliminated at ${STAGE_LABELS[n.eliminated_stage] || "an earlier stage"}. Voting is closed for this nominee.`;
                 } else if (n.stage === "winner" || n.final_rank === 1) {
                     elimNote.classList.remove("hidden");
-                    elimNote.className = "mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-medium";
-                    elimNote.querySelector("i").className = "ph-fill ph-trophy inline mr-1";
+                    elimNote.className =
+                        "mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm font-medium";
+                    elimNote.querySelector("i").className =
+                        "ph-fill ph-trophy inline mr-1";
                     elimText.innerText = "🏆 Winner — congratulations!";
                 } else {
                     elimNote.classList.add("hidden");
-                    elimNote.className = "hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium";
-                    elimNote.querySelector("i").className = "ph-fill ph-warning-circle inline mr-1";
+                    elimNote.className =
+                        "hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm font-medium";
+                    elimNote.querySelector("i").className =
+                        "ph-fill ph-warning-circle inline mr-1";
                 }
 
                 const btn = $("profile-vote-btn");
                 btn.classList.remove("voted");
-                if (n.eliminated) { btn.innerHTML = '<i class="ph ph-x-circle"></i> Eliminated'; btn.disabled = true; btn.classList.add("voted"); }
-                else if (n.stage === "winner" || n.final_rank === 1) { btn.innerHTML = '<i class="ph-fill ph-trophy"></i> Winner 🏆'; btn.disabled = true; btn.classList.add("voted"); }
-                else if (n.appealAllowed) { btn.innerHTML = '<i class="ph-fill ph-arrow-clockwise"></i> Vote Again (Appeal Approved)'; btn.disabled = false; }
-                else if (n.voted) { btn.innerHTML = '<i class="ph-fill ph-check"></i> You\'ve Voted for This Nominee'; btn.disabled = true; btn.classList.add("voted"); }
-                else if (n.categoryVoted) {
-                    const votedFor = n.categoryVoteFor?.name || "another nominee";
+                if (n.eliminated) {
+                    btn.innerHTML = '<i class="ph ph-x-circle"></i> Eliminated';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.stage === "winner" || n.final_rank === 1) {
+                    btn.innerHTML =
+                        '<i class="ph-fill ph-trophy"></i> Winner 🏆';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.appealAllowed) {
+                    btn.innerHTML =
+                        '<i class="ph-fill ph-arrow-clockwise"></i> Vote Again (Appeal Approved)';
+                    btn.disabled = false;
+                } else if (n.voted) {
+                    btn.innerHTML =
+                        '<i class="ph-fill ph-check"></i> You\'ve Voted for This Nominee';
+                    btn.disabled = true;
+                    btn.classList.add("voted");
+                } else if (n.categoryVoted) {
+                    const votedFor =
+                        n.categoryVoteFor?.name || "another nominee";
                     btn.innerHTML = `<i class="ph ph-lock"></i> Voted in this category (for ${escapeHtml(votedFor)})`;
                     btn.disabled = true;
                     btn.classList.add("voted");
+                } else {
+                    btn.innerHTML =
+                        'Vote Now <i class="ph-fill ph-check-circle"></i>';
+                    btn.disabled = false;
                 }
-                else { btn.innerHTML = 'Vote Now <i class="ph-fill ph-check-circle"></i>'; btn.disabled = false; }
 
-                // ✅ Report button: show when user already voted in this category for a DIFFERENT nominee
+                // ✅ Report button: show when user already voted in this category
+                //    for a DIFFERENT nominee → navigates to standalone /report page
                 const reportBtn = $("profile-report-btn");
-                if (n.categoryVoted && !n.voted && !n.eliminated && !n.appealAllowed) {
-                    const votedFor = n.categoryVoteFor?.name || "another nominee";
-                    currentReportContext = {
-                        nomineeCode: n.code,
-                        nomineeName: n.name,
-                        category: n.category,
-                        votedFor,
-                        message: `You already voted in ${n.category} (for ${votedFor}). If this wasn't you, please report it.`,
+                if (
+                    n.categoryVoted &&
+                    !n.voted &&
+                    !n.eliminated &&
+                    !n.appealAllowed
+                ) {
+                    reportBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.location.href = "/report";
                     };
-                    reportBtn.onclick = openReportModal;
                     reportBtn.classList.remove("hidden");
                 } else {
-                    currentReportContext = null;
                     reportBtn.classList.add("hidden");
                 }
 
                 $("profile-modal").classList.add("show");
             }
 
-            function closeModal(id) { $(id).classList.remove("show"); }
+            function closeModal(id) {
+                $(id).classList.remove("show");
+            }
 
             function showVoteState(state) {
-                ["vote-confirm","vote-loading","vote-success","vote-error"].forEach((s) => {
+                [
+                    "vote-confirm",
+                    "vote-loading",
+                    "vote-success",
+                    "vote-error",
+                ].forEach((s) => {
                     const el = $(s);
                     if (el) el.classList.toggle("hidden", s !== state);
                 });
-                const hideHeader = ["vote-success","vote-error"].includes(state);
+                const hideHeader = ["vote-success", "vote-error"].includes(
+                    state,
+                );
                 $("vm-header").classList.toggle("hidden", hideHeader);
             }
 
@@ -895,18 +1859,34 @@
 
             function proceedToVote() {
                 if (!currentNom) return;
-                if (currentNom.eliminated) { toast("This nominee has been eliminated", false); return; }
-                if (currentNom.stage === "winner" || currentNom.final_rank === 1) { toast("This nominee is the winner 🏆", false); return; }
+                if (currentNom.eliminated) {
+                    toast("This nominee has been eliminated", false);
+                    return;
+                }
+                if (
+                    currentNom.stage === "winner" ||
+                    currentNom.final_rank === 1
+                ) {
+                    toast("This nominee is the winner 🏆", false);
+                    return;
+                }
                 if (currentNom.appealAllowed) {
                     // allowed
-                } else if (currentNom.voted) { toast("You've already voted for " + currentNom.name, false); return; }
-                else if (currentNom.categoryVoted) {
-                    const votedFor = currentNom.categoryVoteFor?.name || "another nominee";
-                    toast(`You've already voted in this category (for ${votedFor}). One vote per device per category.`, false);
+                } else if (currentNom.voted) {
+                    toast("You've already voted for " + currentNom.name, false);
+                    return;
+                } else if (currentNom.categoryVoted) {
+                    const votedFor =
+                        currentNom.categoryVoteFor?.name || "another nominee";
+                    toast(
+                        `You've already voted in this category (for ${votedFor}). One vote per device per category.`,
+                        false,
+                    );
                     return;
                 }
                 closeModal("profile-modal");
-                $("vm-img").src = currentNom.img || placeholderImg(currentNom.name);
+                $("vm-img").src =
+                    currentNom.img || placeholderImg(currentNom.name);
                 $("vm-cat").innerText = currentNom.category;
                 $("vm-name").innerText = currentNom.name;
                 $("vm-code").innerText = currentNom.code;
@@ -917,10 +1897,19 @@
 
             async function castVote() {
                 if (!currentNom) return;
-                if (currentNom.eliminated) { toast("This nominee has been eliminated", false); return; }
+                if (currentNom.eliminated) {
+                    toast("This nominee has been eliminated", false);
+                    return;
+                }
                 if (!currentNom.appealAllowed) {
-                    if (currentNom.voted) { toast("You've already voted for this nominee", false); return; }
-                    if (currentNom.categoryVoted) { toast("You've already voted in this category", false); return; }
+                    if (currentNom.voted) {
+                        toast("You've already voted for this nominee", false);
+                        return;
+                    }
+                    if (currentNom.categoryVoted) {
+                        toast("You've already voted in this category", false);
+                        return;
+                    }
                 }
 
                 showVoteState("vote-loading");
@@ -942,97 +1931,49 @@
                     fireConfetti();
                     if (r.appealVote) toast("Appeal vote recorded ✓");
 
-                    try { await refreshNominees(); render(); } catch {}
+                    try {
+                        await refreshNominees();
+                        render();
+                    } catch {}
                 } catch (e) {
                     if (e.status === 409) {
-                        $("vote-error-msg").innerText = e.message || "You've already voted in this category.";
+                        $("vote-error-msg").innerText =
+                            e.message ||
+                            "You've already voted in this category.";
                         const retry = $("vote-error-retry");
                         if (retry) retry.style.display = "none";
 
-                        // ✅ Show report button only if the already-voted nominee is DIFFERENT
+                        // ✅ Show report button only if the already-voted nominee is
+                        //    DIFFERENT — clicking it navigates to /report
                         const reportBtn = $("vote-error-report");
-                        const sameNominee = e.votedNominee?.code && currentNom?.code && e.votedNominee.code === currentNom.code;
+                        const sameNominee =
+                            e.votedNominee?.code &&
+                            currentNom?.code &&
+                            e.votedNominee.code === currentNom.code;
                         if (reportBtn && !sameNominee) {
-                            const votedFor = e.votedNominee?.name || "another nominee";
-                            reportBtn.onclick = () => {
-                                currentReportContext = {
-                                    nomineeCode: currentNom?.code,
-                                    nomineeName: currentNom?.name,
-                                    category: currentNom?.category,
-                                    votedFor,
-                                    message: `This device has a vote on record in ${currentNom?.category} (for ${votedFor}). If this wasn't you, please report it.`,
-                                };
-                                closeVoteModal();
-                                setTimeout(openReportModal, 300);
+                            reportBtn.onclick = (ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                window.location.href = "/report";
                             };
                             reportBtn.classList.remove("hidden");
                         } else if (reportBtn) {
                             reportBtn.classList.add("hidden");
                         }
 
-                        try { await refreshNominees(); render(); } catch {}
+                        try {
+                            await refreshNominees();
+                            render();
+                        } catch {}
                     } else {
-                        $("vote-error-msg").innerText = e.message || "Something went wrong.";
+                        $("vote-error-msg").innerText =
+                            e.message || "Something went wrong.";
                         const retry = $("vote-error-retry");
                         if (retry) retry.style.display = "";
                         const reportBtn = $("vote-error-report");
                         if (reportBtn) reportBtn.classList.add("hidden");
                     }
                     showVoteState("vote-error");
-                }
-            }
-
-            // ═════════════════════════════════════════════════════════════════
-            // REPORT FLOW — directs to /api/report-auto-vote
-            // ═════════════════════════════════════════════════════════════════
-            function showReportState(state) {
-                ["report-form","report-loading","report-success","report-error"].forEach((s) => {
-                    const el = $(s);
-                    if (el) el.classList.toggle("hidden", s !== state);
-                });
-            }
-
-            function openReportModal() {
-                if (!currentReportContext) return;
-                $("profile-modal").classList.remove("show");
-                $("vote-modal").classList.remove("show");
-                $("report-context").innerText = currentReportContext.message || "";
-                $("report-desc").value = "";
-                showReportState("form");
-                setTimeout(() => {
-                    showVoteState("vote-confirm");
-                    $("report-modal").classList.add("show");
-                }, 200);
-            }
-
-            function closeReportModal() {
-                closeModal("report-modal");
-                setTimeout(() => showReportState("form"), 250);
-            }
-
-            async function submitReport() {
-                if (!currentReportContext) { toast("Nothing to report", false); return; }
-                const desc = $("report-desc").value.trim();
-                if (desc.length < 10) { toast("Please describe what happened (at least 10 characters)", false); return; }
-
-                showReportState("loading");
-                try {
-                    const deviceHash = await getDeviceFingerprint();
-                    const r = await api("/api/report-auto-vote", {
-                        method: "POST",
-                        body: JSON.stringify({
-                            description: desc,
-                            voterToken: getVoterToken(),
-                            deviceHash,
-                            fingerprintDetails: captureExtendedFingerprint(),
-                        }),
-                    });
-                    $("report-code").innerText = r.reportCode || "—";
-                    $("report-verdict").innerText = r.message || "Your report has been logged.";
-                    showReportState("success");
-                } catch (e) {
-                    $("report-error-msg").innerText = e.message || "Failed to submit report";
-                    showReportState("error");
                 }
             }
 
