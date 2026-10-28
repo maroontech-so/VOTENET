@@ -57,6 +57,10 @@
             .btn-reject:hover {
                 background: #b91c1c;
             }
+            .btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
             table tbody tr:hover {
                 background: #f9fafb;
             }
@@ -68,6 +72,11 @@
                 box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
                 animation: livePulse 1.8s infinite;
                 display: inline-block;
+            }
+            .live-dot.offline {
+                background: #f59e0b;
+                animation: none;
+                box-shadow: none;
             }
             @keyframes livePulse {
                 0% {
@@ -171,7 +180,6 @@
         </style>
     </head>
     <body class="min-h-screen">
-        <!-- Login / Not authenticated -->
         <div
             id="login-view"
             class="min-h-screen flex items-center justify-center p-4"
@@ -201,7 +209,6 @@
             </div>
         </div>
 
-        <!-- Forbidden (logged in but not super admin) -->
         <div
             id="forbidden-view"
             class="hidden min-h-screen flex items-center justify-center p-4"
@@ -228,7 +235,6 @@
             </div>
         </div>
 
-        <!-- Main view (super admin) -->
         <div id="main-view" class="hidden min-h-screen flex flex-col">
             <header
                 class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-20 shrink-0"
@@ -279,7 +285,6 @@
                     </button>
                 </div>
 
-                <!-- REPORTS TAB -->
                 <section id="tab-reports">
                     <div
                         class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6"
@@ -371,7 +376,6 @@
                     <div id="detail-panel" class="mt-6 hidden"></div>
                 </section>
 
-                <!-- APPEALS TAB -->
                 <section id="tab-appeals" class="hidden">
                     <div
                         class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6"
@@ -493,7 +497,6 @@
                 const res = await fetch(url, { headers: h, ...(opts || {}) });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    // ✅ Token expired or invalid mid-session — return to login
                     if (res.status === 401) {
                         localStorage.removeItem("vn_admin_token");
                         localStorage.removeItem("vn_admin_user");
@@ -601,11 +604,10 @@
                 $("counts").innerHTML = Object.entries(cardColors)
                     .map(
                         ([k, v]) => `
-                    <div class="border ${v.c} rounded-xl px-4 py-3">
-                        <div class="text-[10px] font-bold uppercase tracking-wider ${v.t}">${v.l}</div>
-                        <div class="text-2xl font-bold text-gray-900 mt-1">${counts[k] || 0}</div>
-                    </div>
-                `,
+                        <div class="border ${v.c} rounded-xl px-4 py-3">
+                            <div class="text-[10px] font-bold uppercase tracking-wider ${v.t}">${v.l}</div>
+                            <div class="text-2xl font-bold text-gray-900 mt-1">${counts[k] || 0}</div>
+                        </div>`,
                     )
                     .join("");
 
@@ -625,8 +627,7 @@
                         <td class="px-4 py-3 text-xs max-w-[200px] truncate">${escapeHtml(r.reporter_name || "Anonymous")}</td>
                         <td class="px-4 py-3 text-xs text-right">${r.matches.length}</td>
                         <td class="px-4 py-3 text-right"><button class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold">View →</button></td>
-                    </tr>
-                `,
+                    </tr>`,
                     )
                     .join("");
             }
@@ -651,8 +652,7 @@
                                   ? `
                         <div class="kv-row"><span class="k">Device</span><span class="v">${escapeHtml(m.device_info.device)}</span></div>
                         <div class="kv-row"><span class="k">OS</span><span class="v">${escapeHtml(m.device_info.os)}</span></div>
-                        <div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(m.device_info.browser)}</span></div>
-                    `
+                        <div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(m.device_info.browser)}</span></div>`
                                   : '<div class="text-xs text-gray-400 italic">No device data captured for this vote</div>';
                               return `
                         <div class="match-card">
@@ -668,8 +668,7 @@
                             ${geo.isp ? `<div class="kv-row"><span class="k">ISP</span><span class="v">${escapeHtml(geo.isp)}${geo.asn ? " · AS" + escapeHtml(geo.asn) : ""}</span></div>` : ""}
                             <div class="mt-2 pt-2 border-t border-gray-200">${deviceLines}</div>
                             <div class="text-xs text-gray-600 mt-2 italic">${escapeHtml(m.note)}</div>
-                        </div>
-                    `;
+                        </div>`;
                           })
                           .join("")
                     : '<div class="text-sm text-gray-500 py-4">No matches.</div>';
@@ -686,8 +685,7 @@
                     ? `
                     <div class="kv-row"><span class="k">Device</span><span class="v">${escapeHtml(dev.device)}</span></div>
                     <div class="kv-row"><span class="k">OS</span><span class="v">${escapeHtml(dev.os)}</span></div>
-                    <div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(dev.browser)}</span></div>
-                `
+                    <div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(dev.browser)}</span></div>`
                     : "";
                 const fpLines = fp
                     ? `
@@ -697,8 +695,7 @@
                     ${fp.timezone ? `<div class="kv-row"><span class="k">Timezone</span><span class="v">${escapeHtml(fp.timezone)}${fp.timezoneDisplay ? " (" + escapeHtml(fp.timezoneDisplay) + ")" : ""}</span></div>` : ""}
                     ${fp.cpuCores ? `<div class="kv-row"><span class="k">CPU Cores</span><span class="v">${escapeHtml(fp.cpuCores)}</span></div>` : ""}
                     ${fp.memory ? `<div class="kv-row"><span class="k">Memory</span><span class="v">${escapeHtml(fp.memory)} GB</span></div>` : ""}
-                    ${fp.touchPoints != null ? `<div class="kv-row"><span class="k">Touch Points</span><span class="v">${escapeHtml(fp.touchPoints)}</span></div>` : ""}
-                `
+                    ${fp.touchPoints != null ? `<div class="kv-row"><span class="k">Touch Points</span><span class="v">${escapeHtml(fp.touchPoints)}</span></div>` : ""}`
                     : "";
 
                 panel.innerHTML = `
@@ -713,7 +710,6 @@
                             </div>
                             <button onclick="hideDetail()" class="text-gray-400 hover:text-gray-700 shrink-0"><i class="ph ph-x text-xl"></i></button>
                         </div>
-
                         <div class="grid md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Reporter</div>
@@ -726,12 +722,10 @@
                                 <div class="text-xs text-gray-500">${escapeHtml(geoLine)}</div>
                             </div>
                         </div>
-
                         <div class="bg-gray-50 rounded-xl p-4 mb-4">
                             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">User's description</div>
                             <div class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(r.report_description)}</div>
                         </div>
-
                         <div class="grid md:grid-cols-2 gap-3 mb-4">
                             <div>
                                 <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Reporter's device (from UA)</div>
@@ -742,18 +736,15 @@
                                 <div class="bg-white border border-gray-200 rounded p-2">${fpLines || '<div class="text-xs text-gray-400">No data</div>'}</div>
                             </div>
                         </div>
-
                         <div class="mb-4">
                             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Matches (${r.matches.length})</div>
                             ${matchRows}
                         </div>
-
                         <details class="bg-gray-50 rounded-xl p-4">
                             <summary class="text-xs font-bold text-gray-500 uppercase tracking-wider cursor-pointer select-none">Full fingerprint JSON</summary>
                             <pre class="fingerprint-pre mt-3">${escapeHtml(JSON.stringify(r.fingerprint, null, 2))}</pre>
                         </details>
-                    </div>
-                `;
+                    </div>`;
                 panel.classList.remove("hidden");
                 panel.scrollIntoView({ behavior: "smooth", block: "start" });
             }
@@ -792,8 +783,7 @@
                     <div class="border bg-red-50 border-red-200 rounded-xl px-4 py-3">
                         <div class="text-[10px] font-bold uppercase tracking-wider text-red-700">Rejected</div>
                         <div class="text-2xl font-bold text-gray-900 mt-1">${counts.rejected || 0}</div>
-                    </div>
-                `;
+                    </div>`;
 
                 const tbody = $("appeals-body");
                 if (!ALL_APPEALS.length) {
@@ -811,8 +801,7 @@
                         <td class="px-4 py-3 text-xs">${a.allowance_status ? statusBadge(a.allowance_status) : '<span class="text-gray-400">—</span>'}</td>
                         <td class="px-4 py-3 font-mono text-xs">${escapeHtml(a.report_code)}</td>
                         <td class="px-4 py-3 text-right"><button class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold">View →</button></td>
-                    </tr>
-                `,
+                    </tr>`,
                 ).join("");
             }
 
@@ -821,7 +810,6 @@
                 if (!a) return;
                 const panel = $("appeal-detail");
                 const isPending = a.status === "pending";
-                const dev = a.device_info;
 
                 const actionUI = isPending
                     ? `
@@ -830,7 +818,7 @@
                         <div class="text-xs text-amber-800 mb-3 leading-relaxed">
                             If you approve, this device will get ONE extra vote in "${escapeHtml(a.category_name)}". The vote will be marked as an appeal vote for audit. Once used, no more allowances can be created for this device+category.
                         </div>
-                        <textarea id="decide-note" class="input resize-none mb-3" rows="2" placeholder="Optional note for the record…"></textarea>
+                        <textarea id="decide-note" class="resize-none mb-3 w-full p-2 border border-gray-200 rounded-lg text-sm" rows="2" placeholder="Optional note for the record…"></textarea>
                         <div class="flex gap-2">
                             <button onclick="decideAppeal('${a.appeal_code}','approve')" class="btn btn-approve flex-1 py-3">
                                 <i class="ph ph-check-circle"></i> Approve
@@ -839,8 +827,7 @@
                                 <i class="ph ph-x-circle"></i> Reject
                             </button>
                         </div>
-                    </div>
-                `
+                    </div>`
                     : "";
 
                 panel.innerHTML = `
@@ -880,7 +867,7 @@
                             <div>
                                 <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Reporter's device (from UA)</div>
                                 <div class="bg-white border border-gray-200 rounded p-2">
-                                    ${dev ? `<div class="kv-row"><span class="k">Device</span><span class="v">${escapeHtml(dev.device)}</span></div><div class="kv-row"><span class="k">OS</span><span class="v">${escapeHtml(dev.os)}</span></div><div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(dev.browser)}</span></div>` : '<div class="text-xs text-gray-400">—</div>'}
+                                    ${a.device_info ? `<div class="kv-row"><span class="k">Device</span><span class="v">${escapeHtml(a.device_info.device)}</span></div><div class="kv-row"><span class="k">OS</span><span class="v">${escapeHtml(a.device_info.os)}</span></div><div class="kv-row"><span class="k">Browser</span><span class="v">${escapeHtml(a.device_info.browser)}</span></div>` : '<div class="text-xs text-gray-400">—</div>'}
                                 </div>
                             </div>
                         </div>
@@ -892,8 +879,7 @@
                                 <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Decision</div>
                                 <div class="text-sm">Decided by <strong>${escapeHtml(a.decided_by || "—")}</strong> on ${escapeHtml(fmtTime(a.decided_at))}</div>
                                 ${a.decision_note ? `<div class="text-xs text-gray-600 mt-1 italic">${escapeHtml(a.decision_note)}</div>` : ""}
-                            </div>
-                        `
+                            </div>`
                                 : ""
                         }
 
@@ -904,14 +890,12 @@
                                 <div class="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">Re-vote allowance</div>
                                 <div>Status: ${statusBadge(a.allowance_status)}</div>
                                 ${a.allowance_used_at ? `<div class="text-xs text-gray-600 mt-1">Used: ${escapeHtml(fmtTime(a.allowance_used_at))}${a.used_for_nominee ? " — for " + escapeHtml(a.used_for_nominee) : ""}</div>` : ""}
-                            </div>
-                        `
+                            </div>`
                                 : ""
                         }
 
                         ${actionUI}
-                    </div>
-                `;
+                    </div>`;
                 panel.classList.remove("hidden");
                 panel.scrollIntoView({ behavior: "smooth", block: "start" });
             }
@@ -923,16 +907,24 @@
 
             async function decideAppeal(code, decision) {
                 const note = ($("decide-note")?.value || "").trim();
-                if (
-                    decision === "reject" &&
-                    !confirm(
-                        "Reject this appeal? The user will NOT be able to re-vote in this category.",
+
+                if (decision === "reject") {
+                    if (
+                        !confirm(
+                            "Reject this appeal? The user will NOT be able to re-vote in this category.",
+                        )
                     )
-                )
+                        return;
+                } else if (decision === "approve") {
+                    if (
+                        !confirm(
+                            "Approve this appeal? This creates a ONE-TIME re-vote allowance for this device in EVERY category they were blocked from.",
+                        )
+                    )
+                        return;
+                } else {
                     return;
-                               if (decision === "approve" && !confirm("Approve? This creates a ONE-TIME re-vote allowance for this device in EVERY category they were blocked from.")) return;
-                )
-                    return;
+                }
 
                 try {
                     const res = await api(
@@ -942,13 +934,15 @@
                             body: JSON.stringify({ decision, note }),
                         },
                     );
-                    alert(res.message + (res.allowancesCreated != null
-                        ? `\n\nCategories covered: ${res.allowancesCreated + res.allowancesSkipped}`
-                        : ""));
+                    const extra =
+                        res.allowancesCreated != null
+                            ? `\n\nCategories covered: ${res.allowancesCreated + res.allowancesSkipped}`
+                            : "";
+                    alert((res.message || "Decision recorded.") + extra);
                     await loadAppeals();
                     hideAppealDetail();
                 } catch (e) {
-                    alert(e.message);
+                    alert(e.message || "Failed to record decision");
                 }
             }
 
@@ -1039,12 +1033,8 @@
                 }
             }
 
-            /* ---------- BOOT (FIXED) ---------- */
+            /* ---------- BOOT ---------- */
             (function boot() {
-                // ✅ FIX: hide all three views before deciding which to show.
-                //    Previously login-view was visible by default and never
-                //    hidden when the user WAS authenticated as super admin —
-                //    the login card filled the viewport and hid the dashboard.
                 $("login-view").classList.add("hidden");
                 $("forbidden-view").classList.add("hidden");
                 $("main-view").classList.add("hidden");

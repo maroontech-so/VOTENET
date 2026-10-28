@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Voteus — Audit & Diagnostics</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <style>
+            * {
+                font-family: "Inter", sans-serif;
+            }
+            body {
+                background: #f8fafc;
+                color: #1d1d1f;
+            }
+            .card {
+                background: #fff;
+                border: 1px solid #eef0f3;
+                border-radius: 14px;
+            }
+            .tab-btn {
+                padding: 10px 16px;
+                font-size: 13px;
+                font-weight: 600;
+                color: #6b7280;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.15s;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                white-space: nowrap;
+            }
+            .tab-btn:hover {
+                background: #f3f4f6;
+                color: #111827;
+            }
+            .tab-btn.active {
+                background: #eef2ff;
+                color: #4338ca;
+            }
+            .badge {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+            }
+            .badge-ok {
+                background: #d1fae5;
+                color: #065f46;
+            }
+            .badge-warn {
+                background: #fef3c7;
+                color: #92400e;
+            }
+            .badge-crit {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+            .badge-info {
+                background: #dbeafe;
+                color: #1e40af;
+            }
+            .kv {
+                display: flex;
+                justify-content: space-between;
+                padding: 6px 0;
+                border-bottom: 1px dashed #f3f4f6;
+                font-size: 13px;
+            }
+            .kv:last-child {
+                border-bottom: none;
+            }
+            .kv .k {
+                color: #6b7280;
+                font-weight: 500;
+            }
+            .kv .v {
+                color: #111827;
+                font-weight: 700;
+                font-variant-numeric: tabular-nums;
+            }
+            .metric {
+                background: #fff;
+                border: 1px solid #eef0f3;
+                border-radius: 12px;
+                padding: 14px 16px;
+            }
+            .metric-label {
+                font-size: 10px;
+                font-weight: 700;
+                color: #9ca3af;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 4px;
+            }
+            .metric-value {
+                font-size: 22px;
+                font-weight: 800;
+                color: #111827;
+                line-height: 1;
+                font-variant-numeric: tabular-nums;
+            }
+            .metric-sub {
+                font-size: 11px;
+                color: #6b7280;
+                margin-top: 4px;
+            }
+            table {
+                width: 100%;
+                font-size: 12px;
+            }
+            th {
+                text-align: left;
+                padding: 8px 10px;
+                background: #f9fafb;
+                color: #6b7280;
+                font-weight: 700;
+                text-transform: uppercase;
+                font-size: 10px;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            td {
+                padding: 8px 10px;
+                border-bottom: 1px solid #f3f4f6;
+            }
+            tr:hover td {
+                background: #f9fafb;
+            }
+            .spin {
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .loading {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                border: 2px solid #e5e7eb;
+                border-top-color: #4338ca;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+        </style>
+    </head>
+    <body class="min-h-screen">
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-20">
+            <div
+                class="max-w-[1600px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between"
+            >
+                <div class="flex items-center gap-3">
+                    <i
+                        class="ph-fill ph-magnifying-glass-plus text-indigo-600 text-2xl"
+                    ></i>
+                    <span class="font-bold text-lg">Voteus</span>
+                    <span class="text-xs text-gray-400 uppercase tracking-wider"
+                        >Audit & Diagnostics</span
+                    >
+                </div>
+                <div class="flex items-center gap-3">
+                    <a
+                        href="http://localhost:3000"
+                        target="_blank"
+                        class="text-xs text-gray-500 hover:text-gray-900"
+                        >Main app →</a
+                    >
+                    <button
+                        onclick="loadAll()"
+                        class="btn-sm bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                    >
+                        <i class="ph ph-arrow-clockwise"></i> Refresh All
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-[1600px] mx-auto px-4 lg:px-6 py-6">
+            <div
+                class="flex flex-wrap gap-1 mb-6 p-1 bg-white border border-gray-200 rounded-xl"
+            >
+                <button
+                    class="tab-btn active"
+                    data-tab="health"
+                    onclick="switchTab('health')"
+                >
+                    <i class="ph ph-heartbeat"></i> Health
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="overview"
+                    onclick="switchTab('overview')"
+                >
+                    <i class="ph ph-chart-pie-slice"></i> Overview
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="nominees"
+                    onclick="switchTab('nominees')"
+                >
+                    <i class="ph ph-users"></i> Nominees
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="integrity"
+                    onclick="switchTab('integrity')"
+                >
+                    <i class="ph ph-shield-check"></i> Integrity
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="devices"
+                    onclick="switchTab('devices')"
+                >
+                    <i class="ph ph-devices"></i> Devices
+                </button>
+                <button class="tab-btn" data-tab="ip" onclick="switchTab('ip')">
+                    <i class="ph ph-globe"></i> IP Analysis
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="manipulation"
+                    onclick="switchTab('manipulation')"
+                >
+                    <i class="ph ph-warning-octagon"></i> Vote Manipulation
+                </button>
+                <button
+                    class="tab-btn"
+                    data-tab="sync"
+                    onclick="switchTab('sync')"
+                >
+                    <i class="ph ph-arrows-left-right"></i> Local vs Turso
+                </button>
+            </div>
+
+            <div id="content"></div>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+            const state = {
+                tab: "health",
+                nominee: null,
+                nominees: [],
+                data: {},
+            };
+
+            async function api(path) {
+                const r = await fetch("/api/audit" + path);
+                if (!r.ok)
+                    throw new Error(
+                        (await r.json().catch(() => ({}))).error ||
+                            r.statusText,
+                    );
+                return r.json();
+            }
+
+            function esc(s) {
+                return String(s == null ? "" : s).replace(
+                    /[&<>"']/g,
+                    (c) =>
+                        ({
+                            "&": "&amp;",
+                            "<": "&lt;",
+                            ">": "&gt;",
+                            '"': "&quot;",
+                            "'": "&#39;",
+                        })[c],
+                );
+            }
+
+            function num(n) {
+                return Number(n || 0).toLocaleString();
+            }
+
+            function loadingHtml() {
+                return `<div class="card p-12 text-center text-gray-400"><div class="loading mx-auto mb-3"></div>Loading…</div>`;
+            }
+
+            function errorHtml(msg) {
+                return `<div class="card p-6 border-red-200 bg-red-50 text-red-700"><strong>Error:</strong> ${esc(msg)}</div>`;
+            }
+
+            function switchTab(tab) {
+                state.tab = tab;
+                document
+                    .querySelectorAll(".tab-btn")
+                    .forEach((b) =>
+                        b.classList.toggle("active", b.dataset.tab === tab),
+                    );
+                loadTab();
+            }
+
+            async function loadTab() {
+                const c = $("content");
+                c.innerHTML = loadingHtml();
+                try {
+                    if (state.tab === "health")
+                        return renderHealth(await api("/health"));
+                    if (state.tab === "overview")
+                        return renderOverview(await api("/overview"));
+                    if (state.tab === "nominees") return renderNominees();
+                    if (state.tab === "integrity")
+                        return renderIntegrity(await api("/integrity"));
+                    if (state.tab === "devices")
+                        return renderDevices(await api("/devices"));
+                    if (state.tab === "ip")
+                        return renderIP(await api("/ip-analysis"));
+                    if (state.tab === "manipulation")
+                        return renderManipulation(
+                            await api("/vote-manipulation"),
+                        );
+                    if (state.tab === "sync")
+                        return renderSync(await api("/local-vs-turso"));
+                } catch (e) {
+                    c.innerHTML = errorHtml(e.message);
+                }
+            }
+
+            function renderHealth(d) {
+                $("content").innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div class="card p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="badge ${d.local.ok ? "badge-ok" : "badge-crit"}">${d.local.ok ? "Connected" : "Error"}</span>
+          <span class="text-sm font-bold">Local SQLite</span>
+        </div>
+        <div class="kv"><span class="k">Path</span><span class="v text-xs font-mono">${esc(d.local.path)}</span></div>
+        <div class="kv"><span class="k">Size</span><span class="v">${d.local.sizeMb} MB</span></div>
+      </div>
+      <div class="card p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="badge ${d.turso.connected ? "badge-ok" : "badge-warn"}">${d.turso.connected ? "Connected" : "Offline"}</span>
+          <span class="text-sm font-bold">Turso Cloud</span>
+        </div>
+        ${
+            d.turso.connected
+                ? `<div class="kv"><span class="k">URL</span><span class="v text-xs font-mono">${esc(d.turso.url)}</span></div>`
+                : `<div class="text-xs text-red-600 mt-2">${esc(d.turso.error || "Not configured")}</div>`
+        }
+      </div>
+    </div>
+    <div class="card p-5 mb-4">
+      <h3 class="font-bold mb-3 flex items-center gap-2"><i class="ph ph-flag-checkered text-indigo-600"></i> Election Stage</h3>
+      ${
+          d.stage
+              ? `
+        <div class="kv"><span class="k">Current Stage</span><span class="v capitalize">${esc(d.stage.current)}</span></div>
+        <div class="kv"><span class="k">Last Advanced</span><span class="v text-xs">${esc(d.stage.last_advanced_at || "—")}</span></div>
+      `
+              : `<div class="text-gray-400 text-sm">No stage row found</div>`
+      }
+    </div>
+    <div class="card p-5">
+      <h3 class="font-bold mb-3 flex items-center gap-2"><i class="ph ph-database text-indigo-600"></i> Table Row Counts (local)</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        ${Object.entries(d.tables)
+            .map(
+                ([t, n]) => `
+          <div class="metric">
+            <div class="metric-label">${esc(t)}</div>
+            <div class="metric-value">${n === null ? "—" : num(n)}</div>
+          </div>`,
+            )
+            .join("")}
+      </div>
+    </div>
+    <div class="text-xs text-gray-400 text-center mt-6">Snapshot at ${esc(new Date(d.now).toLocaleString())}</div>
+  `;
+            }
+
+            function renderOverview(d) {
+                const consistent = d.isConsistent;
+                $("content").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div class="metric"><div class="metric-label">Total Votes</div><div class="metric-value">${num(d.totalVotes)}</div><div class="metric-sub">${consistent ? "✓ integrity ok" : "⚠ mismatch"}</div></div>
+      <div class="metric"><div class="metric-label">Nominees</div><div class="metric-value">${num(d.nominees)}</div><div class="metric-sub">${num(d.active)} active · ${num(d.eliminated)} elim</div></div>
+      <div class="metric"><div class="metric-label">Categories</div><div class="metric-value">${num(d.categories)}</div></div>
+      <div class="metric"><div class="metric-label">Unique Voters</div><div class="metric-value">${num(d.uniqueVoters)}</div><div class="metric-sub">tokens</div></div>
+      <div class="metric"><div class="metric-label">Unique Devices</div><div class="metric-value">${num(d.uniqueDevices)}</div><div class="metric-sub">fingerprints</div></div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="card p-5">
+        <h3 class="font-bold mb-3 text-sm">Vote Composition</h3>
+        <div class="kv"><span class="k">Free vote rows</span><span class="v">${num(d.freeVoteRows)}</span></div>
+        <div class="kv"><span class="k">Boost records</span><span class="v">${num(d.boostRows)}</span></div>
+        <div class="kv"><span class="k">Boost votes</span><span class="v">${num(d.boostVotesSum)}</span></div>
+        <div class="kv"><span class="k">Computed total</span><span class="v">${num(d.computedVotes)}</span></div>
+        <div class="kv"><span class="k">Stored total</span><span class="v">${num(d.totalVotes)}</span></div>
+        <div class="kv"><span class="k">Delta</span><span class="v ${d.delta !== 0 ? "text-red-600" : "text-green-600"}">${d.delta}</span></div>
+      </div>
+      <div class="card p-5">
+        <h3 class="font-bold mb-3 text-sm">Signals</h3>
+        <div class="kv"><span class="k">Current stage</span><span class="v capitalize">${esc(d.stage)}</span></div>
+        <div class="kv"><span class="k">Appeals filed</span><span class="v">${num(d.appeals)}</span></div>
+        <div class="kv"><span class="k">Vote reports</span><span class="v">${num(d.reports)}</span></div>
+        <div class="kv"><span class="k">Unique IPs</span><span class="v">${num(d.uniqueIPs)}</span></div>
+      </div>
+      <div class="card p-5">
+        <h3 class="font-bold mb-3 text-sm">Turso (cloud) counts</h3>
+        ${
+            Object.keys(d.turso).length
+                ? Object.entries(d.turso)
+                      .map(
+                          ([t, r]) => `
+            <div class="kv">
+              <span class="k">${esc(t)}</span>
+              <span class="v">${r.error ? '<span class="text-red-600 text-xs">err</span>' : num(r.count)}</span>
+            </div>`,
+                      )
+                      .join("")
+                : `<div class="text-xs text-gray-400">Not connected</div>`
+        }
+      </div>
+    </div>
+  `;
+            }
+
+            async function renderNominees() {
+                if (!state.nominees.length)
+                    state.nominees = await api("/nominees");
+                const byCat = {};
+                for (const n of state.nominees) {
+                    if (!byCat[n.category]) byCat[n.category] = [];
+                    byCat[n.category].push(n);
+                }
+                $("content").innerHTML = `
+    <div class="card p-5 mb-4">
+      <h3 class="font-bold mb-3 text-sm">Select a nominee for deep audit</h3>
+      <select id="nom-select" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm" onchange="loadNomineeDetail(this.value)">
+        <option value="">— Choose a nominee —</option>
+        ${Object.entries(byCat)
+            .map(
+                ([cat, list]) => `
+          <optgroup label="${esc(cat)}">
+            ${list.map((n) => `<option value="${esc(n.code)}">${esc(n.name)} — ${num(n.votes)} votes${n.eliminated ? " (eliminated)" : ""}</option>`).join("")}
+          </optgroup>
+        `,
+            )
+            .join("")}
+      </select>
+    </div>
+    <div id="nominee-detail"></div>
+    <div class="card p-5 mt-4">
+      <h3 class="font-bold mb-3 text-sm">All nominees (${state.nominees.length})</h3>
+      <div class="overflow-x-auto">
+        <table>
+          <thead><tr><th>Code</th><th>Name</th><th>Category</th><th class="text-right">Votes</th><th>Stage</th><th></th></tr></thead>
+          <tbody>
+            ${state.nominees
+                .map(
+                    (n) => `
+              <tr>
+                <td class="font-mono text-xs">${esc(n.code)}</td>
+                <td class="font-semibold">${esc(n.name)}</td>
+                <td class="text-gray-600">${esc(n.category)}</td>
+                <td class="text-right font-bold">${num(n.votes)}</td>
+                <td><span class="badge ${n.eliminated ? "badge-crit" : "badge-ok"}">${esc(n.eliminated ? n.eliminated_stage || "eliminated" : n.stage || "active")}</span></td>
+                <td><button onclick="document.getElementById('nom-select').value='${esc(n.code)}';loadNomineeDetail('${esc(n.code)}')" class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold">Audit →</button></td>
+              </tr>
+            `,
+                )
+                .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+            }
+
+            async function loadNomineeDetail(code) {
+                if (!code) {
+                    $("nominee-detail").innerHTML = "";
+                    return;
+                }
+                const box = $("nominee-detail");
+                box.innerHTML = loadingHtml();
+                try {
+                    const d = await api("/nominee/" + encodeURIComponent(code));
+                    const n = d.nominee;
+                    const integOk = d.integrity.isConsistent;
+                    const noCrossIssues = d.crossVotes.sameCategoryCount === 0;
+                    const noDupDevices = d.devices.duplicates.length === 0;
+                    const noDupTokens = d.tokens.duplicates.length === 0;
+
+                    box.innerHTML = `
+      <div class="card p-5 mb-4">
+        <div class="flex items-start gap-4 mb-4">
+          ${n.img ? `<img src="${esc(n.img)}" class="w-16 h-16 rounded-xl object-cover bg-gray-100">` : ""}
+          <div>
+            <h2 class="text-xl font-extrabold">${esc(n.name)}</h2>
+            <div class="text-sm text-gray-500">${esc(n.code)} · ${esc(n.category)}</div>
+            <div class="flex gap-2 mt-2">
+              <span class="badge ${integOk ? "badge-ok" : "badge-crit"}">${integOk ? "integrity ✓" : "integrity ✗"}</span>
+              ${d.nominee.eliminated ? `<span class="badge badge-crit">eliminated (${esc(d.nominee.eliminated_stage || "—")})</span>` : `<span class="badge badge-ok">active · rank #${d.ranking.rank || "—"}/${d.ranking.totalActiveInCategory}</span>`}
+              <span class="badge ${noCrossIssues ? "badge-ok" : "badge-crit"}">${noCrossIssues ? "no cross-votes" : d.crossVotes.sameCategoryCount + " CROSS-VOTES"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="metric"><div class="metric-label">Stored votes</div><div class="metric-value">${num(d.integrity.stored)}</div></div>
+          <div class="metric"><div class="metric-label">Free vote rows</div><div class="metric-value">${num(d.integrity.freeCount)}</div></div>
+          <div class="metric"><div class="metric-label">Boost votes</div><div class="metric-value">${num(d.integrity.boostSum)}</div></div>
+          <div class="metric"><div class="metric-label">Delta</div><div class="metric-value ${d.integrity.delta !== 0 ? "text-red-600" : ""}">${d.integrity.delta}</div></div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="card p-5">
+          <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-devices text-indigo-600"></i> Devices</h3>
+          <div class="kv"><span class="k">Unique devices</span><span class="v">${num(d.devices.unique)}</span></div>
+          <div class="kv"><span class="k">Missing device hash</span><span class="v ${d.devices.missingDeviceHash > 0 ? "text-red-600" : ""}">${num(d.devices.missingDeviceHash)}</span></div>
+          <div class="kv"><span class="k">Duplicate device groups</span><span class="v ${noDupDevices ? "text-green-600" : "text-red-600"}">${num(d.devices.duplicates.length)}</span></div>
+          ${
+              !noDupDevices
+                  ? `<div class="mt-3 text-xs">${d.devices.duplicates
+                        .slice(0, 5)
+                        .map(
+                            (x) =>
+                                `<div class="font-mono text-red-600 truncate">${esc(x.hash)} (${x.count}×)</div>`,
+                        )
+                        .join("")}</div>`
+                  : ""
+          }
+          <h3 class="font-bold mt-4 mb-3 text-sm flex items-center gap-2"><i class="ph ph-fingerprint text-indigo-600"></i> Tokens</h3>
+          <div class="kv"><span class="k">Unique tokens</span><span class="v">${num(d.tokens.unique)}</span></div>
+          <div class="kv"><span class="k">Duplicate tokens</span><span class="v ${noDupTokens ? "text-green-600" : "text-red-600"}">${num(d.tokens.duplicates.length)}</span></div>
+        </div>
+
+        <div class="card p-5">
+          <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-globe text-indigo-600"></i> IPs</h3>
+          <div class="kv"><span class="k">Unique IPs</span><span class="v">${num(d.ips.unique)}</span></div>
+          <div class="kv"><span class="k">Missing IP</span><span class="v">${num(d.ips.missingIP)}</span></div>
+          <div class="mt-3 space-y-1">
+            ${d.ips.top
+                .slice(0, 8)
+                .map(
+                    (x) =>
+                        `<div class="kv"><span class="k font-mono text-xs">${esc(x.ip)}</span><span class="v">${num(x.count)}</span></div>`,
+                )
+                .join("")}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="card p-5">
+          <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-clock text-indigo-600"></i> Vote Pattern</h3>
+          <div class="kv"><span class="k">First vote</span><span class="v text-xs">${esc(d.votePattern.firstVote || "—")}</span></div>
+          <div class="kv"><span class="k">Last vote</span><span class="v text-xs">${esc(d.votePattern.lastVote || "—")}</span></div>
+          <div class="kv"><span class="k">Duration</span><span class="v">${d.votePattern.durationHours} hours</span></div>
+          <div class="kv"><span class="k">Max votes / minute</span><span class="v ${d.votePattern.maxPerMinute >= 20 ? "text-amber-600" : ""}">${d.votePattern.maxPerMinute}</span></div>
+          <div class="kv"><span class="k">Suspicious bursts (≥10/min)</span><span class="v ${d.votePattern.suspiciousBursts > 0 ? "text-amber-600" : "text-green-600"}">${num(d.votePattern.suspiciousBursts)}</span></div>
+        </div>
+
+        <div class="card p-5">
+          <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-warning text-indigo-600"></i> Cross-Votes</h3>
+          <div class="kv"><span class="k">Same category</span><span class="v ${noCrossIssues ? "text-green-600" : "text-red-600"}">${num(d.crossVotes.sameCategoryCount)}</span></div>
+          <div class="kv"><span class="k">Other categories</span><span class="v">${num(d.crossVotes.otherCategoriesCount)}</span></div>
+          ${
+              d.crossVotes.sameCategorySample.length
+                  ? `
+            <div class="mt-3 text-xs text-red-700 space-y-1">
+              ${d.crossVotes.sameCategorySample
+                  .slice(0, 5)
+                  .map(
+                      (cv) =>
+                          `<div>Device also voted for <strong>${esc(cv.name)}</strong> (${esc(cv.code)})</div>`,
+                  )
+                  .join("")}
+            </div>`
+                  : '<div class="text-xs text-green-600 mt-3">No cross-votes in same category ✓</div>'
+          }
+        </div>
+      </div>
+
+      <div class="card p-5 mb-4">
+        <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-browser text-indigo-600"></i> Top User Agents (${num(d.userAgents.unique)} unique)</h3>
+        <div class="space-y-1">
+          ${d.userAgents.top
+              .slice(0, 8)
+              .map(
+                  (u) => `
+            <div class="kv">
+              <span class="k text-xs truncate font-mono" style="max-width: 70%">${esc(u.preview)}</span>
+              <span class="v">${num(u.count)}</span>
+            </div>`,
+              )
+              .join("")}
+        </div>
+      </div>
+
+      ${
+          d.boosts.length
+              ? `
+        <div class="card p-5 mb-4">
+          <h3 class="font-bold mb-3 text-sm flex items-center gap-2"><i class="ph ph-rocket-launch text-indigo-600"></i> Boosts (${d.boosts.length})</h3>
+          <table>
+            <thead><tr><th>Reference</th><th class="text-right">Votes</th><th>Date</th></tr></thead>
+            <tbody>${d.boosts.map((b) => `<tr><td class="font-mono text-xs">${esc(b.reference)}</td><td class="text-right font-bold">+${num(b.votes_added)}</td><td class="text-xs">${esc(b.created_at)}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>`
+              : ""
+      }
+    `;
+                } catch (e) {
+                    box.innerHTML = errorHtml(e.message);
+                }
+            }
+
+            function renderIntegrity(d) {
+                $("content").innerHTML = `
+    <div class="flex items-center gap-3 mb-6 p-4 rounded-xl ${d.healthy ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}">
+      <i class="ph-fill ${d.healthy ? "ph-check-circle text-green-600" : "ph-x-circle text-red-600"} text-3xl"></i>
+      <div>
+        <div class="font-extrabold text-lg ${d.healthy ? "text-green-800" : "text-red-800"}">${d.healthy ? "All integrity checks passed" : d.criticalCount + " critical issue(s) found"}</div>
+        <div class="text-xs ${d.healthy ? "text-green-700" : "text-red-700"}">${d.warnings} warnings</div>
+      </div>
+    </div>
+    ${renderIssueSection("Vote count mismatches (stored ≠ free_votes + boosts)", d.issues.voteMismatches, ["code", "name", "stored", "freeCount", "boostSum", "computed", "delta"])}
+    ${renderIssueSection("Orphan votes (nominee deleted)", d.issues.orphanVotes ? [{ count: d.issues.orphanVotes }] : [], ["count"])}
+    ${renderIssueSection("Duplicate device + category (should be impossible)", d.issues.duplicateDeviceCategory, ["device_hash", "category_id", "count"])}
+    ${renderIssueSection("Duplicate (voter_token + nominee_id) pairs", d.issues.duplicateVoterNominee, ["voter_token", "nominee_id", "count"])}
+    ${renderIssueSection("Nominees without linked user account", d.issues.nomineesWithoutUser, ["code", "name"])}
+    ${renderIssueSection("Nominees without valid category", d.issues.nomineesWithoutCategory, ["code", "name"])}
+    ${renderIssueSection("Stuck pending transactions (>30 min)", d.issues.stuckPendingTx, ["reference", "type", "amount", "created_at"])}
+    ${renderIssueSection("Orphan boosts (no matching txn)", d.issues.orphanBoosts, ["reference", "nominee_id"])}
+    ${renderIssueSection("Negative vote counts", d.issues.negativeVotes, ["code", "name", "votes"])}
+  `;
+            }
+
+            function renderIssueSection(title, items, cols) {
+                if (!items || !items.length)
+                    return `<div class="card p-4 mb-3"><div class="flex items-center gap-2 text-sm text-green-700"><i class="ph-fill ph-check-circle"></i> ${esc(title)} — <span class="font-bold">clean</span></div></div>`;
+                return `
+    <div class="card p-4 mb-3 border-red-100 bg-red-50/30">
+      <div class="flex items-center gap-2 text-sm text-red-800 font-bold mb-2">
+        <i class="ph-fill ph-warning text-red-600"></i> ${esc(title)} — ${items.length} issue(s)
+      </div>
+      <div class="overflow-x-auto">
+        <table>
+          <thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+          <tbody>${items
+              .slice(0, 20)
+              .map(
+                  (row) =>
+                      `<tr>${cols.map((c) => `<td class="font-mono text-xs">${esc(row[c])}</td>`).join("")}</tr>`,
+              )
+              .join("")}</tbody>
+        </table>
+      </div>
+    </div>`;
+            }
+
+            function renderDevices(d) {
+                $("content").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="metric"><div class="metric-label">Unique devices</div><div class="metric-value">${num(d.totalUniqueDevices)}</div></div>
+      <div class="metric"><div class="metric-label">Missing device hash</div><div class="metric-value ${d.totalMissingDeviceHash > 0 ? "text-red-600" : ""}">${num(d.totalMissingDeviceHash)}</div></div>
+      <div class="metric"><div class="metric-label">Same-cat duplicates</div><div class="metric-value ${d.sameCategoryDuplicates.length > 0 ? "text-red-600" : "text-green-600"}">${num(d.sameCategoryDuplicates.length)}</div></div>
+      <div class="metric"><div class="metric-label">FP collisions</div><div class="metric-value ${d.fingerprintCollisions.length > 0 ? "text-amber-600" : ""}">${num(d.fingerprintCollisions.length)}</div></div>
+    </div>
+    ${renderIssueSection("Same device, same category (2+ votes)", d.sameCategoryDuplicates, ["device_hash", "category_id", "count"])}
+    ${renderIssueSection("Fingerprint collisions (1 hash → multiple tokens)", d.fingerprintCollisions, ["device_hash", "tokens"])}
+    ${renderIssueSection("Devices voting in multiple categories (normal)", d.multiCategoryDevices, ["device_hash", "categories", "total_votes"])}
+  `;
+            }
+
+            function renderIP(d) {
+                $("content").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+      <div class="metric"><div class="metric-label">Unique IPs</div><div class="metric-value">${num(d.totalUniqueIPs)}</div></div>
+      <div class="metric"><div class="metric-label">Private IPs in top</div><div class="metric-value">${num(d.privateIPCount)}</div><div class="metric-sub">of top ${d.topIPs.length}</div></div>
+    </div>
+    <div class="card p-5 mb-4">
+      <h3 class="font-bold mb-3 text-sm">Top IPs by vote count</h3>
+      <table>
+        <thead><tr><th>IP</th><th class="text-right">Votes</th><th class="text-right">Nominees</th><th class="text-right">Categories</th></tr></thead>
+        <tbody>${d.topIPs.map((x) => `<tr><td class="font-mono text-xs">${esc(x.ip)}${/^(10\.|192\.168\.|172\.)/.test(x.ip) ? ' <span class="badge badge-info">private</span>' : ""}</td><td class="text-right font-bold">${num(x.votes)}</td><td class="text-right">${num(x.nominees)}</td><td class="text-right">${num(x.categories)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+    <div class="card p-5">
+      <h3 class="font-bold mb-3 text-sm">Per-nominee unique IP count</h3>
+      <table>
+        <thead><tr><th>Code</th><th>Name</th><th>Category</th><th class="text-right">Votes</th><th class="text-right">Unique IPs</th></tr></thead>
+        <tbody>${d.nomineeIPMap.map((x) => `<tr><td class="font-mono text-xs">${esc(x.code)}</td><td class="font-semibold">${esc(x.name)}</td><td class="text-gray-600">${esc(x.category)}</td><td class="text-right font-bold">${num(x.votes)}</td><td class="text-right ${x.unique_ips <= 5 && x.votes >= 50 ? "text-amber-600 font-bold" : ""}">${num(x.unique_ips)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+            }
+
+            function renderManipulation(d) {
+                const sev = (s) =>
+                    s === "critical"
+                        ? "badge-crit"
+                        : s === "warning"
+                          ? "badge-warn"
+                          : "badge-info";
+                $("content").innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="metric"><div class="metric-label">Critical signals</div><div class="metric-value ${d.summary.critical > 0 ? "text-red-600" : "text-green-600"}">${num(d.summary.critical)}</div></div>
+      <div class="metric"><div class="metric-label">Warnings</div><div class="metric-value ${d.summary.warnings > 0 ? "text-amber-600" : ""}">${num(d.summary.warnings)}</div></div>
+      <div class="metric"><div class="metric-label">Info</div><div class="metric-value">${num(d.summary.info)}</div></div>
+      <div class="metric"><div class="metric-label">Votes last hour</div><div class="metric-value">${num(d.lastHourVotes)}</div></div>
+    </div>
+    ${
+        !d.signals.length
+            ? `<div class="card p-8 text-center text-green-700"><i class="ph-fill ph-shield-check text-5xl text-green-500 mb-3"></i><div class="font-bold text-lg">No manipulation signals detected</div><div class="text-sm text-gray-500 mt-1">All checks passed clean</div></div>`
+            : d.signals
+                  .map(
+                      (s) => `
+        <div class="card p-5 mb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="badge ${sev(s.severity)}">${esc(s.severity)}</span>
+            <span class="font-bold text-sm">${esc(s.type)}</span>
+            <span class="text-xs text-gray-500">(${num(s.count)})</span>
+          </div>
+          <div class="text-xs text-gray-600 mb-3">${esc(s.message)}</div>
+          ${
+              s.sample && s.sample.length
+                  ? `
+            <div class="overflow-x-auto">
+              <table>
+                <thead><tr>${Object.keys(s.sample[0])
+                    .map((c) => `<th>${esc(c)}</th>`)
+                    .join("")}</tr></thead>
+                <tbody>${s.sample
+                    .slice(0, 15)
+                    .map(
+                        (row) =>
+                            `<tr>${Object.keys(row)
+                                .map(
+                                    (c) =>
+                                        `<td class="font-mono text-xs truncate" style="max-width: 300px">${esc(row[c])}</td>`,
+                                )
+                                .join("")}</tr>`,
+                    )
+                    .join("")}</tbody>
+              </table>
+            </div>`
+                  : ""
+          }
+        </div>
+      `,
+                  )
+                  .join("")
+    }
+  `;
+            }
+
+            function renderSync(d) {
+                if (!d.connected) {
+                    $("content").innerHTML =
+                        `<div class="card p-8 text-center text-gray-500"><i class="ph ph-cloud-slash text-4xl mb-3 text-gray-400"></i><div class="font-bold">Turso not connected</div><div class="text-sm mt-1">${esc(d.error || "Check TURSO env vars")}</div></div>`;
+                    return;
+                }
+                $("content").innerHTML = `
+    <div class="card p-5 mb-4">
+      <div class="flex items-center gap-3">
+        <span class="badge ${d.mismatchCount === 0 ? "badge-ok" : "badge-warn"}">${d.mismatchCount === 0 ? "All tables match" : d.mismatchCount + " table(s) differ"}</span>
+        <span class="text-xs text-gray-500">Checked at ${esc(new Date(d.checkedAt).toLocaleString())}</span>
+      </div>
+    </div>
+    <div class="card p-5">
+      <table>
+        <thead><tr><th>Table</th><th class="text-right">Local</th><th class="text-right">Turso</th><th class="text-center">Status</th></tr></thead>
+        <tbody>
+          ${Object.entries(d.tables)
+              .map(
+                  ([t, r]) => `
+            <tr>
+              <td class="font-mono text-xs font-semibold">${esc(t)}</td>
+              <td class="text-right">${r.local === null ? "—" : num(r.local)}</td>
+              <td class="text-right">${r.turso === null ? "—" : num(r.turso)}</td>
+              <td class="text-center">
+                ${r.error ? `<span class="badge badge-crit">err</span>` : r.match ? `<span class="badge badge-ok">match</span>` : `<span class="badge badge-warn">mismatch (${(r.local || 0) - (r.turso || 0) > 0 ? "+" : ""}${(r.local || 0) - (r.turso || 0)})</span>`}
+              </td>
+            </tr>
+          `,
+              )
+              .join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-xs text-gray-400 text-center mt-4">Local = primary source of truth. Turso = backup. Any mismatch with "local > turso" is normal (sync queue pending). "turso > local" means unsynced cloud rows — run the main app's pull cycle.</div>
+  `;
+            }
+
+            async function loadAll() {
+                state.nominees = [];
+                state.data = {};
+                await loadTab();
+            }
+
+            // Boot
+            loadTab();
+        </script>
+    </body>
+</html>

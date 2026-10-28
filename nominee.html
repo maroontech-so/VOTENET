@@ -16,15 +16,10 @@
         <meta name="author" content="emojistudios" />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://gala.voteus.xyz/nominee" />
-        <meta name="generator" content="Voteus v1.0" />
         <link
             rel="icon"
             type="image/svg+xml"
             href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗳️</text></svg>"
-        />
-        <link
-            rel="apple-touch-icon"
-            href="https://gala.voteus.xyz/hero-mobile.jpeg"
         />
         <script src="https://cdn.tailwindcss.com"></script>
         <link
@@ -101,12 +96,6 @@
             }
             .btn-purple:hover {
                 background: #7e22ce;
-            }
-            .btn-green {
-                background: #16a34a;
-            }
-            .btn-green:hover {
-                background: #15803d;
             }
             .btn-sm {
                 padding: 8px 14px;
@@ -187,23 +176,6 @@
             }
             .modal-panel {
                 animation: fadeUp 0.25s ease;
-            }
-            .tab-btn {
-                padding: 14px 4px 12px;
-                font-size: 14px;
-                font-weight: 600;
-                border-bottom: 2px solid transparent;
-                transition: all 0.15s;
-                background: none;
-                cursor: pointer;
-                border-top: none;
-                border-left: none;
-                border-right: none;
-                color: #6b7280;
-            }
-            .tab-btn.active {
-                color: #2563eb;
-                border-bottom-color: #2563eb;
             }
             .photo-picker {
                 position: relative;
@@ -421,49 +393,6 @@
                 color: #2563eb;
                 background: #eff6ff;
             }
-            .strength {
-                display: flex;
-                gap: 4px;
-                margin-top: 8px;
-            }
-            .strength i {
-                flex: 1;
-                height: 4px;
-                border-radius: 999px;
-                background: #e5e7eb;
-                transition: background 0.25s;
-            }
-            .strength.s1 i:nth-child(-n + 1) {
-                background: #ef4444;
-            }
-            .strength.s2 i:nth-child(-n + 2) {
-                background: #f59e0b;
-            }
-            .strength.s3 i:nth-child(-n + 3) {
-                background: #3b82f6;
-            }
-            .strength.s4 i:nth-child(-n + 4) {
-                background: #16a34a;
-            }
-            .field-msg {
-                font-size: 11px;
-                margin-top: 6px;
-                font-weight: 500;
-            }
-            .field-msg.err {
-                color: #dc2626;
-            }
-            .field-msg.ok {
-                color: #16a34a;
-            }
-            .input.invalid {
-                border-color: #fca5a5;
-                background: #fef2f2;
-            }
-            .input.valid {
-                border-color: #86efac;
-            }
-
             #confetti-canvas {
                 position: fixed;
                 top: 0;
@@ -491,28 +420,6 @@
             .vote-pop {
                 animation: votePop 0.5s ease;
             }
-            .lb-row.climbing {
-                animation: climb 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
-            }
-            @keyframes climb {
-                0% {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                30% {
-                    transform: translateX(-8px);
-                    background: #dbeafe;
-                }
-                60% {
-                    transform: translateX(6px);
-                    background: #eff6ff;
-                }
-                100% {
-                    transform: translateX(0);
-                    background: inherit;
-                }
-            }
-
             .zone-banner {
                 border-radius: 16px;
                 padding: 20px 22px;
@@ -550,20 +457,13 @@
                 background: #fef3c7;
                 color: #d97706;
             }
-            .zone-banner.eliminated {
-                background: #f8fafc;
-                border-color: #e2e8f0;
-                color: #475569;
-            }
-            .zone-banner.eliminated .zone-icon {
-                background: #f1f5f9;
-                color: #64748b;
-            }
+            .zone-banner.eliminated,
             .zone-banner.completed {
                 background: #f8fafc;
                 border-color: #e2e8f0;
                 color: #475569;
             }
+            .zone-banner.eliminated .zone-icon,
             .zone-banner.completed .zone-icon {
                 background: #f1f5f9;
                 color: #64748b;
@@ -635,6 +535,9 @@
     <body class="min-h-screen">
         <canvas id="confetti-canvas"></canvas>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LOGIN VIEW — registration removed, admin creates accounts      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section
             id="view-auth"
             class="view active min-h-screen items-center justify-center p-4"
@@ -668,12 +571,12 @@
                             <h2
                                 class="text-3xl font-extrabold mb-3 tracking-tight"
                             >
-                                Join the race.
+                                Welcome back.
                             </h2>
                             <p class="text-white/70 leading-relaxed">
-                                Register as a nominee, track your campaign in
-                                real time, and turn every shilling of support
-                                into votes.
+                                Sign in to track your campaign in real time,
+                                share your voting link, and turn every supporter
+                                into a vote.
                             </p>
                         </div>
                     </div>
@@ -685,120 +588,19 @@
                     >
                         <i class="ph ph-arrow-left"></i> Back to voting
                     </a>
-                    <div class="flex border-b border-gray-200 mb-6">
-                        <button
-                            id="tab-register"
-                            type="button"
-                            class="tab-btn active flex-1"
-                            onclick="toggleAuth('register')"
+                    <div class="text-center mb-6">
+                        <div
+                            class="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
                         >
-                            Create Account
-                        </button>
-                        <button
-                            id="tab-login"
-                            type="button"
-                            class="tab-btn flex-1"
-                            onclick="toggleAuth('login')"
-                        >
-                            Sign In
-                        </button>
+                            <i class="ph ph-sign-in text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-1">Nominee Sign In</h2>
+                        <p class="text-sm text-gray-500">
+                            Use the credentials sent to you by the
+                            administrator.
+                        </p>
                     </div>
-
-                    <div id="form-register" class="space-y-4">
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Full Name</label
-                            >
-                            <input
-                                type="text"
-                                id="reg-name"
-                                class="input"
-                                placeholder="Jane Doe"
-                                autocomplete="name"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Email</label
-                            >
-                            <input
-                                type="email"
-                                id="reg-email"
-                                class="input"
-                                placeholder="jane@example.com"
-                                autocomplete="email"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Password</label
-                            >
-                            <div class="input-wrap">
-                                <input
-                                    type="password"
-                                    id="reg-pass"
-                                    class="input"
-                                    placeholder="••••••••"
-                                    autocomplete="new-password"
-                                    oninput="onPasswordInput()"
-                                />
-                                <button
-                                    type="button"
-                                    class="pw-toggle"
-                                    onclick="togglePassword('reg-pass', this)"
-                                    aria-label="Show password"
-                                >
-                                    <i class="ph ph-eye"></i>
-                                </button>
-                            </div>
-                            <div class="strength" id="pw-strength">
-                                <i></i><i></i><i></i><i></i>
-                            </div>
-                            <p id="pw-msg" class="field-msg text-gray-400">
-                                At least 8 characters, including a number.
-                            </p>
-                        </div>
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Confirm Password</label
-                            >
-                            <div class="input-wrap">
-                                <input
-                                    type="password"
-                                    id="reg-pass2"
-                                    class="input"
-                                    placeholder="••••••••"
-                                    autocomplete="new-password"
-                                    oninput="onConfirmInput()"
-                                />
-                                <button
-                                    type="button"
-                                    class="pw-toggle"
-                                    onclick="togglePassword('reg-pass2', this)"
-                                    aria-label="Show password"
-                                >
-                                    <i class="ph ph-eye"></i>
-                                </button>
-                            </div>
-                            <p id="confirm-msg" class="field-msg text-gray-400">
-                                Re-enter your password.
-                            </p>
-                        </div>
-                        <button
-                            id="reg-btn"
-                            type="button"
-                            onclick="handleRegister()"
-                            class="btn w-full py-3.5"
-                        >
-                            <i class="ph ph-user-plus"></i> Create Account
-                        </button>
-                    </div>
-
-                    <div id="form-login" class="space-y-4 hidden">
+                    <div id="form-login" class="space-y-4">
                         <div>
                             <label
                                 class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
@@ -844,117 +646,20 @@
                             <i class="ph ph-sign-in"></i> Sign In
                         </button>
                     </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="view-onboard" class="view min-h-screen py-10 px-4">
-            <div class="max-w-5xl mx-auto card p-8 sm:p-10">
-                <div class="text-center mb-8">
-                    <div
-                        class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    <p
+                        class="text-xs text-gray-400 text-center mt-6 leading-relaxed"
                     >
-                        <i class="ph ph-sparkle text-2xl"></i>
-                    </div>
-                    <h2 class="text-2xl font-bold mb-1">
-                        Complete Your Nomination
-                    </h2>
-                    <p class="text-gray-500 max-w-lg mx-auto">
-                        Pick a category, add a profile photo, and write a short
-                        bio that tells voters why you deserve to win.
+                        Don't have an account?<br />
+                        Contact the election administrator to be registered as a
+                        nominee.
                     </p>
                 </div>
-                <div class="grid md:grid-cols-2 gap-8">
-                    <div class="space-y-5">
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
-                                >Profile Photo</label
-                            >
-                            <div
-                                class="photo-picker"
-                                onclick="
-                                    document
-                                        .getElementById('ob-img-file')
-                                        .click()
-                                "
-                            >
-                                <div
-                                    class="placeholder"
-                                    id="picker-placeholder"
-                                >
-                                    <i class="ph ph-camera"></i
-                                    ><span>Tap to choose</span>
-                                </div>
-                                <img
-                                    id="ob-img-preview"
-                                    class="hidden"
-                                    alt=""
-                                />
-                                <div class="overlay">
-                                    <i class="ph ph-pencil-simple"></i> Change
-                                </div>
-                            </div>
-                            <input
-                                type="file"
-                                id="ob-img-file"
-                                accept="image/*"
-                                class="hidden"
-                                onchange="handleImage(event)"
-                            />
-                            <div class="upload-bar" id="upload-bar">
-                                <div id="upload-progress"></div>
-                            </div>
-                            <p
-                                class="text-[11px] text-gray-400 text-center mt-3"
-                            >
-                                JPG, PNG or WebP · max 10 MB
-                            </p>
-                        </div>
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Display Name</label
-                            >
-                            <input
-                                id="ob-name"
-                                class="input"
-                                placeholder="Your public voting name"
-                            />
-                        </div>
-                        <div>
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Category</label
-                            >
-                            <select id="ob-cat" class="input"></select>
-                        </div>
-                    </div>
-                    <div class="flex flex-col gap-5">
-                        <div class="flex-grow">
-                            <label
-                                class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-                                >Short Bio</label
-                            >
-                            <textarea
-                                id="ob-desc"
-                                class="input resize-none h-full min-h-[200px]"
-                                placeholder="Share your story — achievements, mission, why voters should choose you."
-                            ></textarea>
-                        </div>
-                        <button
-                            id="publish-btn"
-                            onclick="submitNomination()"
-                            class="btn btn-green w-full py-3.5"
-                        >
-                            <i class="ph ph-rocket-launch"></i> Publish
-                            Nomination
-                        </button>
-                    </div>
-                </div>
             </div>
         </section>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- DASHBOARD VIEW                                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section id="view-dash" class="view min-h-screen">
             <header
                 class="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-gray-200/70"
@@ -1359,6 +1064,9 @@
             </main>
         </section>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- EDIT MODAL                                                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div id="edit-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1367,77 +1075,72 @@
                 >
                     <i class="ph ph-x"></i>
                 </button>
-                <div id="edit-form">
-                    <div
-                        class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-3"
-                    >
-                        <i class="ph ph-pencil-simple text-2xl"></i>
+                <div
+                    class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-3"
+                >
+                    <i class="ph ph-pencil-simple text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-1">Edit Profile</h3>
+                <p class="text-sm text-gray-500 mb-5">
+                    Update your display name or profile photo. Changes go live
+                    immediately.
+                </p>
+                <label
+                    class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
+                    >Profile Photo</label
+                >
+                <div
+                    class="photo-picker mb-4"
+                    onclick="document.getElementById('edit-img-file').click()"
+                >
+                    <div class="placeholder" id="edit-picker-placeholder">
+                        <i class="ph ph-camera"></i><span>Tap to change</span>
                     </div>
-                    <h3 class="text-xl font-bold mb-1">Edit Profile</h3>
-                    <p class="text-sm text-gray-500 mb-5">
-                        Update your display name or profile photo. Changes go
-                        live immediately.
-                    </p>
-
-                    <label
-                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 text-center"
-                        >Profile Photo</label
-                    >
-                    <div
-                        class="photo-picker mb-4"
-                        onclick="
-                            document.getElementById('edit-img-file').click()
-                        "
-                    >
-                        <div class="placeholder" id="edit-picker-placeholder">
-                            <i class="ph ph-camera"></i
-                            ><span>Tap to change</span>
-                        </div>
-                        <img id="edit-img-preview" class="hidden" alt="" />
-                        <div class="overlay">
-                            <i class="ph ph-pencil-simple"></i> Change
-                        </div>
+                    <img id="edit-img-preview" class="hidden" alt="" />
+                    <div class="overlay">
+                        <i class="ph ph-pencil-simple"></i> Change
                     </div>
-                    <input
-                        type="file"
-                        id="edit-img-file"
-                        accept="image/*"
-                        class="hidden"
-                        onchange="handleEditImage(event)"
-                    />
-                    <div class="upload-bar" id="edit-upload-bar">
-                        <div id="edit-upload-progress"></div>
-                    </div>
-
-                    <label
-                        class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 mt-5"
-                        >Display Name</label
+                </div>
+                <input
+                    type="file"
+                    id="edit-img-file"
+                    accept="image/*"
+                    class="hidden"
+                    onchange="handleEditImage(event)"
+                />
+                <div class="upload-bar" id="edit-upload-bar">
+                    <div id="edit-upload-progress"></div>
+                </div>
+                <label
+                    class="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 mt-5"
+                    >Display Name</label
+                >
+                <input
+                    id="edit-name"
+                    class="input mb-5"
+                    placeholder="Your public name"
+                />
+                <div class="flex gap-2">
+                    <button
+                        onclick="closeModal('edit-modal')"
+                        class="btn btn-outline flex-1"
                     >
-                    <input
-                        id="edit-name"
-                        class="input mb-5"
-                        placeholder="Your public name"
-                    />
-
-                    <div class="flex gap-2">
-                        <button
-                            onclick="closeModal('edit-modal')"
-                            class="btn btn-outline flex-1"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            id="edit-save-btn"
-                            onclick="submitEditProfile()"
-                            class="btn flex-1"
-                        >
-                            <i class="ph ph-check"></i> Save Changes
-                        </button>
-                    </div>
+                        Cancel
+                    </button>
+                    <button
+                        id="edit-save-btn"
+                        onclick="submitEditProfile()"
+                        class="btn flex-1"
+                    >
+                        <i class="ph ph-check"></i> Save Changes
+                    </button>
                 </div>
             </div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- CHANGE CATEGORY MODAL                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div id="change-cat-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1547,6 +1250,9 @@
             </div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- UNLOCK LEADERBOARD MODAL                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div id="unlock-modal" class="modal">
             <div class="modal-panel card w-full max-w-md p-6 relative">
                 <button
@@ -1766,6 +1472,9 @@
             </div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- BOOST MODAL                                                    -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div id="boost-modal" class="modal">
             <div
                 class="modal-panel w-full max-w-md relative overflow-hidden rounded-2xl"
@@ -2015,6 +1724,9 @@
             </div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- QR MODAL                                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <div id="qr-modal" class="modal">
             <div
                 class="modal-panel card w-full max-w-sm p-6 relative text-center"
@@ -2088,9 +1800,7 @@
             }
 
             let categories = [],
-                nominee = null,
-                selectedFile = null,
-                uploadedUrl = null;
+                nominee = null;
             let currentUnlockType = "once";
             let pollTimers = { change: null, unlock: null, boost: null };
 
@@ -2110,12 +1820,6 @@
                 semi_finals: "Semi Finals",
                 finals: "Finals",
                 completed: "Completed",
-            };
-            const STAGE_CUTOFF = {
-                preliminaries: 10,
-                semi_finals: 5,
-                finals: 1,
-                completed: 0,
             };
 
             function toast(msg, ok = true) {
@@ -2184,24 +1888,6 @@
                 $(id).classList.remove("show");
             }
 
-            function toggleAuth(type) {
-                $("tab-register").classList.toggle(
-                    "active",
-                    type === "register",
-                );
-                $("tab-login").classList.toggle("active", type === "login");
-                $("form-register").classList.toggle(
-                    "hidden",
-                    type !== "register",
-                );
-                $("form-login").classList.toggle("hidden", type !== "login");
-                setTimeout(() => {
-                    const first =
-                        type === "register" ? $("reg-name") : $("login-email");
-                    if (first) first.focus();
-                }, 50);
-            }
-
             function togglePassword(inputId, btn) {
                 const input = $(inputId);
                 if (!input) return;
@@ -2212,123 +1898,8 @@
                     icon.className = show ? "ph ph-eye-slash" : "ph ph-eye";
             }
 
-            function passwordScore(pw) {
-                let s = 0;
-                if (!pw) return 0;
-                if (pw.length >= 8) s++;
-                if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
-                if (/\d/.test(pw)) s++;
-                if (/[^A-Za-z0-9]/.test(pw) && pw.length >= 10) s++;
-                return Math.min(s, 4);
-            }
-            const PW_LABELS = ["Too weak", "Weak", "Fair", "Good", "Strong"];
-
-            function onPasswordInput() {
-                const pw = $("reg-pass").value;
-                const s = passwordScore(pw);
-                $("pw-strength").className = "strength" + (s ? " s" + s : "");
-                const msg = $("pw-msg");
-                if (!pw) {
-                    msg.className = "field-msg text-gray-400";
-                    msg.innerText =
-                        "At least 8 characters, including a number.";
-                } else if (pw.length < 8) {
-                    msg.className = "field-msg err";
-                    msg.innerText = "Password must be at least 8 characters.";
-                } else if (!/\d/.test(pw)) {
-                    msg.className = "field-msg err";
-                    msg.innerText = "Password must contain a number.";
-                } else {
-                    msg.className = "field-msg ok";
-                    msg.innerText = "Strength: " + PW_LABELS[s];
-                }
-                if ($("reg-pass2").value) onConfirmInput();
-            }
-
-            function onConfirmInput() {
-                const pw = $("reg-pass").value;
-                const pw2 = $("reg-pass2").value;
-                const msg = $("confirm-msg");
-                const input = $("reg-pass2");
-                if (!pw2) {
-                    msg.className = "field-msg text-gray-400";
-                    msg.innerText = "Re-enter your password.";
-                    input.classList.remove("valid", "invalid");
-                } else if (pw === pw2) {
-                    msg.className = "field-msg ok";
-                    msg.innerText = "Passwords match.";
-                    input.classList.add("valid");
-                    input.classList.remove("invalid");
-                } else {
-                    msg.className = "field-msg err";
-                    msg.innerText = "Passwords do not match.";
-                    input.classList.add("invalid");
-                    input.classList.remove("valid");
-                }
-            }
-
             function isValidEmail(e) {
                 return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-            }
-
-            let registering = false;
-
-            async function handleRegister() {
-                if (registering) return;
-                const name = $("reg-name").value.trim();
-                const email = $("reg-email").value.trim().toLowerCase();
-                const password = $("reg-pass").value;
-                const password2 = $("reg-pass2").value;
-
-                if (!name) return toast("Please enter your full name", false);
-                if (!email || !isValidEmail(email))
-                    return toast("Please enter a valid email", false);
-                if (password.length < 8)
-                    return toast(
-                        "Password must be at least 8 characters",
-                        false,
-                    );
-                if (!/\d/.test(password))
-                    return toast("Password must contain a number", false);
-                if (password !== password2)
-                    return toast("Passwords do not match", false);
-
-                registering = true;
-                setBusy(
-                    "reg-btn",
-                    true,
-                    '<i class="ph ph-spinner animate-spin text-lg"></i> Creating…',
-                );
-
-                try {
-                    const d = await api("/api/auth/register", {
-                        method: "POST",
-                        body: JSON.stringify({ name, email, password }),
-                    });
-                    const token = d.token || d.accessToken || d.access_token;
-                    if (!setToken(token))
-                        throw new Error(
-                            "Server did not return a valid session token",
-                        );
-                    $("ob-name").value = (d.user && d.user.name) || name;
-                    await loadCategories();
-                    showView("view-onboard");
-                    toast("Account created — set up your nomination");
-                } catch (e) {
-                    if (e.status === 409) {
-                        toast(
-                            "This email is already registered — switch to Sign In",
-                            false,
-                        );
-                        toggleAuth("login");
-                        $("login-email").value = email;
-                    } else {
-                        toast(e.message || "Registration failed", false);
-                    }
-                } finally {
-                    registering = false;
-                    setBusy("reg-btn", false);
-                }
             }
 
             async function handleLogin() {
@@ -2356,6 +1927,7 @@
                         throw new Error(
                             "Server did not return a valid session token",
                         );
+
                     try {
                         await loadDashboard({ fromLogin: true });
                         toast("Welcome back!");
@@ -2372,10 +1944,11 @@
                             (inner.message &&
                                 inner.message.includes("Not a nominee"))
                         ) {
-                            $("ob-name").value = (d.user && d.user.name) || "";
-                            await loadCategories();
-                            showView("view-onboard");
-                            toast("Set up your nomination to get started");
+                            clearToken();
+                            toast(
+                                "No nominee profile found. Contact the administrator.",
+                                false,
+                            );
                         } else {
                             throw inner;
                         }
@@ -2413,16 +1986,6 @@
                 } catch {
                     categories = [];
                 }
-                if (!categories.length) {
-                    $("ob-cat").innerHTML =
-                        '<option value="">No categories — contact the administrator</option>';
-                } else {
-                    $("ob-cat").innerHTML = categories
-                        .map(
-                            (c) => `<option value="${c.id}">${c.name}</option>`,
-                        )
-                        .join("");
-                }
                 const others = categories.filter(
                     (c) => !nominee || c.id !== nominee.category_id,
                 );
@@ -2434,24 +1997,6 @@
                           )
                           .join("")
                     : '<option value="">No other categories available</option>';
-            }
-
-            function handleImage(event) {
-                const f = event.target.files[0];
-                if (!f) return;
-                if (!f.type.startsWith("image/"))
-                    return toast("Please choose an image file", false);
-                if (f.size > 10 * 1024 * 1024)
-                    return toast("Image must be under 10 MB", false);
-                selectedFile = f;
-                uploadedUrl = null;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    $("ob-img-preview").src = e.target.result;
-                    $("ob-img-preview").classList.remove("hidden");
-                    $("picker-placeholder").classList.add("hidden");
-                };
-                reader.readAsDataURL(f);
             }
 
             function handleEditImage(event) {
@@ -2496,11 +2041,9 @@
                 );
                 try {
                     let imgUrl = null;
-                    if (editSelectedFile && !editUploadedUrl) {
+                    if (editSelectedFile && !editUploadedUrl)
                         imgUrl = await uploadImageEdit();
-                    } else if (editUploadedUrl) {
-                        imgUrl = editUploadedUrl;
-                    }
+                    else if (editUploadedUrl) imgUrl = editUploadedUrl;
                     const body = { name: newName };
                     if (imgUrl) body.img = imgUrl;
                     const d = await api("/api/nominee/update-profile", {
@@ -2533,10 +2076,9 @@
                     $("edit-upload-bar").classList.add("show");
                     $("edit-upload-progress").style.width = "0%";
                     xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
+                        if (e.lengthComputable)
                             $("edit-upload-progress").style.width =
                                 Math.round((e.loaded / e.total) * 100) + "%";
-                        }
                     };
                     xhr.onload = () => {
                         $("edit-upload-bar").classList.remove("show");
@@ -2565,94 +2107,14 @@
                 });
             }
 
-            function uploadImage() {
-                return new Promise((resolve, reject) => {
-                    if (!selectedFile) return resolve(null);
-                    const fd = new FormData();
-                    fd.append("image", selectedFile);
-                    const xhr = new XMLHttpRequest();
-                    xhr.open("POST", "/api/upload");
-                    xhr.setRequestHeader(
-                        "Authorization",
-                        "Bearer " + getToken(),
-                    );
-                    $("upload-bar").classList.add("show");
-                    $("upload-progress").style.width = "0%";
-                    xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
-                            $("upload-progress").style.width =
-                                Math.round((e.loaded / e.total) * 100) + "%";
-                        }
-                    };
-                    xhr.onload = () => {
-                        $("upload-bar").classList.remove("show");
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            try {
-                                const d = JSON.parse(xhr.responseText);
-                                uploadedUrl = d.url;
-                                resolve(d.url);
-                            } catch {
-                                reject(
-                                    new Error("Invalid response from server"),
-                                );
-                            }
-                            return;
-                        }
-                        let msg = `Upload failed (${xhr.status})`;
-                        try {
-                            const parsed = JSON.parse(xhr.responseText);
-                            if (parsed && parsed.error) msg = parsed.error;
-                        } catch {}
-                        reject(new Error(msg));
-                    };
-                    xhr.onerror = () => {
-                        $("upload-bar").classList.remove("show");
-                        reject(new Error("Network error while uploading"));
-                    };
-                    xhr.send(fd);
-                });
-            }
-
-            async function submitNomination() {
-                const name = $("ob-name").value.trim();
-                const categoryId = $("ob-cat").value;
-                const desc = $("ob-desc").value.trim();
-                if (!name || !categoryId)
-                    return toast("Name and category required", false);
-                const btn = $("publish-btn");
-                btn.disabled = true;
-                btn.innerHTML =
-                    '<i class="ph ph-spinner animate-spin text-lg"></i> Publishing…';
-                try {
-                    let imgUrl = uploadedUrl;
-                    if (selectedFile && !imgUrl) imgUrl = await uploadImage();
-                    await api("/api/nominee/register", {
-                        method: "POST",
-                        body: JSON.stringify({
-                            name,
-                            categoryId,
-                            img: imgUrl || "",
-                            desc,
-                        }),
-                    });
-                    toast("Nomination published!");
-                    await loadDashboard();
-                } catch (e) {
-                    toast(e.message || "Publish failed", false);
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML =
-                        '<i class="ph ph-rocket-launch"></i> Publish Nomination';
-                }
-            }
-
+            /* Confetti */
             const _confettiCanvas = document.getElementById("confetti-canvas");
             const _confettiCtx = _confettiCanvas
                 ? _confettiCanvas.getContext("2d")
                 : null;
             let _confettiParticles = [];
             let _confettiRaf = null;
-            let _confettiCols = [
+            const _confettiCols = [
                 "#2563eb",
                 "#16a34a",
                 "#facc15",
@@ -2741,9 +2203,9 @@
                     );
                     _confettiCtx.restore();
                 }
-                if (_confettiParticles.length > 0) {
+                if (_confettiParticles.length > 0)
                     _confettiRaf = requestAnimationFrame(_confettiTick);
-                } else {
+                else {
                     _confettiRaf = null;
                     _confettiCtx.clearRect(
                         0,
@@ -2769,9 +2231,8 @@
                     const eased = 1 - Math.pow(1 - t, 3);
                     const val = Math.round(from + delta * eased);
                     el.innerText = val.toLocaleString();
-                    if (t < 1) {
-                        requestAnimationFrame(step);
-                    } else {
+                    if (t < 1) requestAnimationFrame(step);
+                    else {
                         el.innerText = to.toLocaleString();
                         el.classList.remove("counting");
                         if (typeof opts.onDone === "function") opts.onDone();
@@ -2785,11 +2246,9 @@
                 if (!el) return;
                 const target = Number(n || 0);
                 const prev = Number(lastVoteCount ?? target);
-                if (!animate || target === prev) {
+                if (!animate || target === prev)
                     el.innerText = target.toLocaleString();
-                } else {
-                    animateNumber(el, prev, target, 1400);
-                }
+                else animateNumber(el, prev, target, 1400);
                 const upd = $("d-votes-updated");
                 if (upd)
                     upd.innerText =
@@ -2806,7 +2265,7 @@
                 if (voteEvents.length > 8) voteEvents.pop();
             }
 
-            function applyVotes(fresh, source) {
+            function applyVotes(fresh) {
                 fresh = Number(fresh || 0);
                 const prev = Number(lastVoteCount ?? fresh);
                 if (fresh < prev) return;
@@ -2829,7 +2288,7 @@
                 if (!getToken() || document.hidden) return;
                 try {
                     const d = await api("/api/nominee/me");
-                    applyVotes(d.nominee?.votes, "poll");
+                    applyVotes(d.nominee?.votes);
                 } catch (e) {
                     if (e.status === 401) {
                         clearToken();
@@ -2839,8 +2298,7 @@
             }
 
             function startVoteStream() {
-                if (typeof EventSource === "undefined") return;
-                if (!getToken()) return;
+                if (typeof EventSource === "undefined" || !getToken()) return;
                 if (voteStream) {
                     try {
                         voteStream.close();
@@ -2854,7 +2312,7 @@
                     voteStream.addEventListener("votes", (e) => {
                         try {
                             const { votes } = JSON.parse(e.data);
-                            applyVotes(votes, "sse");
+                            applyVotes(votes);
                         } catch {}
                     });
                     voteStream.addEventListener("stage", (e) => {
@@ -2871,15 +2329,17 @@
                             const evt = JSON.parse(e.data);
                             if (evt.status !== "success") return;
                             if (
-                                evt.type === "leaderboard_once" ||
-                                evt.type === "leaderboard_1h" ||
-                                evt.type === "leaderboard_12h" ||
-                                evt.type === "leaderboard_24h"
-                            ) {
+                                [
+                                    "leaderboard_once",
+                                    "leaderboard_1h",
+                                    "leaderboard_12h",
+                                    "leaderboard_24h",
+                                ].includes(evt.type)
+                            )
                                 toast("Leaderboard unlocked ✓");
-                            } else if (evt.type === "category_change") {
+                            else if (evt.type === "category_change")
                                 toast("Category updated ✓");
-                            } else if (evt.type === "boost_50") {
+                            else if (evt.type === "boost_50") {
                                 toast("Power Boost activated 🚀");
                                 _confettiBurst({
                                     count: 300,
@@ -2943,7 +2403,6 @@
                     return;
                 }
                 el.classList.remove("hidden");
-
                 function tick() {
                     const left = expiresMs - Date.now();
                     if (left <= 0) {
@@ -2981,8 +2440,6 @@
 
             let _hasBooted = false;
 
-            // ✅ SECURITY: no rank or category-total displayed — only my total
-            //    votes and the gap remaining to reach the top cutoff.
             function renderZoneBanner() {
                 const b = $("zone-banner");
                 if (!b || !currentZone) return;
@@ -3015,21 +2472,18 @@
                         "You're inside the top group that advances. Keep sharing your link — every vote helps you stay ahead.";
                     prog.innerHTML = `
                         <span class="zone-pill"><i class="ph-fill ph-vote"></i> ${myVotes.toLocaleString()} votes</span>
-                        <span class="zone-pill"><i class="ph-fill ph-flag-checkered"></i> Inside top ${cutoff}</span>
-                    `;
+                        <span class="zone-pill"><i class="ph-fill ph-flag-checkered"></i> Inside top ${cutoff}</span>`;
                 } else if (z === "danger") {
                     b.classList.add("momentum");
                     icon.className = "ph-fill ph-trend-up";
                     title.innerText = "Keep pushing for the top " + cutoff;
-                    if (gap > 0) {
+                    if (gap > 0)
                         msg.innerText = `You have ${myVotes.toLocaleString()} votes. Just ${gap} more ${gap === 1 ? "vote" : "votes"} to reach the top ${cutoff} — keep going, you're close!`;
-                    } else {
+                    else
                         msg.innerText = `You have ${myVotes.toLocaleString()} votes. Keep sharing your link to stay in the top ${cutoff}.`;
-                    }
                     prog.innerHTML = `
                         <span class="zone-pill"><i class="ph-fill ph-vote"></i> ${myVotes.toLocaleString()} votes</span>
-                        <span class="zone-pill"><i class="ph-fill ph-target"></i> ${gap} ${gap === 1 ? "vote" : "votes"} to top ${cutoff}</span>
-                    `;
+                        <span class="zone-pill"><i class="ph-fill ph-target"></i> ${gap} ${gap === 1 ? "vote" : "votes"} to top ${cutoff}</span>`;
                 } else if (z === "winner") {
                     b.classList.add("winner");
                     icon.className = "ph-fill ph-trophy";
@@ -3097,11 +2551,9 @@
                         );
                     } else {
                         const prev = Number(lastVoteCount ?? newTotal);
-                        if (newTotal !== prev) {
+                        if (newTotal !== prev)
                             animateNumber($("d-votes"), prev, newTotal, 1400);
-                        } else {
-                            paintVotes(newTotal, false);
-                        }
+                        else paintVotes(newTotal, false);
                         lastVoteCount = newTotal;
                     }
 
@@ -3124,8 +2576,12 @@
                         e.status === 404 ||
                         (e.message && e.message.includes("Not a nominee"))
                     ) {
-                        await loadCategories();
-                        showView("view-onboard");
+                        clearToken();
+                        showView("view-auth");
+                        toast(
+                            "No nominee profile found. Contact the administrator.",
+                            false,
+                        );
                         return;
                     }
                     $("dashboard-error-msg").innerText =
@@ -3231,16 +2687,14 @@
                                 </div>
                             </div>
                             <div class="text-sm font-mono font-bold ${r.isMe ? "text-blue-700" : "text-gray-700"} relative z-10">${(r.votes || 0).toLocaleString()}</div>
-                        </div>
-                    `;
+                        </div>`;
                         })
                         .join("");
                     $("full-board").innerHTML = html;
                     if (newSelfRank != null)
                         window.__lastSelfRank = newSelfRank;
-                    if (d.access?.type === "timed" && d.access.expiresAt) {
+                    if (d.access?.type === "timed" && d.access.expiresAt)
                         startLeaderboardTimer(d.access.expiresAt);
-                    }
                 } catch (e) {
                     if (e.status === 402) {
                         $("lb-locked")?.classList.remove("hidden");
@@ -3291,7 +2745,6 @@
             function renderBoostCard() {
                 const wrap = $("boost-card-wrap");
                 if (!wrap || !nominee) return;
-
                 if (nominee.eliminated) {
                     wrap.innerHTML = "";
                     return;
@@ -3302,14 +2755,12 @@
 
                 if (count === 0) {
                     wrap.innerHTML = `
-                        <div class="card overflow-hidden relative"
-                             style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
+                        <div class="card overflow-hidden relative" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border: 1px solid rgba(255,215,0,0.35);">
                             <div class="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none" style="background: rgba(250,204,21,0.15);"></div>
                             <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full blur-3xl pointer-events-none" style="background: rgba(249,115,22,0.15);"></div>
                             <div class="relative p-6">
                                 <div class="flex items-start gap-4 mb-4">
-                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
-                                         style="background: linear-gradient(135deg, #facc15 0%, #f97316 100%); box-shadow: 0 8px 24px -8px rgba(249,115,22,0.6);">
+                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg" style="background: linear-gradient(135deg, #facc15 0%, #f97316 100%); box-shadow: 0 8px 24px -8px rgba(249,115,22,0.6);">
                                         <i class="ph-fill ph-rocket-launch text-white text-2xl"></i>
                                     </div>
                                     <div class="flex-1">
@@ -3335,9 +2786,7 @@
                                     <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Counts toward your final ranking</li>
                                     <li class="flex items-center gap-2"><i class="ph-fill ph-check-circle" style="color:#facc15;"></i> Limit: 1 per nominee</li>
                                 </ul>
-                                <button onclick="openBoost()"
-                                        class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all"
-                                        style="background: linear-gradient(90deg, #facc15 0%, #fde047 100%); box-shadow: 0 8px 24px -10px rgba(250,204,21,0.7);">
+                                <button onclick="openBoost()" class="w-full py-3.5 rounded-xl font-bold text-sm text-gray-900 flex items-center justify-center gap-2 transition-all" style="background: linear-gradient(90deg, #facc15 0%, #fde047 100%); box-shadow: 0 8px 24px -10px rgba(250,204,21,0.7);">
                                     <i class="ph-fill ph-rocket-launch"></i> Activate Boost · KES 250
                                 </button>
                                 <p class="text-[10px] text-gray-500 text-center mt-3">M-Pesa payment · Secure via PayHero</p>
@@ -3345,11 +2794,9 @@
                         </div>`;
                 } else {
                     wrap.innerHTML = `
-                        <div class="card p-6 overflow-hidden relative"
-                             style="background: linear-gradient(135deg, #0f5132 0%, #052e16 100%); border: 1px solid rgba(34,197,94,0.4);">
+                        <div class="card p-6 overflow-hidden relative" style="background: linear-gradient(135deg, #0f5132 0%, #052e16 100%); border: 1px solid rgba(34,197,94,0.4);">
                             <div class="flex items-start gap-4 mb-4">
-                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-                                     style="background: rgba(34,197,94,0.2);">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style="background: rgba(34,197,94,0.2);">
                                     <i class="ph-fill ph-rocket-launch text-3xl" style="color:#4ade80;"></i>
                                 </div>
                                 <div class="flex-1">
@@ -3367,9 +2814,7 @@
                                     <div class="text-[10px] font-bold uppercase tracking-wider text-green-400/70 mt-1">KES per boost</div>
                                 </div>
                             </div>
-                            <button onclick="openBoost()"
-                                    class="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all"
-                                    style="background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%); color:#052e16; box-shadow: 0 8px 24px -10px rgba(34,197,94,0.7);">
+                            <button onclick="openBoost()" class="w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all" style="background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%); color:#052e16; box-shadow: 0 8px 24px -10px rgba(34,197,94,0.7);">
                                 <i class="ph-fill ph-plus-circle"></i> Add +20 votes · KES 250
                             </button>
                             <p class="text-[10px] text-green-400/50 text-center mt-3">Boost votes are cumulative</p>
@@ -3391,12 +2836,9 @@
                         "You cannot purchase a boost after elimination",
                         false,
                     );
-
                 const count = nominee.boostCount || 0;
                 const isFirst = count === 0;
-
                 $("boost-one-time-badge").style.display = isFirst ? "" : "none";
-
                 if (isFirst) {
                     $("boost-votes-num").innerText = "+100";
                     $("boost-price-num").innerText = "250";
@@ -3414,7 +2856,6 @@
                     $("boost-success-text").innerText =
                         "+20 votes added to your campaign.";
                 }
-
                 $("boost-phone").value = "";
                 $("boost-form").classList.remove("hidden");
                 $("boost-loading").classList.add("hidden");
@@ -3562,7 +3003,6 @@
                     $("cc-failed").querySelector("p").innerText = e.message;
                 }
             }
-
             async function verifyCategoryChange() {
                 closeModal("change-cat-modal");
                 await loadDashboard();
@@ -3658,7 +3098,6 @@
                         const useLive =
                             pollCount > 2 && now - lastLiveCheck > 10_000;
                         if (useLive) lastLiveCheck = now;
-
                         const s = await api(
                             (useLive
                                 ? "/api/transactions/check/"
@@ -3696,13 +3135,9 @@
 
             document.addEventListener("keydown", (e) => {
                 if (e.key !== "Enter") return;
-                if (registering) return;
                 const authVisible = $("view-auth").classList.contains("active");
                 if (!authVisible) return;
-                const isRegister =
-                    !$("form-register").classList.contains("hidden");
-                if (isRegister) handleRegister();
-                else handleLogin();
+                handleLogin();
             });
 
             (async () => {
