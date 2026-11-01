@@ -1556,12 +1556,22 @@ function isPrivateIP(ip) {
 function validateFingerprint(fp) {
   if (!fp || typeof fp !== "object") return { ok: false, reason: "missing" };
   for (const k of MIN_FP_KEYS) {
-    if (!fp[k] || String(fp[k]).trim().length === 0)
+    if (!fp[k] || String(fp[k]).trim().length === 0) {
+      // Allow "screen" to be derived from screenWidth/screenHeight
+      if (k === "screen" && fp.screenWidth && fp.screenHeight) continue;
       return { ok: false, reason: `missing_key:${k}` };
+    }
   }
-  if (!/^\d{2,5}x\d{2,5}(x\d{1,2})?$/i.test(String(fp.screen)))
+  let screenStr = String(fp.screen || "").trim();
+  // Fallback: construct from separate width/height if screen is missing
+  if (!screenStr && fp.screenWidth && fp.screenHeight) {
+    screenStr = `${fp.screenWidth}x${fp.screenHeight}`;
+  }
+  // Accept both letter x AND multiplication sign × (U+00D7), with optional spaces
+  if (!/^\d{2,5}\s*[x×]\s*\d{2,5}(\s*[x×]\s*\d{1,2})?$/i.test(screenStr))
     return { ok: false, reason: "invalid_screen" };
-  if (String(fp.userAgent).length < 30)
+  // Relax UA min length from 30 → 20 (some WebViews have shorter UAs)
+  if (String(fp.userAgent).length < 20)
     return { ok: false, reason: "invalid_user_agent" };
   return { ok: true };
 }
