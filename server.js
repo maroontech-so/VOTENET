@@ -27,7 +27,8 @@ try {
 }
 
 const app = express();
-app.set("trust proxy", 1);
+// ── FIX #2: trust proxy = true (multi-hop: Cloudflare → Render → app) ──
+app.set("trust proxy", true);
 app.disable("x-powered-by");
 
 const PORT = process.env.PORT || 3000;
@@ -37,7 +38,6 @@ const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || "super123";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTHORITATIVE 2026 ELECTION WINDOWS (hardcoded — never read from DB/env)
-// Kenya Time = UTC+3. All timestamps below are UTC.
 // ═══════════════════════════════════════════════════════════════════════════
 const STAGE_WINDOWS = Object.freeze({
   preliminaries: { start: null, end: "2026-10-28T21:00:00.000Z" },
@@ -106,6 +106,14 @@ const REPORT_SECRET =
   process.env.REPORT_SECRET || JWT_SECRET || "voteus-report-secret";
 const EMAIL_TICK_INTERVAL_MS = 60_000;
 
+// ── FIX #3, #4, #5, #6: vote hardening constants ──
+const VOTE_FP_COOLDOWN_MS = 5_000; // 5s between votes per fingerprint
+const VOTE_IP_RATE_WINDOW_MS = 60_000;
+const VOTE_IP_RATE_MAX = 300; // generous for campus WiFi
+const VOTE_FP_RATE_MAX = 5; // per fingerprint per 60s
+const VOTE_IP_HOURLY_MAX = 1_000; // hard cap per IP per hour
+const MIN_FP_KEYS = ["screen", "timezone", "language", "userAgent"];
+
 const STAGE_ORDER = ["preliminaries", "semi_finals", "finals", "completed"];
 const STAGE_LABELS = {
   preliminaries: "Preliminaries",
@@ -128,6 +136,31 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+// ── FIX #2: extract real client IP from proxy headers ──
+app.use((req, res, next) => {
+  const cf = req.headers["cf-connecting-ip"];
+  if (cf && typeof cf === "string" && cf.trim()) {
+    req.realIP = cf.trim();
+    return next();
+  }
+  const xff = req.headers["x-forwarded-for"];
+  if (xff && typeof xff === "string") {
+    const first = xff.split(",")[0].trim();
+    if (first) {
+      req.realIP = cleanIP(first);
+      return next();
+    }
+  }
+  const xri = req.headers["x-real-ip"];
+  if (xri && typeof xri === "string") {
+    req.realIP = cleanIP(xri.trim());
+    return next();
+  }
+  req.realIP = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+  next();
+});
+
 app.use((req, res, next) => {
   if (["POST", "PUT", "PATCH"].includes(req.method) && !req.body)
     console.warn(
@@ -1197,6 +1230,80 @@ async function initSchema() {
       await db.exec(`ALTER TABLE free_votes ADD COLUMN ${col}`);
     } catch (e) {}
   }
+
+  // ── FIX #4: add fingerprint_hash column + unique index ──
+  try {
+    await db.exec(`ALTER TABLE free_votes ADD COLUMN fingerprint_hash TEXT`);
+  } catch (e) {}
+  try {
+    await db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_fv_fp_hash ON free_votes(fingerprint_hash)`,
+    );
+  } catch (e) {}
+
+  // Backfill fingerprint_hash from fingerprint_json for existing rows
+  try {
+    const rows = await db
+      .prepare(
+        "SELECT id, fingerprint_json FROM free_votes WHERE fingerprint_json IS NOT NULL AND (fingerprint_hash IS NULL OR fingerprint_hash = '')",
+      )
+      .all();
+    let backfilled = 0;
+    for (const r of rows) {
+      try {
+        const fp = JSON.parse(r.fingerprint_json);
+        if (fp && typeof fp === "object" && fp.userAgent && fp.screen) {
+          const hash = deriveFingerprintHash(fp);
+          await db
+            .prepare("UPDATE free_votes SET fingerprint_hash = ? WHERE id = ?")
+            .run(hash, r.id);
+          backfilled++;
+        }
+      } catch {}
+    }
+    if (backfilled > 0)
+      console.log(
+        `[Schema] ✓ Backfilled fingerprint_hash on ${backfilled} row(s)`,
+      );
+  } catch (e) {}
+
+  // Detect duplicates BEFORE creating unique index
+  let fpDuplicates = [];
+  try {
+    fpDuplicates = await db
+      .prepare(
+        `SELECT fingerprint_hash, category_id, COUNT(*) AS c
+     FROM free_votes
+     WHERE fingerprint_hash IS NOT NULL AND is_appeal = 0 AND category_id IS NOT NULL
+     GROUP BY fingerprint_hash, category_id HAVING c > 1 LIMIT 20`,
+      )
+      .all();
+  } catch (e) {}
+
+  if (fpDuplicates.length) {
+    console.warn(
+      `[Schema] ⚠ ${fpDuplicates.length} duplicate (fingerprint_hash, category_id) groups found.`,
+    );
+    console.warn(
+      `[Schema] Run "node voteus.js clean --apply" to resolve, then restart.`,
+    );
+    console.warn(
+      `[Schema] Unique index on fingerprint_hash is SKIPPED until resolved.`,
+    );
+  } else {
+    try {
+      await db.exec(`DROP INDEX IF EXISTS idx_fv_fp_cat`);
+      await db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_fp_cat
+       ON free_votes(fingerprint_hash, category_id)
+       WHERE fingerprint_hash IS NOT NULL AND is_appeal = 0`,
+      );
+      console.log("[Schema] ✓ UNIQUE(fingerprint_hash, category_id) active");
+    } catch (e) {
+      console.error(`[Schema] idx_fv_fp_cat failed: ${e.message}`);
+    }
+  }
+
   try {
     await db.exec(`DROP INDEX IF EXISTS idx_fv_device_cat`);
     await db.exec(
@@ -1337,26 +1444,48 @@ async function initSchema() {
 // ═══════════════════════════════════════════════════════════════════════════
 // rate limit, helpers, auth
 // ═══════════════════════════════════════════════════════════════════════════
+// ── FIX #1: rate limiter — hard IP bucket always fires first ──
 const rateBuckets = new Map();
 function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
   return (req, res, next) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const ip =
+      req.realIP || cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+    const now = Date.now();
+
+    // ── HARD per-IP bucket — ALWAYS fires, regardless of body fields ──
+    const ipKey = `${key}:ip:${ip}`;
+    let ipEntry = rateBuckets.get(ipKey);
+    if (!ipEntry || now > ipEntry.resetAt) {
+      ipEntry = { count: 0, resetAt: now + windowMs };
+      rateBuckets.set(ipKey, ipEntry);
+    }
+    ipEntry.count++;
+    if (ipEntry.count > max) {
+      res.setHeader("Retry-After", Math.ceil((ipEntry.resetAt - now) / 1000));
+      return res.status(429).json({
+        error: "Too many requests from this IP. Please slow down.",
+        code: "IP_RATE_LIMITED",
+      });
+    }
+
+    // ── Secondary bucket — per-identifier, RAW string (not digit-stripped) ──
     const body = req.body || {};
     const disc = body.phone || body.voterToken || body.email || "";
-    const discClean = String(disc).replace(/\D/g, "");
-    const bucketKey = discClean ? `${key}:id:${discClean}` : `${key}:ip:${ip}`;
-    const now = Date.now();
-    let entry = rateBuckets.get(bucketKey);
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 0, resetAt: now + windowMs };
-      rateBuckets.set(bucketKey, entry);
-    }
-    entry.count++;
-    if (entry.count > max) {
-      res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
-      return res
-        .status(429)
-        .json({ error: "Too many requests. Please slow down." });
+    if (disc) {
+      const discStr = String(disc).slice(0, 128);
+      const idKey = `${key}:id:${discStr}`;
+      let idEntry = rateBuckets.get(idKey);
+      if (!idEntry || now > idEntry.resetAt) {
+        idEntry = { count: 0, resetAt: now + windowMs };
+        rateBuckets.set(idKey, idEntry);
+      }
+      idEntry.count++;
+      if (idEntry.count > max) {
+        res.setHeader("Retry-After", Math.ceil((idEntry.resetAt - now) / 1000));
+        return res
+          .status(429)
+          .json({ error: "Too many requests. Please slow down." });
+      }
     }
     next();
   };
@@ -1421,6 +1550,39 @@ function isPrivateIP(ip) {
     ip.startsWith("192.168.") ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
   );
+}
+
+// ── FIX #3, #4, #5: server-side fingerprint hash derivation ──
+function validateFingerprint(fp) {
+  if (!fp || typeof fp !== "object") return { ok: false, reason: "missing" };
+  for (const k of MIN_FP_KEYS) {
+    if (!fp[k] || String(fp[k]).trim().length === 0)
+      return { ok: false, reason: `missing_key:${k}` };
+  }
+  if (!/^\d{2,5}x\d{2,5}(x\d{1,2})?$/i.test(String(fp.screen)))
+    return { ok: false, reason: "invalid_screen" };
+  if (String(fp.userAgent).length < 30)
+    return { ok: false, reason: "invalid_user_agent" };
+  return { ok: true };
+}
+
+function deriveFingerprintHash(fp) {
+  // Stable canonical subset — same on every request from the same browser
+  const canonical = [
+    String(fp.userAgent || "").slice(0, 200),
+    String(fp.screen || ""),
+    String(fp.timezone || ""),
+    String(fp.language || ""),
+    String(fp.hardwareConcurrency || ""),
+    String(fp.deviceMemory || ""),
+    String(fp.platform || ""),
+    String(fp.maxTouchPoints || ""),
+  ].join("|");
+  return crypto
+    .createHash("sha256")
+    .update(canonical)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 async function lookupIP(rawIp) {
@@ -1782,126 +1944,6 @@ async function extendLeaderboardAccess(t, userId, durationMs) {
   return expiresAt;
 }
 
-async function completeTransaction(reference, receipt) {
-  try {
-    const result = await db.tx(async (t) => {
-      const claimed = await t.execute({
-        sql: `UPDATE transactions SET status='success', mpesa_receipt=?, completed_at=CURRENT_TIMESTAMP WHERE reference=? AND status='pending'`,
-        args: [receipt, reference],
-      });
-      if (Number(claimed.rowsAffected || 0) === 0)
-        return { ok: false, reason: "already_processed_or_not_pending" };
-      const txRow = await t.get(
-        "SELECT * FROM transactions WHERE reference = ?",
-        [reference],
-      );
-      let meta = {};
-      try {
-        meta = txRow.metadata ? JSON.parse(txRow.metadata) : {};
-      } catch (e) {}
-      let extra = {};
-      if (txRow.type === "category_change") {
-        const newCat = meta.newCategoryId;
-        if (!newCat) throw new Error("Missing newCategoryId");
-        const target = await t.get("SELECT id FROM categories WHERE id = ?", [
-          newCat,
-        ]);
-        if (!target) throw new Error("Target category no longer exists");
-        await t.execute({
-          sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
-          args: [newCat, txRow.nominee_id],
-        });
-      } else if (txRow.type === "leaderboard_once")
-        extra.expiresAt = await extendLeaderboardAccess(
-          t,
-          txRow.user_id,
-          LEADERBOARD_ONCE_MS,
-        );
-      else if (txRow.type === "leaderboard_1h")
-        extra.expiresAt = await extendLeaderboardAccess(
-          t,
-          txRow.user_id,
-          LEADERBOARD_1H_MS,
-        );
-      else if (txRow.type === "leaderboard_12h")
-        extra.expiresAt = await extendLeaderboardAccess(
-          t,
-          txRow.user_id,
-          LEADERBOARD_12H_MS,
-        );
-      else if (txRow.type === "leaderboard_24h")
-        extra.expiresAt = await extendLeaderboardAccess(
-          t,
-          txRow.user_id,
-          LEADERBOARD_24H_MS,
-        );
-      else if (txRow.type === "leaderboard_2h")
-        extra.expiresAt = await extendLeaderboardAccess(
-          t,
-          txRow.user_id,
-          LEADERBOARD_2H_MS,
-        );
-      else if (txRow.type === "boost_50") {
-        const votesToAdd = Number(meta.votes) || BOOST_FIRST_VOTES;
-        await t.execute({
-          sql: `INSERT INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
-          args: [uuidv4(), txRow.nominee_id, reference, votesToAdd],
-        });
-        await t.execute({
-          sql: `UPDATE nominees SET votes = (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) + (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?) WHERE id = ?`,
-          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
-        });
-        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
-          txRow.nominee_id,
-        ]);
-        extra.votes = upd?.votes || 0;
-        extra.nomineeId = txRow.nominee_id;
-        extra.boosted = true;
-        extra.votesAdded = votesToAdd;
-      } else if (txRow.type === "vote") {
-        await t.execute({
-          sql: `UPDATE nominees SET votes = (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) + (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?) WHERE id = ?`,
-          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
-        });
-        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
-          txRow.nominee_id,
-        ]);
-        extra.votes = upd?.votes || 0;
-        extra.nomineeId = txRow.nominee_id;
-      }
-      await t.execute({
-        sql: "INSERT INTO payment_logs (reference, event, details) VALUES (?, ?, ?)",
-        args: [
-          reference,
-          "completed",
-          JSON.stringify({ receipt, type: txRow.type }),
-        ],
-      });
-      return { ok: true, type: txRow.type, userId: txRow.user_id, extra };
-    });
-    if (result.ok) {
-      console.log(`✓ ${reference} completed (${result.type})`);
-      db.push().catch((e) => {});
-      broadcastAdminEvent({ type: "transaction:completed", reference });
-      if (result.userId)
-        broadcastPaymentComplete(result.userId, result.type, reference, {
-          expiresAt: result.extra?.expiresAt || null,
-          votes: result.extra?.votes || null,
-        });
-      if (result.extra?.boosted && result.extra?.nomineeId) {
-        broadcastVotes(result.extra.nomineeId, result.extra.votes);
-        broadcastPublicVote(result.extra.nomineeId, result.extra.votes);
-      }
-    } else
-      await logEvent(reference, "complete_skipped", { reason: result.reason });
-    return result.ok;
-  } catch (e) {
-    console.error("[Complete Error]", e.message);
-    await logEvent(reference, "complete_error", { message: e.message });
-    return false;
-  }
-}
-
 async function failTransaction(reference, reason) {
   try {
     await db
@@ -2131,8 +2173,61 @@ async function getLeaderboardAccess(userId) {
   return { allowed: false, type: "none" };
 }
 
+async function resolveIdentifier(raw) {
+  const identifier = String(raw || "").trim();
+  if (!identifier) return { user: null, nominee: null };
+  let nominee = null,
+    user = null;
+  if (/^VOTE_/i.test(identifier)) {
+    nominee = await db
+      .prepare(
+        `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
+      )
+      .get(identifier);
+    if (nominee?.user_id)
+      user = await db
+        .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
+        .get(nominee.user_id);
+  }
+  if (!nominee && identifier.includes("@")) {
+    user = await db
+      .prepare(
+        "SELECT id, name, email, created_at FROM users WHERE LOWER(email) = ?",
+      )
+      .get(identifier.toLowerCase());
+    if (user)
+      nominee = await db
+        .prepare(
+          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?`,
+        )
+        .get(user.id);
+  }
+  if (!nominee && !user && /^[0-9a-f-]{36}$/i.test(identifier)) {
+    user = await db
+      .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
+      .get(identifier);
+    if (user)
+      nominee = await db
+        .prepare(
+          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?`,
+        )
+        .get(user.id);
+    if (!nominee)
+      nominee = await db
+        .prepare(
+          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
+        )
+        .get(identifier);
+    if (nominee && !user && nominee.user_id)
+      user = await db
+        .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
+        .get(nominee.user_id);
+  }
+  return { user, nominee };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// ROUTES
+// ROUTES — Upload, Health, Config, Auth
 // ═══════════════════════════════════════════════════════════════════════════
 app.post(
   "/api/upload",
@@ -2342,7 +2437,6 @@ app.get("/api/categories", async (req, res) => {
   );
 });
 
-// ── /api/nominees — HIDES eliminated by default. Pass ?includeEliminated=1 to include them ──
 app.get("/api/nominees", async (req, res) => {
   const voterToken =
     typeof req.query.voterToken === "string" ? req.query.voterToken : null;
@@ -2438,7 +2532,6 @@ app.get("/api/nominees/:code", async (req, res) => {
   res.json(n);
 });
 
-// ── AUTH: login only (registration removed — admins create accounts) ──
 app.post(
   "/api/auth/login",
   rateLimit({ key: "login", max: 20 }),
@@ -2591,129 +2684,6 @@ app.get("/api/admin/diagnostic/users-list", superAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin/stages/status", superAuth, async (req, res) => {
-  try {
-    const s = await getStages();
-    const cats = await db.prepare("SELECT id, name FROM categories").all();
-    const counts = [];
-    for (const cat of cats) {
-      const row = await db
-        .prepare(
-          `SELECT COUNT(*) AS total, SUM(CASE WHEN eliminated = 0 THEN 1 ELSE 0 END) AS active FROM nominees WHERE category_id = ?`,
-        )
-        .get(cat.id);
-      counts.push({
-        category: cat.name,
-        total: Number(row?.total || 0),
-        active: Number(row?.active || 0),
-      });
-    }
-    res.json({
-      stages: {
-        current_stage: s.current_stage,
-        label: STAGE_LABELS[s.current_stage] || s.current_stage,
-        next: NEXT_STAGE[s.current_stage] || null,
-        next_label: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
-        cutoff: STAGE_CUTOFF[s.current_stage] || 10,
-        preliminaries_start: s.preliminaries_start,
-        preliminaries_end: s.preliminaries_end,
-        semifinals_start: s.semifinals_start,
-        semifinals_end: s.semifinals_end,
-        finals_start: s.finals_start,
-        finals_end: s.finals_end,
-        last_advanced_at: s.last_advanced_at,
-        updated_at: s.updated_at,
-      },
-      counts,
-      hardcoded: true,
-      windows: STAGE_WINDOWS,
-      requiredStageNow: requiredStageAt(),
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post("/api/admin/stages/config", superAuth, async (req, res) => {
-  res.status(400).json({
-    error:
-      "Stage dates are hardcoded for the 2026 election and cannot be modified.",
-    note: "Automatic elimination and email notifications are driven by these fixed windows.",
-    windows: STAGE_WINDOWS,
-    current_stage: (await getStages()).current_stage,
-    required_stage_now: requiredStageAt(),
-  });
-});
-
-app.post("/api/admin/stages/advance", superAuth, async (req, res) => {
-  try {
-    const r = await advanceStage();
-    if (!r.ok) return res.status(400).json({ error: r.error });
-    res.json(r);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// EMAIL DIAGNOSTICS + TESTING APIS
-// ═══════════════════════════════════════════════════════════════════════════
-app.get("/api/admin/email/log", superAuth, async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
-    const type = req.query.type ? String(req.query.type) : null;
-    const where = type ? "WHERE event_type = ?" : "";
-    const params = type ? [type, limit] : [limit];
-    const rows = await db
-      .prepare(
-        `SELECT * FROM email_log ${where} ORDER BY created_at DESC LIMIT ?`,
-      )
-      .all(...params);
-    const counts = (
-      await db
-        .prepare(
-          "SELECT event_type, COUNT(*) AS c FROM email_log GROUP BY event_type",
-        )
-        .all()
-    ).reduce((a, r) => ({ ...a, [r.event_type]: r.c }), {});
-    res.json({
-      emails: rows,
-      counts,
-      total: rows.length,
-      resendConfigured: !!resend,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post("/api/admin/email/test", superAuth, async (req, res) => {
-  const { to, subject, bodyHtml } = req.body || {};
-  if (!to) return res.status(400).json({ error: "Missing 'to' email address" });
-  if (!resend)
-    return res
-      .status(400)
-      .json({ error: "Resend not configured (RESEND_API_KEY missing)" });
-  try {
-    const html =
-      bodyHtml ||
-      emailWrapper({
-        title: "Voteus test",
-        preheader: "Test email",
-        body: `<p>This is a test email from Voteus at ${new Date().toISOString()}.</p>`,
-        footerNote: "<em>Test</em>",
-      });
-    const r = await sendEmail({
-      to,
-      subject: subject || "Voteus email test",
-      html,
-    });
-    res.json({ ok: r.ok, mode: "simple", to, result: r });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get(
   "/api/admin/diagnostics/user/:identifier",
   superAuth,
@@ -2747,7 +2717,6 @@ app.get(
             }
           : null,
       };
-
       if (ctx.nominee) {
         const free = await db
           .prepare("SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id = ?")
@@ -2790,59 +2759,6 @@ app.get(
     }
   },
 );
-
-async function resolveIdentifier(raw) {
-  const identifier = String(raw || "").trim();
-  if (!identifier) return { user: null, nominee: null };
-  let nominee = null,
-    user = null;
-  if (/^VOTE_/i.test(identifier)) {
-    nominee = await db
-      .prepare(
-        `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.code = ?`,
-      )
-      .get(identifier);
-    if (nominee?.user_id)
-      user = await db
-        .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
-        .get(nominee.user_id);
-  }
-  if (!nominee && identifier.includes("@")) {
-    user = await db
-      .prepare(
-        "SELECT id, name, email, created_at FROM users WHERE LOWER(email) = ?",
-      )
-      .get(identifier.toLowerCase());
-    if (user)
-      nominee = await db
-        .prepare(
-          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?`,
-        )
-        .get(user.id);
-  }
-  if (!nominee && !user && /^[0-9a-f-]{36}$/i.test(identifier)) {
-    user = await db
-      .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
-      .get(identifier);
-    if (user)
-      nominee = await db
-        .prepare(
-          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.user_id = ?`,
-        )
-        .get(user.id);
-    if (!nominee)
-      nominee = await db
-        .prepare(
-          `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id WHERE n.id = ?`,
-        )
-        .get(identifier);
-    if (nominee && !user && nominee.user_id)
-      user = await db
-        .prepare("SELECT id, name, email, created_at FROM users WHERE id = ?")
-        .get(nominee.user_id);
-  }
-  return { user, nominee };
-}
 
 app.get("/api/admin/diagnostics/integrity", superAuth, async (req, res) => {
   try {
@@ -2944,9 +2860,126 @@ app.get("/api/admin/diagnostics/integrity", superAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Nominee endpoints
-// ═══════════════════════════════════════════════════════════════════════════
+app.get("/api/admin/stages/status", superAuth, async (req, res) => {
+  try {
+    const s = await getStages();
+    const cats = await db.prepare("SELECT id, name FROM categories").all();
+    const counts = [];
+    for (const cat of cats) {
+      const row = await db
+        .prepare(
+          `SELECT COUNT(*) AS total, SUM(CASE WHEN eliminated = 0 THEN 1 ELSE 0 END) AS active FROM nominees WHERE category_id = ?`,
+        )
+        .get(cat.id);
+      counts.push({
+        category: cat.name,
+        total: Number(row?.total || 0),
+        active: Number(row?.active || 0),
+      });
+    }
+    res.json({
+      stages: {
+        current_stage: s.current_stage,
+        label: STAGE_LABELS[s.current_stage] || s.current_stage,
+        next: NEXT_STAGE[s.current_stage] || null,
+        next_label: STAGE_LABELS[NEXT_STAGE[s.current_stage]] || null,
+        cutoff: STAGE_CUTOFF[s.current_stage] || 10,
+        preliminaries_start: s.preliminaries_start,
+        preliminaries_end: s.preliminaries_end,
+        semifinals_start: s.semifinals_start,
+        semifinals_end: s.semifinals_end,
+        finals_start: s.finals_start,
+        finals_end: s.finals_end,
+        last_advanced_at: s.last_advanced_at,
+        updated_at: s.updated_at,
+      },
+      counts,
+      hardcoded: true,
+      windows: STAGE_WINDOWS,
+      requiredStageNow: requiredStageAt(),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/stages/config", superAuth, async (req, res) => {
+  res.status(400).json({
+    error:
+      "Stage dates are hardcoded for the 2026 election and cannot be modified.",
+    note: "Automatic elimination and email notifications are driven by these fixed windows.",
+    windows: STAGE_WINDOWS,
+    current_stage: (await getStages()).current_stage,
+    required_stage_now: requiredStageAt(),
+  });
+});
+
+app.post("/api/admin/stages/advance", superAuth, async (req, res) => {
+  try {
+    const r = await advanceStage();
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/admin/email/log", superAuth, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
+    const type = req.query.type ? String(req.query.type) : null;
+    const where = type ? "WHERE event_type = ?" : "";
+    const params = type ? [type, limit] : [limit];
+    const rows = await db
+      .prepare(
+        `SELECT * FROM email_log ${where} ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(...params);
+    const counts = (
+      await db
+        .prepare(
+          "SELECT event_type, COUNT(*) AS c FROM email_log GROUP BY event_type",
+        )
+        .all()
+    ).reduce((a, r) => ({ ...a, [r.event_type]: r.c }), {});
+    res.json({
+      emails: rows,
+      counts,
+      total: rows.length,
+      resendConfigured: !!resend,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/email/test", superAuth, async (req, res) => {
+  const { to, subject, bodyHtml } = req.body || {};
+  if (!to) return res.status(400).json({ error: "Missing 'to' email address" });
+  if (!resend)
+    return res
+      .status(400)
+      .json({ error: "Resend not configured (RESEND_API_KEY missing)" });
+  try {
+    const html =
+      bodyHtml ||
+      emailWrapper({
+        title: "Voteus test",
+        preheader: "Test email",
+        body: `<p>This is a test email from Voteus at ${new Date().toISOString()}.</p>`,
+        footerNote: "<em>Test</em>",
+      });
+    const r = await sendEmail({
+      to,
+      subject: subject || "Voteus email test",
+      html,
+    });
+    res.json({ ok: r.ok, mode: "simple", to, result: r });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/nominee/me", auth, async (req, res) => {
   const nominee = await db
     .prepare(
@@ -3200,35 +3233,45 @@ app.post(
   },
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CORE VOTE ENDPOINT — watertight (FIX #3, #4, #5, #6)
+// ═══════════════════════════════════════════════════════════════════════════
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
   async (req, res) => {
     if (!(await votingOpen()))
       return res.status(403).json({ error: "Voting is closed" });
-    const {
-      nomineeCode,
-      voterToken,
-      deviceHash,
-      userAgent,
-      fingerprintDetails,
-    } = req.body || {};
-    if (!nomineeCode || !voterToken || !deviceHash)
-      return res.status(400).json({
-        error: "Nominee code, voter token, and device fingerprint are required",
-      });
-    if (
-      typeof deviceHash !== "string" ||
-      deviceHash.length < 8 ||
-      deviceHash.length > 128
-    )
-      return res.status(400).json({ error: "Invalid device fingerprint" });
+
+    const { nomineeCode, voterToken, userAgent, fingerprintDetails } =
+      req.body || {};
+
+    if (!nomineeCode || !voterToken)
+      return res
+        .status(400)
+        .json({ error: "Nominee code and voter token are required" });
     if (
       typeof voterToken !== "string" ||
       voterToken.length < 10 ||
       voterToken.length > 100
     )
       return res.status(400).json({ error: "Invalid voter token" });
+
+    const fpCheck = validateFingerprint(fingerprintDetails);
+    if (!fpCheck.ok)
+      return res.status(400).json({
+        error: "Browser fingerprint required. Please refresh the page.",
+        code: "FINGERPRINT_REQUIRED",
+        reason: fpCheck.reason,
+      });
+
+    const fingerprintHash = deriveFingerprintHash(fingerprintDetails);
+    const fpJson = JSON.stringify(fingerprintDetails).slice(0, 4000);
+    const deviceHash =
+      typeof req.body.deviceHash === "string" && req.body.deviceHash.length >= 8
+        ? req.body.deviceHash
+        : fingerprintHash;
+
     const nominee = await db
       .prepare("SELECT * FROM nominees WHERE code = ?")
       .get(nomineeCode);
@@ -3239,24 +3282,66 @@ app.post(
         code: "NOMINEE_ELIMINATED",
         eliminatedStage: nominee.eliminated_stage,
       });
-    const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+
+    const ip =
+      req.realIP || cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     const ua = String(userAgent || req.headers["user-agent"] || "").slice(
       0,
       500,
     );
-    const fpJson = fingerprintDetails
-      ? JSON.stringify(fingerprintDetails).slice(0, 4000)
-      : null;
+
+    try {
+      const lastVote = await db
+        .prepare(
+          `SELECT created_at FROM free_votes WHERE fingerprint_hash = ? ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get(fingerprintHash);
+      if (lastVote) {
+        const lastMs = new Date(
+          String(lastVote.created_at).replace(" ", "T") + "Z",
+        ).getTime();
+        if (
+          Number.isFinite(lastMs) &&
+          Date.now() - lastMs < VOTE_FP_COOLDOWN_MS
+        )
+          return res.status(429).json({
+            error: "Please wait a few seconds before voting again.",
+            code: "VOTE_COOLDOWN",
+            retryAfterMs: VOTE_FP_COOLDOWN_MS - (Date.now() - lastMs),
+          });
+      }
+    } catch (e) {}
+
+    try {
+      const ipHourCount = await db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM free_votes WHERE ip = ? AND created_at >= datetime('now', '-1 hour')`,
+        )
+        .get(ip);
+      if (Number(ipHourCount?.c || 0) >= VOTE_IP_HOURLY_MAX)
+        return res.status(429).json({
+          error: "This network has voted too many times in the last hour.",
+          code: "IP_HOURLY_LIMIT",
+        });
+    } catch (e) {}
+
     let result;
     try {
       result = await db.tx(async (t) => {
         const existing = await t.get(
-          `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code, fv.voter_token, fv.device_hash FROM free_votes fv JOIN nominees n2 ON fv.nominee_id = n2.id WHERE n2.category_id = ? AND (fv.voter_token = ? OR fv.device_hash = ?) LIMIT 1`,
-          [nominee.category_id, voterToken, deviceHash],
+          `SELECT fv.nominee_id, n2.name AS voted_name, n2.code AS voted_code,
+                fv.voter_token, fv.device_hash, fv.fingerprint_hash
+         FROM free_votes fv JOIN nominees n2 ON fv.nominee_id = n2.id
+         WHERE n2.category_id = ?
+           AND (fv.voter_token = ? OR fv.device_hash = ? OR fv.fingerprint_hash = ?)
+         LIMIT 1`,
+          [nominee.category_id, voterToken, deviceHash, fingerprintHash],
         );
         if (existing) {
           const allowance = await t.get(
-            `SELECT * FROM vote_allowances WHERE (device_hash = ? OR voter_token = ?) AND category_id = ? AND status = 'active' LIMIT 1`,
+            `SELECT * FROM vote_allowances
+           WHERE (device_hash = ? OR voter_token = ?) AND category_id = ? AND status = 'active'
+           LIMIT 1`,
             [deviceHash, voterToken, nominee.category_id],
           );
           if (!allowance)
@@ -3265,12 +3350,23 @@ app.post(
               sameNominee: existing.nominee_id === nominee.id,
               votedName: existing.voted_name,
               votedCode: existing.voted_code,
-              reason: existing.device_hash === deviceHash ? "device" : "voter",
+              reason:
+                existing.fingerprint_hash === fingerprintHash
+                  ? "fingerprint"
+                  : existing.device_hash === deviceHash
+                    ? "device"
+                    : "voter",
             };
+
           const voteId = uuidv4();
           const appealVoterToken = `${voterToken}_apl_${Date.now()}`;
+          const appealFpHash = deriveFingerprintHash({
+            ...fingerprintDetails,
+            _appeal_suffix: String(Date.now()),
+          });
           await t.execute({
-            sql: `INSERT INTO free_votes (id, voter_token, nominee_id, device_hash, ip, category_id, user_agent, fingerprint_json, is_appeal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            sql: `INSERT INTO free_votes (id, voter_token, nominee_id, device_hash, ip, category_id, user_agent, fingerprint_json, fingerprint_hash, is_appeal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
             args: [
               voteId,
               appealVoterToken,
@@ -3280,6 +3376,7 @@ app.post(
               nominee.category_id,
               ua,
               fpJson,
+              appealFpHash,
             ],
           });
           await t.execute({
@@ -3307,8 +3404,10 @@ app.post(
             appealCode: allowance.appeal_code,
           };
         }
+
         await t.execute({
-          sql: `INSERT INTO free_votes (id, voter_token, nominee_id, device_hash, ip, category_id, user_agent, fingerprint_json, is_appeal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          sql: `INSERT INTO free_votes (id, voter_token, nominee_id, device_hash, ip, category_id, user_agent, fingerprint_json, fingerprint_hash, is_appeal)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
           args: [
             uuidv4(),
             voterToken,
@@ -3318,6 +3417,7 @@ app.post(
             nominee.category_id,
             ua,
             fpJson,
+            fingerprintHash,
           ],
         });
         await t.execute({
@@ -3338,9 +3438,12 @@ app.post(
         });
       return res.status(500).json({ error: "Vote failed. Please try again." });
     }
+
     if (!result.ok) {
       let message;
-      if (result.reason === "device")
+      if (result.reason === "fingerprint")
+        message = `This browser has already voted in this category (for ${result.votedName}).`;
+      else if (result.reason === "device")
         message = `This device has already voted in this category (for ${result.votedName}).`;
       else if (result.sameNominee)
         message = "You have already voted for this nominee.";
@@ -3352,6 +3455,7 @@ app.post(
         votedNominee: { name: result.votedName, code: result.votedCode },
       });
     }
+
     db.push().catch(() => {});
     const absoluteVotes = await (async () => {
       const c = await db
@@ -3368,6 +3472,7 @@ app.post(
         .run(total, nominee.id);
       return total;
     })();
+
     broadcastVotes(nominee.id, absoluteVotes);
     broadcastPublicVote(nominee.id, absoluteVotes);
     broadcastAdminEvent({
@@ -3377,6 +3482,7 @@ app.post(
       appealVote: !!result.appealVote,
       at: new Date().toISOString(),
     });
+
     const response = { success: true, votes: absoluteVotes };
     if (result.appealVote) {
       response.appealVote = true;
@@ -3402,9 +3508,6 @@ app.get("/api/votes/my-votes/:voterToken", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// REPORT + APPEAL APIs — the report button on the home page POSTs here
-// ═══════════════════════════════════════════════════════════════════════════
 const VERDICT_MESSAGES = {
   NO_RECORD_FOUND:
     "No votes exist on record for your browser, device fingerprint, or network.",
@@ -3432,7 +3535,8 @@ app.post(
         return res.status(400).json({
           error: "Please describe what happened (at least 10 characters)",
         });
-      const ip = cleanIP(req.ip || req.socket.remoteAddress || "unknown");
+      const ip =
+        req.realIP || cleanIP(req.ip || req.socket.remoteAddress || "unknown");
       const ua = String(req.headers["user-agent"] || "").slice(0, 500);
       const currentDevice = parseUA(ua);
       const currentFingerprint = parseFingerprint(fingerprintDetails);
@@ -4216,8 +4320,317 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
+// ── Transaction status endpoints (nominee.html polling) ──
+app.get("/api/transactions/status/:reference", async (req, res) => {
+  try {
+    const row = await db
+      .prepare(
+        `SELECT reference, status, type, amount, created_at, completed_at FROM transactions WHERE reference = ?`,
+      )
+      .get(req.params.reference);
+    if (!row) return res.status(404).json({ error: "Transaction not found" });
+    res.json({
+      ...row,
+      created_at: toISOUTC(row.created_at),
+      completed_at: toISOUTC(row.completed_at),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/transactions/check/:reference", async (req, res) => {
+  try {
+    const row = await db
+      .prepare(
+        `SELECT reference, status, type, amount, mpesa_receipt, created_at, completed_at FROM transactions WHERE reference = ?`,
+      )
+      .get(req.params.reference);
+    if (!row) return res.status(404).json({ error: "Transaction not found" });
+
+    if (row.status === "pending" && PAYHERO_API_KEY && PAYHERO_API_SECRET) {
+      try {
+        const payload = await checkPayHeroStatus(req.params.reference);
+        const result = interpretPayHeroStatus(payload);
+        if (result?.status === "success") {
+          await completeTransaction(req.params.reference, result.receipt);
+        } else if (result?.status === "failed") {
+          await failTransaction(req.params.reference, "reconciliation_failed");
+        }
+      } catch (e) {}
+    }
+
+    const fresh = await db
+      .prepare(
+        `SELECT reference, status, type, amount, mpesa_receipt, created_at, completed_at FROM transactions WHERE reference = ?`,
+      )
+      .get(req.params.reference);
+    res.json({
+      ...fresh,
+      created_at: toISOUTC(fresh.created_at),
+      completed_at: toISOUTC(fresh.completed_at),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
-// Static site, sitemap, hero images
+// ✅ EXPORT ROUTES (were missing in the truncated file — admin.html calls them)
+// ═══════════════════════════════════════════════════════════════════════════
+app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
+  try {
+    const data = await loadReportData(req);
+    const lines = [];
+    lines.push(`# Voteus Official Report`);
+    lines.push(`# Report ID,${csvEscape(data.reportId)}`);
+    lines.push(`# Generated At,${csvEscape(data.generatedAt)}`);
+    lines.push(
+      `# Generated By,${csvEscape(data.generatedBy)} (${csvEscape(data.generatedByRole)})`,
+    );
+    lines.push(`# Signature,${csvEscape(data.signature)}`);
+    lines.push(`# Total Votes,${data.totalVotes}`);
+    lines.push(`# Unique Voters,${data.uniqueVoters}`);
+    lines.push(`# Unique Devices,${data.uniqueDevices}`);
+    lines.push(`# Categories,${data.categories.length}`);
+    lines.push(`# Nominees,${data.nominees.length}`);
+    lines.push(``);
+    lines.push(
+      `Category,Rank,Code,Name,Votes,Percent,Stage,Eliminated,Eliminated Stage,Final Rank`,
+    );
+    for (const cat of data.perCategory) {
+      for (const n of cat.nominees) {
+        lines.push(
+          [
+            csvEscape(cat.name),
+            n.rank,
+            csvEscape(n.code),
+            csvEscape(n.name),
+            n.votes || 0,
+            (n.percent || 0) + "%",
+            csvEscape(n.stage || ""),
+            n.eliminated ? "YES" : "no",
+            csvEscape(n.eliminated_stage || ""),
+            n.final_rank || "",
+          ].join(","),
+        );
+      }
+    }
+    const csv = lines.join("\n");
+    const filename = `voteus-report-${data.reportId}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Report-Id", data.reportId);
+    res.setHeader("X-Report-Signature", data.signature);
+    res.send(csv);
+  } catch (e) {
+    console.error("[Export CSV]", e.message);
+    res.status(500).json({ error: "Export failed: " + e.message });
+  }
+});
+
+app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
+  try {
+    const data = await loadReportData(req);
+    const filename = `voteus-report-${data.reportId}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Report-Id", data.reportId);
+    res.setHeader("X-Report-Signature", data.signature);
+
+    const doc = new PDFDocument({ size: "A4", margin: 48 });
+    doc.pipe(res);
+
+    doc
+      .fillColor("#1e3a8a")
+      .fontSize(28)
+      .font("Helvetica-Bold")
+      .text("VOTEUS", { align: "center" });
+    doc.moveDown(0.3);
+    doc
+      .fillColor("#111827")
+      .fontSize(22)
+      .text("Gala Awards 2026", { align: "center" });
+    doc.moveDown(0.2);
+    doc
+      .fillColor("#6b7280")
+      .fontSize(12)
+      .font("Helvetica")
+      .text("Official Voting Report", { align: "center" });
+    doc.moveDown(2);
+
+    doc
+      .fillColor("#111827")
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text("Report Metadata", { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(10).font("Helvetica");
+    const rows = [
+      ["Report ID", data.reportId],
+      ["Generated At", formatDateTime(data.generatedAt)],
+      ["Generated By", `${data.generatedBy} (${data.generatedByRole})`],
+      ["Total Votes", data.totalVotes.toLocaleString()],
+      ["Unique Voters", data.uniqueVoters.toLocaleString()],
+      ["Unique Devices", data.uniqueDevices.toLocaleString()],
+      ["Categories", String(data.categories.length)],
+      ["Nominees", String(data.nominees.length)],
+    ];
+    for (const [k, v] of rows) {
+      doc.fillColor("#6b7280").text(k + ":", { continued: true, width: 160 });
+      doc.fillColor("#111827").text(" " + v);
+    }
+    doc.moveDown(1.5);
+    doc
+      .fillColor("#111827")
+      .fontSize(11)
+      .font("Helvetica-Bold")
+      .text("Cryptographic Signature", { underline: true });
+    doc.moveDown(0.5);
+    doc
+      .font("Courier")
+      .fontSize(9)
+      .fillColor("#374151")
+      .text(data.signature, { width: 500 });
+    doc.moveDown(0.5);
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#6b7280")
+      .text(
+        `Verify this report at: ${PUBLIC_BASE_URL}/verify?r=${encodeURIComponent(data.reportId)}&s=${encodeURIComponent(data.signature)}&v=${data.totalVotes}&c=${data.categories.length}&n=${data.nominees.length}&t=${Date.parse(data.generatedAt)}`,
+        { width: 500 },
+      );
+
+    if (QRCode) {
+      try {
+        const verifyUrl = `${PUBLIC_BASE_URL}/verify?r=${encodeURIComponent(data.reportId)}&s=${encodeURIComponent(data.signature)}&v=${data.totalVotes}&c=${data.categories.length}&n=${data.nominees.length}&t=${Date.parse(data.generatedAt)}`;
+        const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+          width: 180,
+          margin: 1,
+        });
+        const qrBuf = Buffer.from(qrDataUrl.split(",")[1], "base64");
+        doc.image(qrBuf, 400, 640, { width: 140 });
+        doc
+          .fontSize(8)
+          .fillColor("#6b7280")
+          .text("Scan to verify", 400, 785, { width: 140, align: "center" });
+      } catch (e) {
+        console.warn("[PDF QR]", e.message);
+      }
+    }
+
+    doc.addPage();
+    doc
+      .fillColor("#111827")
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("Voting Results");
+    doc.moveDown(0.5);
+
+    for (const cat of data.perCategory) {
+      if (doc.y > 680) doc.addPage();
+      doc
+        .fillColor("#1e3a8a")
+        .fontSize(13)
+        .font("Helvetica-Bold")
+        .text(cat.name, { continued: false });
+      doc
+        .fillColor("#6b7280")
+        .fontSize(9)
+        .font("Helvetica")
+        .text(`Total: ${cat.totalVotes.toLocaleString()} votes`);
+      doc.moveDown(0.3);
+      for (const n of cat.nominees) {
+        if (doc.y > 720) doc.addPage();
+        const isWinner = n.stage === "winner" || n.final_rank === 1;
+        const isElim = !!n.eliminated;
+        const bar = shareBar(n.percent || 0, 20);
+        doc
+          .fontSize(9)
+          .font("Helvetica-Bold")
+          .fillColor(isElim ? "#9ca3af" : isWinner ? "#b45309" : "#111827")
+          .text(`${n.rank}. ${n.name}${isWinner ? " 🏆" : ""}`, {
+            continued: true,
+          });
+        doc
+          .font("Helvetica")
+          .fillColor("#6b7280")
+          .text(` (${n.code})`, { continued: false });
+        doc
+          .fontSize(8)
+          .font("Courier")
+          .fillColor(isElim ? "#9ca3af" : "#374151")
+          .text(
+            `${bar}  ${(n.votes || 0).toLocaleString()} votes  ·  ${n.percent || 0}%`,
+          );
+        if (isElim)
+          doc
+            .fontSize(7)
+            .fillColor("#dc2626")
+            .text(`  Eliminated at ${n.eliminated_stage || "—"}`);
+        doc.moveDown(0.2);
+      }
+      doc.moveDown(0.8);
+    }
+
+    doc.addPage();
+    doc
+      .fillColor("#111827")
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("Authenticity & Signature", { align: "center" });
+    doc.moveDown(1);
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .fillColor("#374151")
+      .text(
+        "This report has been cryptographically signed by Voteus. Any modification to the vote counts, category totals, or metadata will invalidate the signature below.",
+        { align: "justify" },
+      );
+    doc.moveDown(1);
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .fillColor("#111827")
+      .text("Report ID:");
+    doc.font("Courier").fontSize(11).fillColor("#1e3a8a").text(data.reportId);
+    doc.moveDown(0.5);
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .fillColor("#111827")
+      .text("Signature (SHA-256):");
+    doc
+      .font("Courier")
+      .fontSize(9)
+      .fillColor("#374151")
+      .text(data.signature, { width: 500 });
+    doc.moveDown(1);
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .fillColor("#6b7280")
+      .text(
+        `Verify online: ${PUBLIC_BASE_URL}/verify?r=${encodeURIComponent(data.reportId)}&s=${encodeURIComponent(data.signature)}&v=${data.totalVotes}&c=${data.categories.length}&n=${data.nominees.length}&t=${Date.parse(data.generatedAt)}`,
+      );
+
+    doc.end();
+  } catch (e) {
+    console.error("[Export PDF]", e.message);
+    if (!res.headersSent)
+      res.status(500).json({ error: "Export failed: " + e.message });
+    else {
+      try {
+        res.end();
+      } catch {}
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Static + sitemap + hero images
 // ═══════════════════════════════════════════════════════════════════════════
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
@@ -4392,6 +4805,9 @@ setInterval(async () => {
   } catch (e) {}
 }, RECONCILE_INTERVAL_MS);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Error handler + graceful shutdown
+// ═══════════════════════════════════════════════════════════════════════════
 app.use((err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.url}:`, err.message);
   if (res.headersSent) return next(err);
@@ -4425,7 +4841,7 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STARTUP
+// 🚀 STARTUP — THIS IS THE BLOCK THAT WAS MISSING
 // ═══════════════════════════════════════════════════════════════════════════
 const server = app.listen(PORT, async () => {
   console.log(`\n✓ Voteus on http://localhost:${PORT}`);
@@ -4491,6 +4907,9 @@ const server = app.listen(PORT, async () => {
   console.log(`  Auth:        LOGIN ONLY (registration via admin)`);
   console.log(
     `  Reports:     POST /api/report-auto-vote (public, rate-limited)`,
+  );
+  console.log(
+    `  Exports:     GET /api/admin/export/csv · /api/admin/export/pdf`,
   );
   console.log(`  ── HARDCODED 2026 WINDOWS (EAT = UTC+3) ──`);
   console.log(
