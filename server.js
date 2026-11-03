@@ -2461,7 +2461,15 @@ app.get("/api/nominees", async (req, res) => {
     req.query.includeEliminated === "true";
 
   let sql = `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id`;
-  if (!includeEliminated) sql += ` WHERE COALESCE(n.eliminated, 0) = 0`;
+  if (!includeEliminated) {
+    // Always expose the top 3 finalists even when the runners-up have
+    // been marked eliminated by advanceStage(). The frontend uses these
+    // rows to render the winners podium (winner + 1st + 2nd runner-up).
+    sql += ` WHERE (
+               COALESCE(n.eliminated, 0) = 0
+               OR (n.final_rank IS NOT NULL AND n.final_rank <= 3)
+             )`;
+  }
   sql += ` ORDER BY n.created_at ASC`;
 
   const rows = await db.prepare(sql).all();
@@ -2634,6 +2642,86 @@ app.get("/api/admin/users", superAuth, async (req, res) => {
     .all();
   res.json({ admins: rows, super: { username: SUPER_ADMIN_USERNAME } });
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// /api/winners — clean contract for the winners podium
+// Returns winner + 1st runner-up + 2nd runner-up per category.
+// ═══════════════════════════════════════════════════════════════════════════
+app.get("/api/winners", async (req, res) => {
+  try {
+    const s = await getStages();
+    if (s.current_stage !== "completed") {
+      return res.status(400).json({
+        error: "Election not yet completed",
+        currentStage: s.current_stage,
+      });
+    }
+
+    const categories = await db
+      .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
+      .all();
+
+    const results = [];
+    for (const cat of categories) {
+      const rows = await db
+        .prepare(
+          `SELECT id, name, code, img, COALESCE(votes, 0) AS votes,
+                  final_rank, stage, eliminated, eliminated_stage, category_id
+             FROM nominees
+            WHERE category_id = ?
+              AND final_rank IS NOT NULL
+              AND final_rank <= 3
+            ORDER BY final_rank ASC`,
+        )
+        .all(cat.id);
+
+      if (!rows.length) continue;
+
+      const slots = { winner: null, firstRunnerUp: null, secondRunnerUp: null };
+      let totalVotes = 0;
+
+      for (const r of rows) {
+        const rank = Number(r.final_rank);
+        const slot = {
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          img: r.img,
+          votes: Number(r.votes || 0),
+          rank,
+          title:
+            rank === 1
+              ? "Winner"
+              : rank === 2
+                ? "1st Runner-Up"
+                : "2nd Runner-Up",
+          medal: rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉",
+          categoryId: r.category_id,
+          eliminated: !!r.eliminated,
+          eliminatedStage: r.eliminated_stage,
+        };
+        totalVotes += slot.votes;
+        if (rank === 1) slots.winner = slot;
+        else if (rank === 2) slots.firstRunnerUp = slot;
+        else if (rank === 3) slots.secondRunnerUp = slot;
+      }
+
+      results.push({
+        category: { id: cat.id, name: cat.name },
+        totalVotes,
+        winner: slots.winner,
+        firstRunnerUp: slots.firstRunnerUp,
+        secondRunnerUp: slots.secondRunnerUp,
+      });
+    }
+
+    res.json({ stage: s.current_stage, categories: results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 app.post("/api/admin/users", superAuth, async (req, res) => {
   const { username, password, displayName } = req.body || {};
