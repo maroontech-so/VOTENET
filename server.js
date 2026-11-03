@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");     
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -27,7 +28,6 @@ try {
 }
 
 const app = express();
-// ── FIX #2: trust proxy = true (multi-hop: Cloudflare → Render → app) ──
 app.set("trust proxy", true);
 app.disable("x-powered-by");
 
@@ -36,9 +36,6 @@ const JWT_SECRET = process.env.JWT_SECRET || "change-me";
 const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME || "superadmin";
 const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || "super123";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AUTHORITATIVE 2026 ELECTION WINDOWS (hardcoded — never read from DB/env)
-// ═══════════════════════════════════════════════════════════════════════════
 const STAGE_WINDOWS = Object.freeze({
   preliminaries: { start: null, end: "2026-10-28T21:00:00.000Z" },
   semi_finals: {
@@ -46,11 +43,11 @@ const STAGE_WINDOWS = Object.freeze({
     end: "2026-11-02T21:00:00.000Z",
   },
   finals: {
-    start: "2026-11-02T21:00:00.000Z",
-    end: "2026-11-04T20:59:59.000Z",
+    start: "2026-11-02T21:00:00.000Z", // Nov 3 00:00 EAT
+    end: "2026-11-03T18:00:00.000Z", // Nov 3 18:00 EAT
   },
 });
-const RESULTS_ANNOUNCED_AT = "2026-11-04T21:00:00.000Z";
+const RESULTS_ANNOUNCED_AT = "2026-11-03T18:00:00.000Z"; // Nov 3 21:00 EAT
 
 const PAYHERO_API_KEY = process.env.PAYHERO_API_KEY || "";
 const PAYHERO_API_SECRET = process.env.PAYHERO_API_SECRET || "";
@@ -106,12 +103,11 @@ const REPORT_SECRET =
   process.env.REPORT_SECRET || JWT_SECRET || "voteus-report-secret";
 const EMAIL_TICK_INTERVAL_MS = 60_000;
 
-// ── FIX #3, #4, #5, #6: vote hardening constants ──
-const VOTE_FP_COOLDOWN_MS = 5_000; // 5s between votes per fingerprint
+const VOTE_FP_COOLDOWN_MS = 5_000;
 const VOTE_IP_RATE_WINDOW_MS = 60_000;
-const VOTE_IP_RATE_MAX = 300; // generous for campus WiFi
-const VOTE_FP_RATE_MAX = 5; // per fingerprint per 60s
-const VOTE_IP_HOURLY_MAX = 1_000; // hard cap per IP per hour
+const VOTE_IP_RATE_MAX = 300;
+const VOTE_FP_RATE_MAX = 5;
+const VOTE_IP_HOURLY_MAX = 1_000;
 const MIN_FP_KEYS = ["screen", "timezone", "language", "userAgent"];
 
 const STAGE_ORDER = ["preliminaries", "semi_finals", "finals", "completed"];
@@ -137,7 +133,6 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// ── FIX #2: extract real client IP from proxy headers ──
 app.use((req, res, next) => {
   const cf = req.headers["cf-connecting-ip"];
   if (cf && typeof cf === "string" && cf.trim()) {
@@ -305,9 +300,6 @@ function parseFingerprint(fpJson) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// STAGE HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
 async function getStages() {
   let dbRow = null;
   try {
@@ -505,9 +497,6 @@ async function advanceStage() {
   return { ok: true, from: current, to: next, results };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// EMAIL INFRASTRUCTURE
-// ═══════════════════════════════════════════════════════════════════════════
 const EAT_OFFSET_MS = 3 * 60 * 60 * 1000;
 function getEATDateKey(ts = Date.now()) {
   return new Date(ts + EAT_OFFSET_MS).toISOString().slice(0, 10);
@@ -948,6 +937,60 @@ async function autoAdvanceIfNeeded() {
   }
 }
 
+
+async function reconcileStageWithWindows() {
+  const required = requiredStageAt();
+  const row = await db
+    .prepare("SELECT current_stage FROM election_stages WHERE id = 1")
+    .get();
+  const current = row?.current_stage || "preliminaries";
+
+  if (current === required) return { changed: false, current };
+
+  const order = ["preliminaries", "semi_finals", "finals", "completed"];
+  const curIdx = order.indexOf(current);
+  const reqIdx = order.indexOf(required);
+
+  if (reqIdx < curIdx) {
+    // Time says we should be EARLIER than the DB does → roll back.
+
+    if (current === "completed") {
+      // Undo the finals finalisation performed by advanceStage()
+      await db
+        .prepare(
+          `UPDATE nominees
+             SET final_rank = NULL,
+                 stage = 'finals',
+                 eliminated = 0,
+                 eliminated_stage = NULL
+           WHERE eliminated_stage = 'finals'
+              OR final_rank IS NOT NULL
+              OR stage = 'winner'`,
+        )
+        .run();
+    }
+
+    // Reset the stage row
+    await db
+      .prepare(
+        `UPDATE election_stages
+            SET current_stage = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = 1`,
+      )
+      .run(required);
+
+    console.log(
+      `[Stage Reconcile] Rolled back ${current} → ${required} (STAGE_WINDOWS changed)`,
+    );
+    broadcastStage(required);
+    return { changed: true, from: current, to: required };
+  }
+
+  // reqIdx > curIdx → autoAdvanceIfNeeded() will handle it. Do nothing.
+  return { changed: false, current };
+}
+
+
 async function maybeSendDailyProgress() {
   const s = await getStages();
   if (s.current_stage === "completed") return;
@@ -1169,6 +1212,7 @@ async function maybeSendCountdowns() {
 
 async function emailTick() {
   try {
+    await reconcileStageWithWindows();   
     await autoAdvanceIfNeeded();
     await maybeSendDailyProgress();
     await maybeSendCountdowns();
@@ -1177,9 +1221,6 @@ async function emailTick() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SCHEMA
-// ═══════════════════════════════════════════════════════════════════════════
 async function initSchema() {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -1231,7 +1272,6 @@ async function initSchema() {
     } catch (e) {}
   }
 
-  // ── FIX #4: add fingerprint_hash column + unique index ──
   try {
     await db.exec(`ALTER TABLE free_votes ADD COLUMN fingerprint_hash TEXT`);
   } catch (e) {}
@@ -1241,7 +1281,6 @@ async function initSchema() {
     );
   } catch (e) {}
 
-  // Backfill fingerprint_hash from fingerprint_json for existing rows
   try {
     const rows = await db
       .prepare(
@@ -1267,7 +1306,6 @@ async function initSchema() {
       );
   } catch (e) {}
 
-  // Detect duplicates BEFORE creating unique index
   let fpDuplicates = [];
   try {
     fpDuplicates = await db
@@ -1441,10 +1479,6 @@ async function initSchema() {
   } catch (e) {}
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// rate limit, helpers, auth
-// ═══════════════════════════════════════════════════════════════════════════
-// ── FIX #1: rate limiter — hard IP bucket always fires first ──
 const rateBuckets = new Map();
 function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
   return (req, res, next) => {
@@ -1452,7 +1486,6 @@ function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
       req.realIP || cleanIP(req.ip || req.socket.remoteAddress || "unknown");
     const now = Date.now();
 
-    // ── HARD per-IP bucket — ALWAYS fires, regardless of body fields ──
     const ipKey = `${key}:ip:${ip}`;
     let ipEntry = rateBuckets.get(ipKey);
     if (!ipEntry || now > ipEntry.resetAt) {
@@ -1468,7 +1501,6 @@ function rateLimit({ windowMs = 60_000, max = 60, key = "default" } = {}) {
       });
     }
 
-    // ── Secondary bucket — per-identifier, RAW string (not digit-stripped) ──
     const body = req.body || {};
     const disc = body.phone || body.voterToken || body.email || "";
     if (disc) {
@@ -1552,32 +1584,26 @@ function isPrivateIP(ip) {
   );
 }
 
-// ── FIX #3, #4, #5: server-side fingerprint hash derivation ──
 function validateFingerprint(fp) {
   if (!fp || typeof fp !== "object") return { ok: false, reason: "missing" };
   for (const k of MIN_FP_KEYS) {
     if (!fp[k] || String(fp[k]).trim().length === 0) {
-      // Allow "screen" to be derived from screenWidth/screenHeight
       if (k === "screen" && fp.screenWidth && fp.screenHeight) continue;
       return { ok: false, reason: `missing_key:${k}` };
     }
   }
   let screenStr = String(fp.screen || "").trim();
-  // Fallback: construct from separate width/height if screen is missing
   if (!screenStr && fp.screenWidth && fp.screenHeight) {
     screenStr = `${fp.screenWidth}x${fp.screenHeight}`;
   }
-  // Accept both letter x AND multiplication sign × (U+00D7), with optional spaces
   if (!/^\d{2,5}\s*[x×]\s*\d{2,5}(\s*[x×]\s*\d{1,2})?$/i.test(screenStr))
     return { ok: false, reason: "invalid_screen" };
-  // Relax UA min length from 30 → 20 (some WebViews have shorter UAs)
   if (String(fp.userAgent).length < 20)
     return { ok: false, reason: "invalid_user_agent" };
   return { ok: true };
 }
 
 function deriveFingerprintHash(fp) {
-  // Stable canonical subset — same on every request from the same browser
   const canonical = [
     String(fp.userAgent || "").slice(0, 200),
     String(fp.screen || ""),
@@ -1742,9 +1768,6 @@ function adminAuthAllowQuery(req, res, next) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SSE
-// ═══════════════════════════════════════════════════════════════════════════
 const nomineeVoteClients = new Map();
 const publicVoteClients = new Set();
 const adminStreamClients = new Set();
@@ -1810,9 +1833,6 @@ app.get("/api/live/admin", adminAuthAllowQuery, (req, res) => {
   initSSE(req, res, adminStreamClients, null);
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Report helpers
-// ═══════════════════════════════════════════════════════════════════════════
 function buildReportId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const r = crypto.randomBytes(3).toString("hex").toUpperCase();
@@ -1966,6 +1986,152 @@ async function failTransaction(reference, reason) {
   } catch (e) {}
 }
 
+async function completeTransaction(reference, receipt) {
+  try {
+    const result = await db.tx(async (t) => {
+      const claimed = await t.execute({
+        sql: `UPDATE transactions SET status='success', mpesa_receipt=?, completed_at=CURRENT_TIMESTAMP WHERE reference=? AND status='pending'`,
+        args: [receipt, reference],
+      });
+      if (Number(claimed.rowsAffected || 0) === 0)
+        return { ok: false, reason: "already_processed_or_not_pending" };
+
+      const txRow = await t.get(
+        "SELECT * FROM transactions WHERE reference = ?",
+        [reference],
+      );
+      let meta = {};
+      try {
+        meta = txRow.metadata ? JSON.parse(txRow.metadata) : {};
+      } catch (e) {}
+
+      let extra = {};
+
+      if (txRow.type === "category_change") {
+        const newCat = meta.newCategoryId;
+        if (!newCat) throw new Error("Missing newCategoryId");
+        const target = await t.get("SELECT id FROM categories WHERE id = ?", [
+          newCat,
+        ]);
+        if (!target) throw new Error("Target category no longer exists");
+        await t.execute({
+          sql: "UPDATE nominees SET category_id = ? WHERE id = ?",
+          args: [newCat, txRow.nominee_id],
+        });
+      } else if (txRow.type === "leaderboard_once") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_ONCE_MS,
+        );
+      } else if (txRow.type === "leaderboard_1h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_1H_MS,
+        );
+      } else if (txRow.type === "leaderboard_12h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_12H_MS,
+        );
+      } else if (txRow.type === "leaderboard_24h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_24H_MS,
+        );
+      } else if (txRow.type === "leaderboard_2h") {
+        extra.expiresAt = await extendLeaderboardAccess(
+          t,
+          txRow.user_id,
+          LEADERBOARD_2H_MS,
+        );
+      } else if (txRow.type === "boost_50") {
+        const boostCountNow = Number(
+          (
+            await t.get(
+              "SELECT COUNT(*) AS c FROM nominee_boosts WHERE nominee_id = ?",
+              [txRow.nominee_id],
+            )
+          )?.c || 0,
+        );
+        const isFirst = boostCountNow === 0;
+        const expectedVotes = isFirst ? BOOST_FIRST_VOTES : BOOST_REPEAT_VOTES;
+        const storedVotes = Number(meta.votes);
+        const votesToAdd = Math.max(
+          1,
+          Math.min(
+            Number.isFinite(storedVotes) && storedVotes > 0
+              ? storedVotes
+              : expectedVotes,
+            expectedVotes,
+          ),
+        );
+        await t.execute({
+          sql: `INSERT OR IGNORE INTO nominee_boosts (id, nominee_id, reference, votes_added) VALUES (?, ?, ?, ?)`,
+          args: [uuidv4(), txRow.nominee_id, reference, votesToAdd],
+        });
+        await t.execute({
+          sql: `UPDATE nominees SET votes = (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) + (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?) WHERE id = ?`,
+          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
+        });
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
+        extra.votes = upd?.votes || 0;
+        extra.nomineeId = txRow.nominee_id;
+        extra.boosted = true;
+        extra.votesAdded = votesToAdd;
+      } else if (txRow.type === "vote") {
+        await t.execute({
+          sql: `UPDATE nominees SET votes = (SELECT COUNT(*) FROM free_votes WHERE nominee_id = ?) + (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = ?) WHERE id = ?`,
+          args: [txRow.nominee_id, txRow.nominee_id, txRow.nominee_id],
+        });
+        const upd = await t.get("SELECT votes FROM nominees WHERE id = ?", [
+          txRow.nominee_id,
+        ]);
+        extra.votes = upd?.votes || 0;
+        extra.nomineeId = txRow.nominee_id;
+      }
+
+      await t.execute({
+        sql: "INSERT INTO payment_logs (reference, event, details) VALUES (?, ?, ?)",
+        args: [
+          reference,
+          "completed",
+          JSON.stringify({ receipt, type: txRow.type }),
+        ],
+      });
+
+      return { ok: true, type: txRow.type, userId: txRow.user_id, extra };
+    });
+
+    if (result.ok) {
+      console.log(`✓ ${reference} completed (${result.type})`);
+      db.push().catch(() => {});
+      broadcastAdminEvent({ type: "transaction:completed", reference });
+      if (result.userId)
+        broadcastPaymentComplete(result.userId, result.type, reference, {
+          expiresAt: result.extra?.expiresAt || null,
+          votes: result.extra?.votes || null,
+        });
+      if (result.extra?.boosted && result.extra?.nomineeId) {
+        broadcastVotes(result.extra.nomineeId, result.extra.votes);
+        broadcastPublicVote(result.extra.nomineeId, result.extra.votes);
+      }
+    } else {
+      await logEvent(reference, "complete_skipped", { reason: result.reason });
+    }
+    return result.ok;
+  } catch (e) {
+    console.error("[Complete Error]", e.message);
+    await logEvent(reference, "complete_error", { message: e.message });
+    return false;
+  }
+}
+
 async function initiatePayment({
   type,
   userId,
@@ -2107,6 +2273,25 @@ function interpretPayHeroStatus(payload) {
 
 async function getNomineeZone(nominee) {
   if (nominee.eliminated) {
+    const rank = Number(nominee.final_rank);
+    if (Number.isFinite(rank) && rank === 2) {
+      return {
+        zone: "runner_up",
+        label: "1st Runner-Up",
+        message: "Congratulations — you are the 1st Runner-Up! 🥈",
+        stage: nominee.eliminated_stage,
+        rank: 2,
+      };
+    }
+    if (Number.isFinite(rank) && rank === 3) {
+      return {
+        zone: "runner_up",
+        label: "2nd Runner-Up",
+        message: "Congratulations — you are the 2nd Runner-Up! 🥉",
+        stage: nominee.eliminated_stage,
+        rank: 3,
+      };
+    }
     const atLabel =
       STAGE_LABELS[nominee.eliminated_stage] || nominee.eliminated_stage || "a";
     return {
@@ -2236,9 +2421,6 @@ async function resolveIdentifier(raw) {
   return { user, nominee };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ROUTES — Upload, Health, Config, Auth
-// ═══════════════════════════════════════════════════════════════════════════
 app.post(
   "/api/upload",
   anyAuth,
@@ -2457,7 +2639,15 @@ app.get("/api/nominees", async (req, res) => {
     req.query.includeEliminated === "true";
 
   let sql = `SELECT n.*, c.name as category FROM nominees n JOIN categories c ON n.category_id = c.id`;
-  if (!includeEliminated) sql += ` WHERE COALESCE(n.eliminated, 0) = 0`;
+  if (!includeEliminated) {
+    // Always expose the winner + runners-up (final_rank 1..3) even though
+    // the runners-up are marked eliminated at finals. The frontend uses
+    // these rows to render the winners podium.
+    sql += ` WHERE (
+               COALESCE(n.eliminated, 0) = 0
+               OR (n.final_rank IS NOT NULL AND n.final_rank <= 3)
+             )`;
+  }
   sql += ` ORDER BY n.created_at ASC`;
 
   const rows = await db.prepare(sql).all();
@@ -2540,6 +2730,80 @@ app.get("/api/nominees/:code", async (req, res) => {
   if (!n) return res.status(404).json({ error: "Not found" });
   if (n.votes === null || n.votes === undefined) n.votes = 0;
   res.json(n);
+});
+
+app.get("/api/winners", async (req, res) => {
+  try {
+    const s = await getStages();
+    if (s.current_stage !== "completed") {
+      return res.status(400).json({
+        error: "Election not yet completed",
+        currentStage: s.current_stage,
+      });
+    }
+
+    const categories = await db
+      .prepare("SELECT id, name FROM categories ORDER BY created_at ASC")
+      .all();
+
+    const results = [];
+    for (const cat of categories) {
+      const rows = await db
+        .prepare(
+          `SELECT id, name, code, img, COALESCE(votes, 0) AS votes,
+                  final_rank, stage, eliminated, eliminated_stage, category_id
+           FROM nominees
+           WHERE category_id = ?
+             AND final_rank IS NOT NULL
+             AND final_rank <= 3
+           ORDER BY final_rank ASC`,
+        )
+        .all(cat.id);
+
+      if (!rows.length) continue;
+
+      const slots = { winner: null, firstRunnerUp: null, secondRunnerUp: null };
+      let totalVotes = 0;
+
+      for (const r of rows) {
+        const rank = Number(r.final_rank);
+        const slot = {
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          img: r.img,
+          votes: Number(r.votes || 0),
+          rank,
+          title:
+            rank === 1
+              ? "Winner"
+              : rank === 2
+                ? "1st Runner-Up"
+                : "2nd Runner-Up",
+          medal: rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉",
+          categoryId: r.category_id,
+          eliminated: !!r.eliminated,
+          eliminatedStage: r.eliminated_stage,
+        };
+        totalVotes += slot.votes;
+        if (rank === 1) slots.winner = slot;
+        else if (rank === 2) slots.firstRunnerUp = slot;
+        else if (rank === 3) slots.secondRunnerUp = slot;
+      }
+
+      results.push({
+        category: { id: cat.id, name: cat.name },
+        totalVotes,
+        winner: slots.winner,
+        firstRunnerUp: slots.firstRunnerUp,
+        secondRunnerUp: slots.secondRunnerUp,
+      });
+    }
+
+    res.json({ stage: s.current_stage, categories: results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post(
@@ -3243,9 +3507,6 @@ app.post(
   },
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CORE VOTE ENDPOINT — watertight (FIX #3, #4, #5, #6)
-// ═══════════════════════════════════════════════════════════════════════════
 app.post(
   "/api/votes",
   rateLimit({ key: "vote", max: 60 }),
@@ -4330,7 +4591,6 @@ app.get("/api/admin/logs/:reference", superAuth, async (req, res) => {
   );
 });
 
-// ── Transaction status endpoints (nominee.html polling) ──
 app.get("/api/transactions/status/:reference", async (req, res) => {
   try {
     const row = await db
@@ -4385,9 +4645,6 @@ app.get("/api/transactions/check/:reference", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ✅ EXPORT ROUTES (were missing in the truncated file — admin.html calls them)
-// ═══════════════════════════════════════════════════════════════════════════
 app.get("/api/admin/export/csv", adminAuth, async (req, res) => {
   try {
     const data = await loadReportData(req);
@@ -4639,9 +4896,6 @@ app.get("/api/admin/export/pdf", adminAuth, async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Static + sitemap + hero images
-// ═══════════════════════════════════════════════════════════════════════════
 app.get("/manifest.json", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(__dirname, "manifest.json"));
@@ -4743,15 +4997,219 @@ function sendHTMLNoCache(file) {
     res.sendFile(path.join(__dirname, file));
   };
 }
+
+/* Try to locate the live local SQLite file across common setups. */
+function resolveDbPath() {
+  const candidates = [
+    typeof db.path === "string" && db.path ? db.path : null,
+    typeof db.getPath === "function" ? db.getPath() : null,
+    process.env.DB_PATH,
+    process.env.LOCAL_DB_PATH,
+    process.env.SQLITE_PATH,
+    process.env.SQLITE_DB_PATH,
+    path.join(__dirname, "voting-local.db"),
+    path.join(__dirname, "voteus.db"),
+    path.join(__dirname, "voting.db"),
+    path.join(__dirname, "database.db"),
+    path.join(__dirname, "data", "voteus.db"),
+    path.join(__dirname, "data", "voting.db"),
+  ].filter(Boolean);
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).isFile() && fs.statSync(p).size > 0)
+        return p;
+    } catch {}
+  }
+  return null;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   SUPER-ADMIN: download the live SQLite database
+   ───────────────────────────────────────────────────────────────── */
+app.get(
+  "/api/admin/download/db",
+  superAuth,
+  rateLimit({ key: "db-download", max: 5 }),
+  async (req, res) => {
+    const downloadToken = `dbdl_${Date.now()}_${crypto
+      .randomBytes(4)
+      .toString("hex")}`;
+    console.log(
+      `[DB Download] START ${downloadToken} by ${req.admin?.username || "?"} from ${req.realIP || req.ip}`,
+    );
+
+    let tmpPath = null;
+    const cleanup = () => {
+      if (tmpPath) {
+        fs.unlink(tmpPath, () => {});
+        tmpPath = null;
+      }
+    };
+
+    try {
+      // 1) Try VACUUM INTO — produces a consistent snapshot that already
+      //    folds in any pending WAL pages. This is the safest path.
+      try {
+        tmpPath = path.join(
+          os.tmpdir(),
+          `voteus-db-snapshot-${Date.now()}-${crypto
+            .randomBytes(3)
+            .toString("hex")}.db`,
+        );
+        const escaped = tmpPath.replace(/'/g, "''");
+        await db.exec(`VACUUM INTO '${escaped}'`);
+        if (!fs.existsSync(tmpPath) || fs.statSync(tmpPath).size === 0)
+          throw new Error("VACUUM INTO produced an empty file");
+        console.log(`[DB Download] ${downloadToken} snapshot via VACUUM INTO`);
+      } catch (e) {
+        console.warn(
+          `[DB Download] VACUUM INTO failed — falling back to checkpoint+stream: ${e.message}`,
+        );
+        cleanup();
+        try {
+          await db.push();
+        } catch {}
+        try {
+          await db.checkpoint();
+        } catch {}
+      }
+
+      // 2) Resolve what to stream
+      const sourcePath = tmpPath || resolveDbPath();
+      if (!sourcePath) {
+        return res.status(404).json({
+          error: "DB file not found",
+          hint: "Set DB_PATH env var, or ensure voting-local.db sits next to server.js",
+          triedTmpPath: tmpPath,
+        });
+      }
+      if (!fs.existsSync(sourcePath)) {
+        return res
+          .status(500)
+          .json({ error: "Snapshot disappeared after creation" });
+      }
+
+      // 3) Headers + stream
+      const stat = fs.statSync(sourcePath);
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const filename = `voteus-db-${stamp}.db`;
+
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      res.setHeader("Content-Length", stat.size);
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+      res.setHeader("X-DB-Source", tmpPath ? "vacuum-snapshot" : "live-file");
+      res.setHeader("X-DB-Size", stat.size);
+      res.setHeader("X-DB-Mtime", stat.mtime.toISOString());
+      res.setHeader("X-Download-Token", downloadToken);
+
+      const stream = fs.createReadStream(sourcePath);
+      let aborted = false;
+
+      stream.on("error", (e) => {
+        aborted = true;
+        console.error(
+          `[DB Download] ${downloadToken} stream error: ${e.message}`,
+        );
+        if (!res.headersSent) res.status(500).json({ error: "Stream failed" });
+        else try { res.end(); } catch {}
+      });
+
+      res.on("finish", () => {
+        if (!aborted)
+          console.log(
+            `[DB Download] DONE  ${downloadToken} · ${stat.size.toLocaleString()} bytes`,
+          );
+        cleanup();
+      });
+
+      res.on("close", () => {
+        if (!aborted && !res.writableEnded)
+          console.log(`[DB Download] ABORTED ${downloadToken}`);
+        cleanup();
+      });
+
+      stream.pipe(res);
+    } catch (e) {
+      cleanup();
+      console.error(`[DB Download] ${downloadToken} failed:`, e);
+      if (!res.headersSent) res.status(500).json({ error: e.message });
+      else try { res.end(); } catch {}
+    }
+  },
+);
+
+/* Metadata / sanity check — useful before downloading a huge file. */
+app.get("/api/admin/download/db/info", superAuth, async (req, res) => {
+  try {
+    const dbPath = resolveDbPath();
+    if (!dbPath) return res.status(404).json({ error: "DB file not found" });
+
+    const stat = fs.statSync(dbPath);
+
+    let tables = [];
+    try {
+      tables = await db
+        .prepare(
+          `SELECT name,
+                  (SELECT COUNT(*) FROM pragma_table_info(m.name)) AS cols
+             FROM sqlite_master m
+            WHERE type = 'table'
+              AND name NOT LIKE 'sqlite_%'
+            ORDER BY name`,
+        )
+        .all();
+    } catch {}
+
+    let counts = {};
+    try {
+      counts =
+        (await db
+          .prepare(
+            `SELECT
+               (SELECT COUNT(*) FROM categories)       AS categories,
+               (SELECT COUNT(*) FROM nominees)         AS nominees,
+               (SELECT COUNT(*) FROM free_votes)       AS free_votes,
+               (SELECT COUNT(*) FROM nominee_boosts)   AS nominee_boosts,
+               (SELECT COUNT(*) FROM transactions)     AS transactions,
+               (SELECT COUNT(*) FROM users)            AS users,
+               (SELECT COUNT(*) FROM vote_reports)     AS vote_reports`,
+          )
+          .get()) || {};
+    } catch {}
+
+    let walSize = null;
+    try { walSize = await db.walSize(); } catch {}
+
+    res.json({
+      path: dbPath,
+      size: stat.size,
+      mtime: stat.mtime.toISOString(),
+      walSize,
+      tables,
+      counts,
+      currentStage: (await getStages()).current_stage,
+      requiredStage: requiredStageAt(),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 app.get("/", sendHTMLNoCache("index.html"));
 app.get("/nominee", sendHTMLNoCache("nominee.html"));
 app.get("/admin", sendHTMLNoCache("admin.html"));
 app.get("/report", sendHTMLNoCache("report.html"));
 app.get("/admin/reports", sendHTMLNoCache("admin-reports.html"));
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Background intervals
-// ═══════════════════════════════════════════════════════════════════════════
 setInterval(async () => {
   try {
     const cutoff = new Date(
@@ -4815,9 +5273,6 @@ setInterval(async () => {
   } catch (e) {}
 }, RECONCILE_INTERVAL_MS);
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Error handler + graceful shutdown
-// ═══════════════════════════════════════════════════════════════════════════
 app.use((err, req, res, next) => {
   console.error(`[Error] ${req.method} ${req.url}:`, err.message);
   if (res.headersSent) return next(err);
@@ -4830,116 +5285,165 @@ process.on("uncaughtException", (err) => {
   console.error("[Uncaught Exception]", err.message);
 });
 
-let shuttingDown = false;
-function shutdown(signal) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`\n[${signal}] Shutting down gracefully…`);
-  server.close(async () => {
-    try {
-      await db.push();
-      console.log("  ✓ Final push to cloud");
-    } catch (e) {}
-    try {
-      await db.checkpoint();
-    } catch {}
-    process.exit(0);
-  });
-  setTimeout(() => process.exit(1), 15_000).unref();
-}
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
 // ═══════════════════════════════════════════════════════════════════════════
-// 🚀 STARTUP — THIS IS THE BLOCK THAT WAS MISSING
+// 🚀 STARTUP — DB INIT BEFORE LISTEN
 // ═══════════════════════════════════════════════════════════════════════════
-const server = app.listen(PORT, async () => {
-  console.log(`\n✓ Voteus on http://localhost:${PORT}`);
+(async () => {
+  console.log("\n▶ Bootstrapping…");
   try {
     await db.verifyConnection();
     await db.ensureRemoteSchema();
     await initSchema();
     console.log("  ✓ Local schema ready");
     await db.bootstrapIfEmpty();
+
+    // 1) First, roll the DB stage back if STAGE_WINDOWS now says we're
+    //    earlier than the DB does. This lets date edits take effect.
+    const stageRec = await reconcileStageWithWindows();
+    if (stageRec.changed)
+      console.log(
+        `  ✓ Stage reconciled: ${stageRec.from} → ${stageRec.to}`,
+      );
+
+    // 2) SAFETY GATE for reconcile — do not destroy legit vote counts
+    //    if the local DB only pulled a partial dataset from Turso.
     if (typeof db.reconcileVotes === "function") {
-      const fixed = await db.reconcileVotes();
-      if (fixed > 0)
-        console.log(`  ✓ Reconciled ${fixed} nominee(s) on startup`);
-    }
-    await autoAdvanceIfNeeded();
-    const rec = await recoverMissedAdvanceEmails();
-    if (rec.sent > 0)
-      console.log(`  ✓ Recovered ${rec.sent} missed advance email(s)`);
-    emailTick().catch((e) => console.warn("[Startup emailTick]", e.message));
-    setInterval(emailTick, EMAIL_TICK_INTERVAL_MS);
-  } catch (e) {
-    console.error("\n⚠ Startup failed:", e.message);
-  }
+      const stored =
+        (
+          await db
+            .prepare("SELECT SUM(COALESCE(votes,0)) AS t FROM nominees")
+            .get()
+        )?.t || 0;
+      const freeCount =
+        (await db.prepare("SELECT COUNT(*) AS c FROM free_votes").get())?.c ||
+        0;
+      const boostSum =
+        (
+          await db
+            .prepare(
+              "SELECT COALESCE(SUM(votes_added),0) AS t FROM nominee_boosts",
+            )
+            .get()
+        )?.t || 0;
+      const computed = freeCount + boostSum;
+      const ratio = stored > 0 ? computed / stored : 1;
 
-  let syncBusy = false;
-  setInterval(async () => {
-    if (syncBusy) return;
-    syncBusy = true;
-    try {
-      const { pushed } = await db.push();
-      if (pushed > 0)
-        console.log(`[Sync Push] ${pushed} write(s) sent to cloud`);
-    } catch (e) {
-    } finally {
-      syncBusy = false;
-    }
-  }, SYNC_PUSH_INTERVAL_MS);
-
-  setInterval(async () => {
-    try {
-      await db.pull();
-    } catch (e) {}
-  }, SYNC_PULL_INTERVAL_MS);
-  setInterval(async () => {
-    try {
-      const size = await db.walSize();
-      if (size > CHECKPOINT_WAL_THRESHOLD) {
-        await db.checkpoint();
-        console.log(
-          `[Checkpoint] WAL compacted (was ${Math.round(size / 1024)} KB)`,
+      if (stored === 0) {
+        // nothing to reconcile
+      } else if (ratio >= 0.9) {
+        const fixed = await db.reconcileVotes();
+        if (fixed > 0)
+          console.log(`  ✓ Reconciled ${fixed} nominee(s) on startup`);
+      } else {
+        console.warn(
+          `  ⚠ Skipping reconcile — stored=${stored.toLocaleString()}, ` +
+            `computed=${computed.toLocaleString()} (${(ratio * 100).toFixed(1)}%). ` +
+            `Refusing to destroy vote counts.`,
         );
       }
-    } catch (e) {}
-  }, WAL_CHECKPOINT_INTERVAL_MS);
+    }
 
-  const cur = requiredStageAt();
-  console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
-  console.log(
-    `  Email:       ${resend ? "LIVE via Resend" : "SIMULATION (log-only)"}`,
-  );
-  console.log(`  Voting:      FREE · one per device per category`);
-  console.log(`  Home list:   eliminated nominees HIDDEN from /api/nominees`);
-  console.log(`  Auth:        LOGIN ONLY (registration via admin)`);
-  console.log(
-    `  Reports:     POST /api/report-auto-vote (public, rate-limited)`,
-  );
-  console.log(
-    `  Exports:     GET /api/admin/export/csv · /api/admin/export/pdf`,
-  );
-  console.log(`  ── HARDCODED 2026 WINDOWS (EAT = UTC+3) ──`);
-  console.log(
-    `    Preliminaries ends  : 29 Oct 00:00  (${STAGE_WINDOWS.preliminaries.end})`,
-  );
-  console.log(
-    `    Semi Finals start   : 29 Oct 00:00  (${STAGE_WINDOWS.semi_finals.start})`,
-  );
-  console.log(
-    `    Semi Finals ends    : 03 Nov 00:00  (${STAGE_WINDOWS.semi_finals.end})`,
-  );
-  console.log(
-    `    Finals start        : 03 Nov 00:00  (${STAGE_WINDOWS.finals.start})`,
-  );
-  console.log(
-    `    Finals ends         : 04 Nov 23:59  (${STAGE_WINDOWS.finals.end})`,
-  );
-  console.log(
-    `    Winners announced   : 05 Nov 00:00  (${RESULTS_ANNOUNCED_AT})`,
-  );
-  console.log(`  Current stage (auto-derived): ${cur}`);
-  console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}\n`);
-});
+    // 3) Now advance forward if the DB is behind the clock.
+    await autoAdvanceIfNeeded();
+
+    // 4) Recover any missed advance emails.
+    const emailRec = await recoverMissedAdvanceEmails();
+    if (emailRec.sent > 0)
+      console.log(`  ✓ Recovered ${emailRec.sent} missed advance email(s)`);
+  } catch (e) {
+    console.error("\n⚠ Startup failed:", e.message);
+    console.error(e.stack);
+    process.exit(1);
+  }
+
+  const server = app.listen(PORT, () => {
+    console.log(`\n✓ Voteus on http://localhost:${PORT}`);
+
+    emailTick().catch((e) => console.warn("[Startup emailTick]", e.message));
+    setInterval(emailTick, EMAIL_TICK_INTERVAL_MS);
+
+    let syncBusy = false;
+    setInterval(async () => {
+      if (syncBusy) return;
+      syncBusy = true;
+      try {
+        const { pushed } = await db.push();
+        if (pushed > 0)
+          console.log(`[Sync Push] ${pushed} write(s) sent to cloud`);
+      } catch (e) {
+      } finally {
+        syncBusy = false;
+      }
+    }, SYNC_PUSH_INTERVAL_MS);
+
+    //setInterval(async () => {
+    //   try {
+    //     await db.pull();
+    // } catch (e) {}
+    //}, SYNC_PULL_INTERVAL_MS);
+
+    setInterval(async () => {
+      try {
+        const size = await db.walSize();
+        if (size > CHECKPOINT_WAL_THRESHOLD) {
+          await db.checkpoint();
+          console.log(
+            `[Checkpoint] WAL compacted (was ${Math.round(size / 1024)} KB)`,
+          );
+        }
+      } catch (e) {}
+    }, WAL_CHECKPOINT_INTERVAL_MS);
+
+    const cur = requiredStageAt();
+    console.log(`  PayHero:     ${PAYHERO_API_KEY ? "LIVE" : "SIMULATION"}`);
+    console.log(
+      `  Email:       ${resend ? "LIVE via Resend" : "SIMULATION (log-only)"}`,
+    );
+    console.log(`  Voting:      FREE · one per device per category`);
+    console.log(`  Current stage (auto-derived): ${cur}`);
+    console.log(`  Super Admin: ${SUPER_ADMIN_USERNAME}\n`);
+  });
+
+  let shuttingDown = false;
+  function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n[${signal}] Shutting down gracefully…`);
+
+    // Force-close SSE streams so server.close() can finish
+    try {
+      for (const bucket of [
+        nomineeVoteClients,
+        publicVoteClients,
+        adminStreamClients,
+      ]) {
+        if (bucket instanceof Map) {
+          for (const set of bucket.values())
+            for (const r of set)
+              try {
+                r.end();
+              } catch {}
+        } else {
+          for (const r of bucket)
+            try {
+              r.end();
+            } catch {}
+        }
+      }
+    } catch {}
+
+    server.close(async () => {
+      try {
+        await db.push();
+        console.log("  ✓ Final push to cloud");
+      } catch (e) {}
+      try {
+        await db.checkpoint();
+      } catch {}
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 8_000).unref();
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+})();

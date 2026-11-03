@@ -1,756 +1,697 @@
-// audit.js — standalone audit & diagnostics server (port 4000)
-// Usage:
-//   node audit.js                    → starts HTTP dashboard on :4000
-//   node audit.js --cli              → console full audit
-//   node audit.js --cli VOTE_MK685   → console audit of one nominee
+#!/usr/bin/env node
+/**
+ * sync-db.js — Inspect and repair Voteus DB inconsistencies, then push to Turso.
+ *
+ * Usage:
+ *   node sync-db.js                 # report only (no writes)
+ *   node sync-db.js --fix-votes     # fix nominees.votes so it equals free+boost
+ *   node sync-db.js --dedup         # remove duplicate (fingerprint_hash, category_id) rows
+ *   node sync-db.js --push          # push repaired local → Turso
+ *   node sync-db.js --all           # fix-votes → dedup → push
+ *
+ * Safety:
+ *   - Always backs up the local DB first unless --no-backup
+ *   - --dedup and --push prompt for confirmation
+ *   - Skips local-only tables (_sync_queue, _migrations, email_log)
+ *
+ * Exit codes: 0 clean, 1 errors remain, 2 fatal
+ */
+"use strict";
 require("dotenv").config();
-const express = require("express");
+
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const Database = require("better-sqlite3");
 const { createClient } = require("@libsql/client");
 
-const PORT = process.env.AUDIT_PORT || 4000;
+const FLAGS = new Set(process.argv.slice(2).filter((a) => a.startsWith("--")));
+const DO_FIX_VOTES = FLAGS.has("--fix-votes") || FLAGS.has("--all");
+const DO_DEDUP = FLAGS.has("--dedup") || FLAGS.has("--all");
+const DO_PUSH = FLAGS.has("--push") || FLAGS.has("--all");
+const SKIP_BACKUP = FLAGS.has("--no-backup");
+const SKIP_IMAGES = FLAGS.has("--skip-images");
+
 const DATA_DIR = process.env.DATA_DIR || __dirname;
-const LOCAL_DB_PATH = path.join(DATA_DIR, "voting-local.db");
-const CLI_MODE = process.argv.includes("--cli");
-const CLI_CODE = process.argv.find((a) => /^VOTE_/i.test(a));
+const DB_PATH = path.join(DATA_DIR, "voting-local.db");
 
-if (!fs.existsSync(LOCAL_DB_PATH)) {
-  console.error(`✗ Local DB not found: ${LOCAL_DB_PATH}`);
-  console.error(`  Start the main server once (npm start) to create it.`);
-  process.exit(1);
+// ─── setup ────────────────────────────────────────────────────────────
+if (!fs.existsSync(DB_PATH)) {
+  console.error(`✗ Local DB not found: ${DB_PATH}`);
+  process.exit(2);
+}
+if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
+  if (DO_PUSH) {
+    console.error(
+      "✗ TURSO_DATABASE_URL / TURSO_AUTH_TOKEN not set — cannot push",
+    );
+    process.exit(2);
+  }
 }
 
-const local = new Database(LOCAL_DB_PATH, { readonly: true });
-let remote = null;
-let remoteError = null;
+const db = new Database(DB_PATH);
+db.pragma("busy_timeout = 8000");
+db.pragma("journal_mode = WAL");
 
-if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-  try {
-    remote = createClient({
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN,
+// ─── helpers ──────────────────────────────────────────────────────────
+const C = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+};
+function section(t) {
+  console.log(`\n${C.bold}━━━ ${t} ━━━${C.reset}`);
+}
+function ok(m) {
+  console.log(`  ${C.green}✓${C.reset} ${m}`);
+}
+function warn(m) {
+  console.log(`  ${C.yellow}⚠${C.reset} ${m}`);
+}
+function err(m) {
+  console.log(`  ${C.red}✗${C.reset} ${m}`);
+}
+function note(m) {
+  console.log(`  ${C.dim}·${C.reset} ${m}`);
+}
+function header(m) {
+  console.log(`\n${C.cyan}${m}${C.reset}`);
+}
+
+async function ask(q) {
+  process.stdout.write(`${q} ${C.dim}[y/N]${C.reset} `);
+  return new Promise((resolve) => {
+    process.stdin.once("data", (d) => {
+      resolve(/^y(es)?$/i.test(d.toString().trim()));
     });
-  } catch (e) {
-    remoteError = e.message;
-  }
-} else {
-  remoteError = "TURSO_DATABASE_URL or TURSO_AUTH_TOKEN missing in .env";
+  });
 }
 
-// ─── helpers ───
-const all = (sql, ...args) => local.prepare(sql).all(...args);
-const one = (sql, ...args) => local.prepare(sql).get(...args);
+function sha256(buf) {
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
 
-async function remoteCount(table) {
-  if (!remote) return { error: remoteError };
+function deriveFingerprintHash(fp) {
+  const canonical = [
+    String(fp.userAgent || "").slice(0, 200),
+    String(fp.screen || ""),
+    String(fp.timezone || ""),
+    String(fp.language || ""),
+    String(fp.hardwareConcurrency || ""),
+    String(fp.deviceMemory || ""),
+    String(fp.platform || ""),
+    String(fp.maxTouchPoints || ""),
+  ].join("|");
+  return crypto
+    .createHash("sha256")
+    .update(canonical)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+// ─── backup ───────────────────────────────────────────────────────────
+function backupLocal() {
+  if (SKIP_BACKUP) {
+    note("Backup skipped (--no-backup)");
+    return null;
+  }
+  section("BACKUP");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const bakPath = `${DB_PATH}.${stamp}.bak`;
   try {
-    const r = await remote.execute(`SELECT COUNT(*) AS c FROM ${table}`);
-    return { count: Number(r.rows[0]?.c || 0) };
+    db.pragma("wal_checkpoint(TRUNCATE)");
+  } catch {}
+  fs.copyFileSync(DB_PATH, bakPath);
+  const size = fs.statSync(bakPath).size;
+  ok(`${path.basename(bakPath)} (${(size / 1024 / 1024).toFixed(2)} MB)`);
+  return bakPath;
+}
+
+// ─── Turso client ─────────────────────────────────────────────────────
+let turso = null;
+async function initTurso() {
+  if (!process.env.TURSO_DATABASE_URL) return null;
+  turso = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+  try {
+    await turso.execute("SELECT 1 AS ok");
+    return turso;
   } catch (e) {
-    return { error: e.message };
+    err(`Turso unreachable: ${e.message}`);
+    return null;
   }
 }
 
-// ─── audit functions ───
-function getHealth() {
-  const tables = [
-    "categories",
-    "users",
-    "nominees",
-    "free_votes",
-    "nominee_boosts",
-    "transactions",
-    "vote_reports",
-    "vote_appeals",
-    "vote_allowances",
-    "election_stages",
-    "admins",
-    "email_log",
-  ];
-  const counts = {};
-  for (const t of tables) {
+// ─── 1. Report current state ──────────────────────────────────────────
+const ALL_TABLES = [
+  "categories",
+  "users",
+  "nominees",
+  "free_votes",
+  "transactions",
+  "nominee_boosts",
+  "payment_logs",
+  "vote_reports",
+  "vote_appeals",
+  "vote_allowances",
+  "admins",
+  "leaderboard_access",
+  "election_stages",
+  "images",
+  "ip_lookup_cache",
+];
+
+async function report() {
+  section("LOCAL vs TURSO");
+
+  let tursoOk = false;
+  if (turso) {
     try {
-      counts[t] = Number(one(`SELECT COUNT(*) AS c FROM ${t}`)?.c || 0);
-    } catch {
-      counts[t] = null;
+      await turso.execute("SELECT 1");
+      tursoOk = true;
+    } catch (e) {
+      warn(`Turso check failed: ${e.message}`);
     }
   }
-  let stage = null;
-  try {
-    const s = one("SELECT * FROM election_stages WHERE id = 1");
-    if (s)
-      stage = {
-        current: s.current_stage,
-        last_advanced_at: s.last_advanced_at,
-        updated_at: s.updated_at,
-      };
-  } catch {}
-  const size = fs.statSync(LOCAL_DB_PATH).size;
-  return {
-    local: {
-      path: LOCAL_DB_PATH,
-      size,
-      sizeMb: (size / 1024 / 1024).toFixed(2),
-      ok: true,
-    },
-    turso: {
-      connected: !!remote,
-      url: process.env.TURSO_DATABASE_URL
-        ? process.env.TURSO_DATABASE_URL.slice(0, 55) + "…"
-        : null,
-      error: remoteError,
-    },
-    tables: counts,
-    stage,
-    now: new Date().toISOString(),
-  };
-}
 
-async function getOverview() {
-  const cats = Number(one("SELECT COUNT(*) AS c FROM categories")?.c || 0);
-  const noms = Number(one("SELECT COUNT(*) AS c FROM nominees")?.c || 0);
-  const active = Number(
-    one("SELECT COUNT(*) AS c FROM nominees WHERE eliminated = 0")?.c || 0,
+  console.log(
+    `  ${"table".padEnd(22)} ${"local".padStart(8)} ${"turso".padStart(8)}  ${"diff".padStart(8)}`,
   );
-  const totalVotes = Number(
-    one("SELECT COALESCE(SUM(votes),0) AS t FROM nominees")?.t || 0,
+  console.log(
+    `  ${"─".repeat(22)} ${"─".repeat(8)} ${"─".repeat(8)}  ${"─".repeat(8)}`,
   );
-  const freeRows = Number(one("SELECT COUNT(*) AS c FROM free_votes")?.c || 0);
-  const boostRows = Number(
-    one("SELECT COUNT(*) AS c FROM nominee_boosts")?.c || 0,
-  );
-  const boostSum = Number(
-    one("SELECT COALESCE(SUM(votes_added),0) AS t FROM nominee_boosts")?.t || 0,
-  );
-  const uniqueVoters = Number(
-    one("SELECT COUNT(DISTINCT voter_token) AS c FROM free_votes")?.c || 0,
-  );
-  const uniqueDevices = Number(
-    one(
-      "SELECT COUNT(DISTINCT device_hash) AS c FROM free_votes WHERE device_hash IS NOT NULL",
-    )?.c || 0,
-  );
-  const uniqueIPs = Number(
-    one("SELECT COUNT(DISTINCT ip) AS c FROM free_votes WHERE ip IS NOT NULL")
-      ?.c || 0,
-  );
-  const appeals = Number(one("SELECT COUNT(*) AS c FROM vote_appeals")?.c || 0);
-  const reports = Number(one("SELECT COUNT(*) AS c FROM vote_reports")?.c || 0);
-  let stage = "unknown";
-  try {
-    stage =
-      one("SELECT current_stage FROM election_stages WHERE id = 1")
-        ?.current_stage || "unknown";
-  } catch {}
 
-  const turso = {};
-  if (remote) {
-    for (const t of [
-      "nominees",
-      "free_votes",
-      "nominee_boosts",
-      "categories",
-      "vote_appeals",
-      "vote_reports",
-    ]) {
-      turso[t] = await remoteCount(t);
+  let totLocal = 0,
+    totTurso = 0,
+    diffs = 0;
+  for (const t of ALL_TABLES) {
+    let lc = null,
+      tc = null;
+    try {
+      lc = Number(db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get()?.c || 0);
+    } catch {}
+    if (tursoOk) {
+      try {
+        const r = await turso.execute(`SELECT COUNT(*) AS c FROM ${t}`);
+        tc = r.rows.length ? Number(r.rows[0].c) : 0;
+      } catch {}
     }
+    const diff = (lc ?? 0) - (tc ?? 0);
+    const colour = (lc ?? 0) === (tc ?? 0) ? "" : diff > 0 ? C.yellow : C.red;
+    const dStr = diff === 0 ? "—" : `${diff > 0 ? "+" : ""}${diff}`;
+    console.log(
+      `  ${t.padEnd(22)} ${String(lc ?? "?").padStart(8)} ${String(tc ?? (tursoOk ? "?" : "—")).padStart(8)}  ${colour}${dStr.padStart(8)}${C.reset}`,
+    );
+    if (lc != null) totLocal += lc;
+    if (tc != null) totTurso += tc;
+    if (lc != null && tc != null && lc !== tc) diffs++;
   }
-  const computed = freeRows + boostSum;
-  return {
-    categories: cats,
-    nominees: noms,
-    active,
-    eliminated: noms - active,
-    totalVotes,
-    freeVoteRows: freeRows,
-    boostRows,
-    boostVotesSum: boostSum,
-    computedVotes: computed,
-    delta: totalVotes - computed,
-    isConsistent: totalVotes === computed,
-    uniqueVoters,
-    uniqueDevices,
-    uniqueIPs,
-    appeals,
-    reports,
-    stage,
-    turso,
-  };
+  console.log(
+    `  ${"─".repeat(22)} ${"─".repeat(8)} ${"─".repeat(8)}  ${"─".repeat(8)}`,
+  );
+  console.log(
+    `  ${"TOTAL".padEnd(22)} ${String(totLocal).padStart(8)} ${String(totTurso).padStart(8)}  ${diffs === 0 ? "—" : `${totLocal - totTurso}`}`,
+  );
 }
 
-function getIntegrity() {
-  const voteMismatches = all(`
-    SELECT n.id, n.code, n.name, n.votes AS stored,
-      (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) AS free_count,
-      (SELECT COALESCE(SUM(votes_added),0) FROM nominee_boosts WHERE nominee_id = n.id) AS boost_sum
+// ─── 2. Vote-count mismatches ─────────────────────────────────────────
+function findVoteMismatches() {
+  return db
+    .prepare(
+      `
+    SELECT n.id, n.code, n.name,
+           COALESCE(n.votes, 0) AS stored,
+           (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) AS free_count,
+           (SELECT COALESCE(SUM(votes_added), 0) FROM nominee_boosts WHERE nominee_id = n.id) AS boost_sum
     FROM nominees n
-    WHERE n.votes != (
+    WHERE COALESCE(n.votes, -1) !=
       (SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
       COALESCE((SELECT SUM(votes_added) FROM nominee_boosts WHERE nominee_id = n.id), 0)
+    ORDER BY ABS(COALESCE(n.votes, 0) -
+      ((SELECT COUNT(*) FROM free_votes WHERE nominee_id = n.id) +
+       COALESCE((SELECT SUM(votes_added) FROM nominee_boosts WHERE nominee_id = n.id), 0))) DESC
+  `,
     )
-  `).map((m) => ({
-    id: m.id,
-    code: m.code,
-    name: m.name,
-    stored: m.stored,
-    freeCount: Number(m.free_count),
-    boostSum: Number(m.boost_sum),
-    computed: Number(m.free_count) + Number(m.boost_sum),
-    delta: Number(m.stored) - Number(m.free_count) - Number(m.boost_sum),
-  }));
-
-  const orphanVotes = Number(
-    one(
-      "SELECT COUNT(*) AS c FROM free_votes WHERE nominee_id NOT IN (SELECT id FROM nominees)",
-    )?.c || 0,
-  );
-  const duplicateDeviceCategory = all(
-    `SELECT device_hash, category_id, COUNT(*) AS count FROM free_votes WHERE device_hash IS NOT NULL AND is_appeal = 0 AND category_id IS NOT NULL GROUP BY device_hash, category_id HAVING COUNT(*) > 1 LIMIT 50`,
-  );
-  const duplicateVoterNominee = all(
-    `SELECT voter_token, nominee_id, COUNT(*) AS count FROM free_votes GROUP BY voter_token, nominee_id HAVING COUNT(*) > 1 LIMIT 50`,
-  );
-  const nomineesWithoutUser = all(
-    "SELECT id, code, name FROM nominees WHERE user_id IS NULL OR user_id = '' LIMIT 50",
-  );
-  const nomineesWithoutCategory = all(
-    "SELECT id, code, name FROM nominees WHERE category_id IS NULL OR category_id = '' OR category_id NOT IN (SELECT id FROM categories) LIMIT 50",
-  );
-  const stuckPendingTx = all(
-    `SELECT reference, type, amount, created_at FROM transactions WHERE status = 'pending' AND created_at < datetime('now', '-30 minutes') LIMIT 50`,
-  );
-  const orphanBoosts = all(
-    `SELECT nb.id, nb.nominee_id, nb.reference FROM nominee_boosts nb LEFT JOIN transactions t ON t.reference = nb.reference WHERE t.reference IS NULL LIMIT 50`,
-  );
-  const negativeVotes = all(
-    "SELECT id, code, name, votes FROM nominees WHERE votes < 0",
-  );
-
-  const criticalCount =
-    voteMismatches.length +
-    orphanVotes +
-    duplicateDeviceCategory.length +
-    duplicateVoterNominee.length +
-    nomineesWithoutUser.length +
-    nomineesWithoutCategory.length +
-    negativeVotes.length;
-  return {
-    healthy: criticalCount === 0,
-    criticalCount,
-    warnings: stuckPendingTx.length + orphanBoosts.length,
-    issues: {
-      voteMismatches,
-      orphanVotes,
-      duplicateDeviceCategory,
-      duplicateVoterNominee,
-      nomineesWithoutUser,
-      nomineesWithoutCategory,
-      stuckPendingTx,
-      orphanBoosts,
-      negativeVotes,
-    },
-  };
+    .all();
 }
 
-async function getLocalVsTurso() {
-  if (!remote) return { error: remoteError, connected: false };
-  const tables = [
-    "categories",
-    "users",
-    "nominees",
-    "free_votes",
-    "nominee_boosts",
-    "transactions",
-    "vote_reports",
-    "vote_appeals",
-    "vote_allowances",
-    "admins",
-    "email_log",
-    "election_stages",
-  ];
-  const result = {};
-  for (const t of tables) {
-    let localCount = null;
-    try {
-      localCount = Number(one(`SELECT COUNT(*) AS c FROM ${t}`)?.c || 0);
-    } catch {}
-    const rc = await remoteCount(t);
-    const tursoCount = rc.error ? null : rc.count;
-    result[t] = {
-      local: localCount,
-      turso: tursoCount,
-      match:
-        localCount !== null && tursoCount !== null && localCount === tursoCount,
-      error: rc.error || null,
-    };
+function reportVoteMismatches(mismatches) {
+  section("VOTE COUNT MISMATCHES");
+  if (!mismatches.length) {
+    ok("No mismatches. votes = free_votes + boosts for every nominee.");
+    return;
   }
-  return {
-    connected: true,
-    tables: result,
-    mismatchCount: Object.values(result).filter((r) => !r.match && !r.error)
-      .length,
-    checkedAt: new Date().toISOString(),
-  };
-}
-
-function getNomineeList() {
-  return all(`
-    SELECT n.id, n.code, n.name, n.votes, n.stage, n.eliminated, n.eliminated_stage, n.final_rank,
-           n.category_id, c.name AS category, n.img
-    FROM nominees n JOIN categories c ON c.id = n.category_id
-    ORDER BY c.name, n.votes DESC
-  `);
-}
-
-function getNomineeDeepAudit(code) {
-  const n = one(
-    `SELECT n.*, c.name AS category FROM nominees n JOIN categories c ON c.id = n.category_id WHERE n.code = ?`,
-    code,
+  err(
+    `${mismatches.length} nominee(s) have a stored votes value that doesn't match free+boost.`,
   );
-  if (!n) return { error: "Nominee not found: " + code };
-
-  const freeVotes = all(
-    "SELECT * FROM free_votes WHERE nominee_id = ? ORDER BY created_at",
-    n.id,
+  note("Fix with --fix-votes (updates nominees.votes to the derived total)");
+  console.log(
+    `\n  ${"code".padEnd(14)} ${"stored".padStart(7)} ${"free".padStart(7)} ${"boost".padStart(7)} ${"expected".padStart(9)} ${"delta".padStart(7)}`,
   );
-  const boosts = all(
-    "SELECT * FROM nominee_boosts WHERE nominee_id = ? ORDER BY created_at",
-    n.id,
-  );
-  const transactions = all(
-    "SELECT * FROM transactions WHERE nominee_id = ? ORDER BY created_at DESC",
-    n.id,
-  );
-
-  const freeCount = freeVotes.length;
-  const boostSum = boosts.reduce((s, b) => s + (b.votes_added || 0), 0);
-  const computed = freeCount + boostSum;
-  const stored = Number(n.votes || 0);
-
-  const deviceCounts = {},
-    ipCounts = {},
-    uaCounts = {},
-    tokenCounts = {},
-    minuteCounts = {},
-    hourCounts = {};
-  let missingDevice = 0,
-    missingUA = 0,
-    missingIP = 0;
-
-  for (const v of freeVotes) {
-    if (v.device_hash)
-      deviceCounts[v.device_hash] = (deviceCounts[v.device_hash] || 0) + 1;
-    else missingDevice++;
-    if (v.ip) ipCounts[v.ip] = (ipCounts[v.ip] || 0) + 1;
-    else missingIP++;
-    if (v.user_agent)
-      uaCounts[v.user_agent] = (uaCounts[v.user_agent] || 0) + 1;
-    else missingUA++;
-    if (v.voter_token)
-      tokenCounts[v.voter_token] = (tokenCounts[v.voter_token] || 0) + 1;
-    if (v.created_at) {
-      const minute = String(v.created_at).slice(0, 16);
-      const hour = String(v.created_at).slice(0, 13);
-      minuteCounts[minute] = (minuteCounts[minute] || 0) + 1;
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-    }
-  }
-
-  const duplicateDevices = Object.entries(deviceCounts)
-    .filter(([_, c]) => c > 1)
-    .map(([hash, count]) => ({ hash, count }))
-    .slice(0, 50);
-  const duplicateTokens = Object.entries(tokenCounts)
-    .filter(([_, c]) => c > 1)
-    .map(([token, count]) => ({ token, count }))
-    .slice(0, 50);
-  const topIPs = Object.entries(ipCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([ip, count]) => ({ ip, count }));
-  const topUAs = Object.entries(uaCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([ua, count]) => ({ ua, count, preview: String(ua).slice(0, 120) }));
-  const topMinutes = Object.entries(minuteCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([minute, count]) => ({ minute, count }));
-  const timeline = Object.entries(hourCounts)
-    .sort()
-    .map(([hour, count]) => ({ hour, count }));
-
-  let crossVotesSameCat = [],
-    crossVotesOtherCats = [];
-  const hashes = Object.keys(deviceCounts);
-  if (hashes.length) {
-    const ph = hashes.map(() => "?").join(",");
-    const cross = all(
-      `
-      SELECT fv.device_hash, n2.code, n2.name, c.name AS category, c.id AS category_id, fv.created_at
-      FROM free_votes fv
-      JOIN nominees n2 ON n2.id = fv.nominee_id
-      JOIN categories c ON c.id = fv.category_id
-      WHERE fv.device_hash IN (${ph}) AND fv.nominee_id != ?
-    `,
-      ...hashes,
-      n.id,
-    );
-    crossVotesSameCat = cross.filter((cv) => cv.category_id === n.category_id);
-    crossVotesOtherCats = cross.filter(
-      (cv) => cv.category_id !== n.category_id,
-    );
-  }
-
-  const active = all(
-    `SELECT id, votes FROM nominees WHERE category_id = ? AND eliminated = 0 ORDER BY COALESCE(votes, 0) DESC, created_at ASC`,
-    n.category_id,
-  );
-  const rank = active.findIndex((r) => r.id === n.id) + 1;
-
-  const firstVote = freeVotes[0]?.created_at;
-  const lastVote = freeVotes[freeVotes.length - 1]?.created_at;
-  const durationHours =
-    firstVote && lastVote
-      ? (new Date(lastVote) - new Date(firstVote)) / 3_600_000
-      : 0;
-  const maxPerMinute = Math.max(0, ...Object.values(minuteCounts));
-
-  return {
-    nominee: {
-      code: n.code,
-      name: n.name,
-      category: n.category,
-      category_id: n.category_id,
-      stage: n.stage,
-      eliminated: n.eliminated,
-      eliminated_stage: n.eliminated_stage,
-      final_rank: n.final_rank,
-      img: n.img,
-      created_at: n.created_at,
-    },
-    integrity: {
-      stored,
-      freeCount,
-      boostSum,
-      computed,
-      delta: stored - computed,
-      isConsistent: stored === computed,
-    },
-    ranking: { rank: rank || null, totalActiveInCategory: active.length },
-    devices: {
-      unique: Object.keys(deviceCounts).length,
-      duplicates: duplicateDevices,
-      missingDeviceHash: missingDevice,
-    },
-    tokens: {
-      unique: Object.keys(tokenCounts).length,
-      duplicates: duplicateTokens,
-    },
-    ips: { unique: Object.keys(ipCounts).length, missingIP, top: topIPs },
-    userAgents: {
-      unique: Object.keys(uaCounts).length,
-      missingUA,
-      top: topUAs,
-    },
-    votePattern: {
-      firstVote,
-      lastVote,
-      durationHours: Math.round(durationHours * 100) / 100,
-      maxPerMinute,
-      topMinutes,
-      suspiciousBursts: topMinutes.filter((m) => m.count >= 10).length,
-    },
-    crossVotes: {
-      sameCategoryCount: crossVotesSameCat.length,
-      otherCategoriesCount: crossVotesOtherCats.length,
-      sameCategorySample: crossVotesSameCat.slice(0, 20),
-    },
-    appeals: all(
-      `SELECT appeal_code, report_code, category_name, status, created_at FROM vote_appeals WHERE device_hash IN (SELECT DISTINCT device_hash FROM free_votes WHERE nominee_id = ?)`,
-      n.id,
-    ),
-    boosts,
-    transactions,
-    timeline,
-  };
-}
-
-function getDevicesAnalysis() {
-  const totalUniqueDevices = Number(
-    one(
-      "SELECT COUNT(DISTINCT device_hash) AS c FROM free_votes WHERE device_hash IS NOT NULL",
-    )?.c || 0,
-  );
-  const totalMissingDeviceHash = Number(
-    one(
-      "SELECT COUNT(*) AS c FROM free_votes WHERE device_hash IS NULL OR device_hash = ''",
-    )?.c || 0,
-  );
-  const multiCategoryDevices = all(
-    `SELECT device_hash, COUNT(DISTINCT category_id) AS categories, COUNT(*) AS total_votes FROM free_votes WHERE device_hash IS NOT NULL GROUP BY device_hash HAVING COUNT(DISTINCT category_id) > 1 ORDER BY total_votes DESC LIMIT 30`,
-  );
-  const sameCategoryDuplicates = all(
-    `SELECT device_hash, category_id, COUNT(*) AS count FROM free_votes WHERE device_hash IS NOT NULL AND is_appeal = 0 GROUP BY device_hash, category_id HAVING COUNT(*) > 1 LIMIT 50`,
-  );
-  const fingerprintCollisions = all(
-    `SELECT device_hash, COUNT(DISTINCT voter_token) AS tokens FROM free_votes WHERE device_hash IS NOT NULL GROUP BY device_hash HAVING COUNT(DISTINCT voter_token) > 1 ORDER BY tokens DESC LIMIT 30`,
-  );
-  return {
-    totalUniqueDevices,
-    totalMissingDeviceHash,
-    multiCategoryDevices,
-    sameCategoryDuplicates,
-    fingerprintCollisions,
-  };
-}
-
-function getIPAnalysis() {
-  const totalUniqueIPs = Number(
-    one("SELECT COUNT(DISTINCT ip) AS c FROM free_votes WHERE ip IS NOT NULL")
-      ?.c || 0,
-  );
-  const topIPs = all(
-    `SELECT ip, COUNT(*) AS votes, COUNT(DISTINCT nominee_id) AS nominees, COUNT(DISTINCT category_id) AS categories FROM free_votes WHERE ip IS NOT NULL AND ip != '' GROUP BY ip ORDER BY votes DESC LIMIT 30`,
-  );
-  const privateIPs = topIPs.filter((x) =>
-    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.)/.test(x.ip),
-  );
-  const nomineeIPMap = all(
-    `SELECT n.code, n.name, c.name AS category, COUNT(DISTINCT fv.ip) AS unique_ips, COUNT(*) AS votes FROM nominees n JOIN categories c ON c.id = n.category_id LEFT JOIN free_votes fv ON fv.nominee_id = n.id GROUP BY n.id HAVING votes > 0 ORDER BY votes DESC LIMIT 50`,
-  );
-  return {
-    totalUniqueIPs,
-    topIPs,
-    privateIPs,
-    privateIPCount: privateIPs.length,
-    nomineeIPMap,
-  };
-}
-
-function getVoteManipulation() {
-  const signals = [];
-  const dupDevCat = all(
-    `SELECT device_hash, category_id, COUNT(*) AS count FROM free_votes WHERE device_hash IS NOT NULL AND is_appeal = 0 GROUP BY device_hash, category_id HAVING COUNT(*) > 1 LIMIT 20`,
-  );
-  if (dupDevCat.length)
-    signals.push({
-      type: "DUPLICATE_DEVICE_CATEGORY",
-      severity: "critical",
-      count: dupDevCat.length,
-      message:
-        "Same device voted multiple times in one category — impossible by design",
-      sample: dupDevCat,
-    });
-
-  const collisions = all(
-    `SELECT device_hash, COUNT(DISTINCT voter_token) AS tokens FROM free_votes WHERE device_hash IS NOT NULL GROUP BY device_hash HAVING COUNT(DISTINCT voter_token) > 1 LIMIT 20`,
-  );
-  if (collisions.length)
-    signals.push({
-      type: "FINGERPRINT_COLLISION",
-      severity: "warning",
-      count: collisions.length,
-      message:
-        "Same device_hash paired with multiple voter_tokens — cleared storage or collision",
-      sample: collisions,
-    });
-
-  const missingDevice = Number(
-    one(
-      "SELECT COUNT(*) AS c FROM free_votes WHERE device_hash IS NULL OR device_hash = ''",
-    )?.c || 0,
-  );
-  if (missingDevice > 0)
-    signals.push({
-      type: "MISSING_DEVICE_HASH",
-      severity: "critical",
-      count: missingDevice,
-      message: "Votes with no device hash — suggests direct DB insertion",
-    });
-
-  const missingUA = Number(
-    one(
-      "SELECT COUNT(*) AS c FROM free_votes WHERE user_agent IS NULL OR user_agent = ''",
-    )?.c || 0,
-  );
-  if (missingUA > 0)
-    signals.push({
-      type: "MISSING_USER_AGENT",
-      severity: "warning",
-      count: missingUA,
-      message: "Votes with no user agent — old data or direct insert",
-    });
-
-  const bursts = all(
-    `SELECT nominee_id, substr(created_at, 1, 16) AS minute, COUNT(*) AS votes FROM free_votes GROUP BY nominee_id, minute HAVING COUNT(*) >= 20 ORDER BY votes DESC LIMIT 20`,
-  );
-  if (bursts.length)
-    signals.push({
-      type: "VOTE_BURST",
-      severity: "warning",
-      count: bursts.length,
-      message:
-        "20+ votes for one nominee in a single minute — possible bot or script",
-      sample: bursts,
-    });
-
-  const ipConcentration = all(
-    `SELECT n.code, n.name, c.name AS category, COUNT(*) AS votes, COUNT(DISTINCT fv.ip) AS unique_ips FROM nominees n JOIN categories c ON c.id = n.category_id JOIN free_votes fv ON fv.nominee_id = n.id GROUP BY n.id HAVING votes >= 50 AND unique_ips <= 5 ORDER BY votes DESC`,
-  );
-  if (ipConcentration.length)
-    signals.push({
-      type: "IP_CONCENTRATION",
-      severity: "info",
-      count: ipConcentration.length,
-      message:
-        "Nominees with 50+ votes from ≤5 IPs — check if legitimate shared network",
-      sample: ipConcentration,
-    });
-
-  const crossSameCat = all(
-    `SELECT a.device_hash, a.category_id, GROUP_CONCAT(DISTINCT n.code) AS nominees FROM free_votes a JOIN nominees n ON n.id = a.nominee_id WHERE a.device_hash IS NOT NULL GROUP BY a.device_hash, a.category_id HAVING COUNT(DISTINCT a.nominee_id) > 1 LIMIT 20`,
-  );
-  if (crossSameCat.length)
-    signals.push({
-      type: "CROSS_VOTES_SAME_CATEGORY",
-      severity: "critical",
-      count: crossSameCat.length,
-      message:
-        "One device voted for 2+ nominees in same category — misattribution or unique-index failure",
-      sample: crossSameCat,
-    });
-
-  const lastHourVotes = Number(
-    one(
-      "SELECT COUNT(*) AS c FROM free_votes WHERE created_at >= datetime('now', '-1 hour')",
-    )?.c || 0,
-  );
-
-  return {
-    signals,
-    lastHourVotes,
-    summary: {
-      critical: signals.filter((s) => s.severity === "critical").length,
-      warnings: signals.filter((s) => s.severity === "warning").length,
-      info: signals.filter((s) => s.severity === "info").length,
-    },
-  };
-}
-
-// ─── server or CLI ───
-if (!CLI_MODE) {
-  const app = express();
-  app.use(express.json());
-
-  app.get("/", (req, res) => {
-    const htmlPath = path.join(__dirname, "audit.html");
-    if (!fs.existsSync(htmlPath))
-      return res
-        .status(404)
-        .type("text/plain")
-        .send("audit.html not found next to audit.js");
-    res.sendFile(htmlPath);
-  });
-
-  app.get("/api/audit/health", (req, res) => res.json(getHealth()));
-  app.get("/api/audit/overview", async (req, res) => {
-    try {
-      res.json(await getOverview());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/integrity", (req, res) => {
-    try {
-      res.json(getIntegrity());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/local-vs-turso", async (req, res) => {
-    try {
-      res.json(await getLocalVsTurso());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/nominees", (req, res) => res.json(getNomineeList()));
-  app.get("/api/audit/nominee/:code", (req, res) => {
-    try {
-      const r = getNomineeDeepAudit(req.params.code);
-      if (r.error) return res.status(404).json(r);
-      res.json(r);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/devices", (req, res) => {
-    try {
-      res.json(getDevicesAnalysis());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/ip-analysis", (req, res) => {
-    try {
-      res.json(getIPAnalysis());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.get("/api/audit/vote-manipulation", (req, res) => {
-    try {
-      res.json(getVoteManipulation());
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.listen(PORT, () => {
-    console.log(`\n✓ Audit & diagnostics server running`);
-    console.log(`  Dashboard:  http://localhost:${PORT}`);
-    console.log(`  Local DB:   ${LOCAL_DB_PATH}`);
+  for (const m of mismatches) {
+    const expected = m.free_count + m.boost_sum;
+    const delta = m.stored - expected;
+    const colour = delta > 0 ? C.yellow : C.red;
     console.log(
-      `  Turso:      ${remote ? "connected" : "disconnected — " + remoteError}`,
+      `  ${m.code.padEnd(14)} ${String(m.stored).padStart(7)} ${String(m.free_count).padStart(7)} ${String(m.boost_sum).padStart(7)} ${String(expected).padStart(9)} ${colour}${(delta > 0 ? "+" : "") + delta}${C.reset}`.padStart(
+        7,
+      ),
     );
-    console.log(`\n  Endpoints:`);
-    console.log(`    GET /api/audit/health`);
-    console.log(`    GET /api/audit/overview`);
-    console.log(`    GET /api/audit/integrity`);
-    console.log(`    GET /api/audit/local-vs-turso`);
-    console.log(`    GET /api/audit/nominees`);
-    console.log(`    GET /api/audit/nominee/:code`);
-    console.log(`    GET /api/audit/devices`);
-    console.log(`    GET /api/audit/ip-analysis`);
-    console.log(`    GET /api/audit/vote-manipulation\n`);
+  }
+}
+
+function applyVoteFix(mismatches) {
+  if (!mismatches.length) return 0;
+  const upd = db.prepare("UPDATE nominees SET votes = ? WHERE id = ?");
+  const tx = db.transaction((rows) => {
+    for (const m of rows) upd.run(m.free_count + m.boost_sum, m.id);
   });
-} else {
-  (async () => {
+  tx(mismatches);
+  ok(`Updated ${mismatches.length} nominee(s)`);
+  return mismatches.length;
+}
+
+// ─── 3. Duplicate fingerprints ────────────────────────────────────────
+function findDuplicateFingerprints() {
+  return db
+    .prepare(
+      `
+    SELECT fingerprint_hash, category_id, COUNT(*) AS c
+    FROM free_votes
+    WHERE fingerprint_hash IS NOT NULL AND is_appeal = 0 AND category_id IS NOT NULL
+    GROUP BY fingerprint_hash, category_id HAVING c > 1
+    ORDER BY c DESC
+  `,
+    )
+    .all();
+}
+
+function expandDuplicateGroups(groups) {
+  const expanded = [];
+  for (const g of groups) {
+    const votes = db
+      .prepare(
+        `
+      SELECT id, nominee_id, voter_token, ip, created_at
+      FROM free_votes
+      WHERE fingerprint_hash = ? AND category_id = ? AND is_appeal = 0
+      ORDER BY created_at ASC
+    `,
+      )
+      .all(g.fingerprint_hash, g.category_id);
+    if (votes.length < 2) continue;
+    // Keep earliest vote; delete the rest
+    expanded.push({
+      fp: g.fingerprint_hash,
+      category: g.category_id,
+      keep: votes[0],
+      del: votes.slice(1),
+    });
+  }
+  return expanded;
+}
+
+function reportDuplicates(groups, expanded) {
+  section("DUPLICATE FINGERPRINTS");
+  if (!groups.length) {
+    ok("No duplicate (fingerprint_hash, category_id) groups.");
+    return;
+  }
+  err(
+    `${groups.length} group(s) — ${expanded.reduce((s, g) => s + g.del.length, 0)} row(s) would be deleted.`,
+  );
+  note("Fix with --dedup (keeps earliest vote per group, deletes the rest)");
+  console.log(
+    `\n  ${"fp".padEnd(16)} ${"category".padEnd(10)} ${"votes".padStart(5)}  ${"keep time".padEnd(20)} ${"delete".padStart(6)}`,
+  );
+  for (const g of expanded.slice(0, 10)) {
+    const keepTime = (g.keep.created_at || "").slice(0, 19);
+    console.log(
+      `  ${(g.fp.slice(0, 12) + "…").padEnd(16)} ${g.category.slice(0, 8).padEnd(10)} ${String(g.del.length + 1).padStart(5)}  ${keepTime.padEnd(20)} ${String(g.del.length).padStart(6)}`,
+    );
+  }
+  if (expanded.length > 10) note(`…and ${expanded.length - 10} more group(s)`);
+
+  // Show a sample of the full detail for the top 3 groups
+  header("Sample detail (top 3 groups):");
+  for (const g of expanded.slice(0, 3)) {
+    console.log(`  fp=${g.fp.slice(0, 16)}… cat=${g.category}`);
+    console.log(
+      `    KEEP ${g.keep.id} @ ${g.keep.created_at} ip=${g.keep.ip} nom=${g.keep.nominee_id.slice(0, 8)}…`,
+    );
+    for (const d of g.del) {
+      console.log(
+        `    DEL  ${d.id} @ ${d.created_at} ip=${d.ip} nom=${d.nominee_id.slice(0, 8)}…`,
+      );
+    }
+  }
+}
+
+function applyDedup(expanded) {
+  if (!expanded.length) return 0;
+  const del = db.prepare("DELETE FROM free_votes WHERE id = ?");
+  const ids = expanded.flatMap((g) => g.del.map((d) => d.id));
+  const tx = db.transaction((list) => {
+    for (const id of list) del.run(id);
+  });
+  tx(ids);
+  ok(`Deleted ${ids.length} duplicate vote(s)`);
+  return ids.length;
+}
+
+// ─── 4. Push local → Turso ────────────────────────────────────────────
+// Table order: parents before children so foreign keys don't matter,
+// though the current schema has no FKs anyway.
+const PUSH_ORDER = [
+  "categories",
+  "users",
+  "admins",
+  "election_stages",
+  "nominees",
+  "free_votes",
+  "nominee_boosts",
+  "transactions",
+  "payment_logs",
+  "vote_reports",
+  "vote_appeals",
+  "vote_allowances",
+  "leaderboard_access",
+  "ip_lookup_cache",
+  "images",
+];
+
+async function pushTable(table) {
+  if (table === "images" && SKIP_IMAGES) {
+    note(`${table.padEnd(18)} skipped (--skip-images)`);
+    return { table, local: null, turso: null, skipped: true };
+  }
+
+  let rows;
+  try {
+    rows = db.prepare(`SELECT * FROM ${table}`).all();
+  } catch (e) {
+    warn(`${table}: read failed — ${e.message}`);
+    return { table, error: e.message };
+  }
+  if (!rows.length) {
+    note(`${table.padEnd(18)} 0 rows (nothing to push)`);
+    return { table, local: 0, turso: 0 };
+  }
+
+  const cols = Object.keys(rows[0]);
+  // ON CONFLICT DO UPDATE requires a primary key. All these tables have one.
+  // For safety and simplicity, use INSERT OR REPLACE — the schema has no
+  // triggers, and local is authoritative.
+  const placeholders = cols.map(() => "?").join(",");
+  const sql = `INSERT OR REPLACE INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`;
+
+  let okCount = 0,
+    failCount = 0;
+  const failures = [];
+  const started = Date.now();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const args = cols.map((c) => {
+      const v = row[c];
+      if (v instanceof Buffer) return v;
+      if (v instanceof Uint8Array) return Buffer.from(v);
+      return v;
+    });
     try {
-      if (CLI_CODE) {
-        const r = getNomineeDeepAudit(CLI_CODE);
-        console.log(JSON.stringify(r, null, 2));
-      } else {
-        const health = getHealth();
-        const overview = await getOverview();
-        const integrity = getIntegrity();
-        const manipulation = getVoteManipulation();
-        const localVsTurso = await getLocalVsTurso();
-        console.log(
-          JSON.stringify(
-            { health, overview, integrity, manipulation, localVsTurso },
-            null,
-            2,
-          ),
+      await turso.execute({ sql, args });
+      okCount++;
+    } catch (e) {
+      failCount++;
+      if (failures.length < 3) failures.push(`row ${i}: ${e.message}`);
+    }
+    // Progress every 500 rows for large tables
+    if (rows.length > 1000 && (i + 1) % 500 === 0) {
+      process.stdout.write(`\r  ${table.padEnd(18)} ${i + 1}/${rows.length}…`);
+    }
+  }
+  if (rows.length > 1000) process.stdout.write("\r");
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+  if (failCount === 0) {
+    ok(`${table.padEnd(18)} ${okCount}/${rows.length} pushed (${elapsed}s)`);
+  } else {
+    warn(
+      `${table.padEnd(18)} ${okCount}/${rows.length} pushed, ${failCount} failed (${elapsed}s)`,
+    );
+    for (const f of failures) note(`  ${f}`);
+  }
+  return { table, local: rows.length, turso: okCount, failed: failCount };
+}
+
+async function pushAll() {
+  section("PUSH LOCAL → TURSO");
+  if (!turso) {
+    err("Turso not configured — cannot push");
+    return false;
+  }
+
+  // Drain any pending queue first so we don't lose it
+  let pending = 0;
+  try {
+    pending = Number(
+      db.prepare("SELECT COUNT(*) AS c FROM _sync_queue").get()?.c || 0,
+    );
+  } catch {}
+  if (pending > 0) {
+    warn(
+      `${pending} row(s) in _sync_queue — running db.push() first to drain…`,
+    );
+    try {
+      const dbmod = require("./db");
+      const r = await dbmod.push();
+      ok(`Drained ${r.pushed} row(s) from queue`);
+    } catch (e) {
+      warn(`Queue drain failed: ${e.message} — continuing with full push`);
+    }
+  }
+
+  const results = [];
+  for (const t of PUSH_ORDER) {
+    results.push(await pushTable(t));
+  }
+  const totalPushed = results.reduce((s, r) => s + (r.turso || 0), 0);
+  const totalFailed = results.reduce((s, r) => s + (r.failed || 0), 0);
+  if (totalFailed === 0) {
+    ok(`Pushed ${totalPushed} row(s) total`);
+    return true;
+  }
+  warn(`Pushed ${totalPushed} row(s), ${totalFailed} failed`);
+  return false;
+}
+
+// ─── 5. Verify after push ─────────────────────────────────────────────
+async function verifyAfterPush() {
+  section("VERIFY AFTER PUSH");
+  if (!turso) {
+    err("Turso not configured — cannot verify");
+    return false;
+  }
+
+  let totalLocal = 0,
+    totalTurso = 0,
+    mismatched = [];
+  for (const t of PUSH_ORDER) {
+    if (t === "images" && SKIP_IMAGES) continue;
+    let lc = null,
+      tc = null;
+    try {
+      lc = Number(db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get()?.c || 0);
+    } catch {}
+    try {
+      const r = await turso.execute(`SELECT COUNT(*) AS c FROM ${t}`);
+      tc = r.rows.length ? Number(r.rows[0].c) : 0;
+    } catch (e) {
+      warn(`${t}: ${e.message}`);
+      continue;
+    }
+    if (lc != null) totalLocal += lc;
+    if (tc != null) totalTurso += tc;
+    if (lc !== tc)
+      mismatched.push({
+        table: t,
+        local: lc,
+        turso: tc,
+        diff: (lc || 0) - (tc || 0),
+      });
+  }
+
+  if (mismatched.length === 0) {
+    ok(`All ${PUSH_ORDER.length} tables match (${totalTurso} rows total)`);
+  } else {
+    warn(`${mismatched.length} table(s) still differ:`);
+    for (const m of mismatched) {
+      note(
+        `${m.table.padEnd(22)} local ${String(m.local).padStart(7)}  turso ${String(m.turso).padStart(7)}  ${m.diff > 0 ? "+" : ""}${m.diff}`,
+      );
+    }
+  }
+
+  // Per-nominee vote spot check
+  try {
+    const localNom = db
+      .prepare(
+        "SELECT code, COALESCE(votes, 0) AS votes FROM nominees ORDER BY code",
+      )
+      .all();
+    const r = await turso.execute(
+      "SELECT code, COALESCE(votes, 0) AS votes FROM nominees",
+    );
+    const tursoMap = new Map(
+      (r.rows || []).map((row) => [row.code, Number(row.votes || 0)]),
+    );
+    const voteDiffs = localNom.filter((n) => tursoMap.get(n.code) !== n.votes);
+    if (voteDiffs.length === 0) {
+      ok(`Per-nominee votes match (${localNom.length} nominees)`);
+    } else {
+      warn(`${voteDiffs.length} nominee vote mismatch(es) on Turso:`);
+      for (const d of voteDiffs.slice(0, 5)) {
+        note(
+          `${d.code}  local=${d.votes}  turso=${tursoMap.get(d.code) ?? "missing"}`,
         );
       }
-    } catch (e) {
-      console.error("✗", e.message);
     }
-    process.exit(0);
-  })();
+  } catch (e) {
+    note(`Per-nominee vote check skipped: ${e.message}`);
+  }
+
+  return mismatched.length === 0;
 }
+
+// ─── main ─────────────────────────────────────────────────────────────
+async function main() {
+  console.log(
+    `\n${C.bold}╔══════════════════════════════════════════════════════════╗${C.reset}`,
+  );
+  console.log(
+    `${C.bold}║  Voteus — DB Inspection & Sync                           ║${C.reset}`,
+  );
+  console.log(`${C.bold}║  ${new Date().toISOString().padEnd(56)}║${C.reset}`);
+  console.log(
+    `${C.bold}╚══════════════════════════════════════════════════════════╝${C.reset}`,
+  );
+
+  header("Actions requested:");
+  note(
+    `--fix-votes        ${DO_FIX_VOTES ? C.green + "ON" : C.dim + "off"}${C.reset}`,
+  );
+  note(
+    `--dedup            ${DO_DEDUP ? C.green + "ON" : C.dim + "off"}${C.reset}`,
+  );
+  note(
+    `--push             ${DO_PUSH ? C.green + "ON" : C.dim + "off"}${C.reset}`,
+  );
+  note(
+    `--skip-images      ${SKIP_IMAGES ? C.green + "ON" : C.dim + "off"}${C.reset}`,
+  );
+  if (!DO_FIX_VOTES && !DO_DEDUP && !DO_PUSH) {
+    note(
+      `${C.yellow}Nothing will be changed — this is a report only.${C.reset}`,
+    );
+  }
+
+  await initTurso();
+  if (turso)
+    note(`Turso: ${(process.env.TURSO_DATABASE_URL || "").slice(0, 45)}…`);
+
+  // Backup before any write
+  const willWrite = DO_FIX_VOTES || DO_DEDUP || DO_PUSH;
+  if (willWrite) backupLocal();
+
+  // ── Report ──
+  await report();
+  const mismatches = findVoteMismatches();
+  reportVoteMismatches(mismatches);
+  const dupGroups = findDuplicateFingerprints();
+  const dupExpanded = expandDuplicateGroups(dupGroups);
+  reportDuplicates(dupGroups, dupExpanded);
+
+  // ── Apply fixes ──
+  if (DO_DEDUP && dupExpanded.length) {
+    section("APPLY DEDUP");
+    const total = dupExpanded.reduce((s, g) => s + g.del.length, 0);
+    warn(
+      `This will DELETE ${total} free_votes row(s) across ${dupExpanded.length} group(s).`,
+    );
+    warn(
+      "Keeps the EARLIEST vote in each group (most likely the legitimate one).",
+    );
+    const yes = await ask("Proceed with dedup?");
+    if (yes) {
+      applyDedup(dupExpanded);
+      // Recompute mismatches (deletions change free_count)
+      const remaining = findVoteMismatches();
+      if (remaining.length && DO_FIX_VOTES) {
+        applyVoteFix(remaining);
+      }
+    } else {
+      warn("Dedup cancelled.");
+    }
+  } else if (DO_DEDUP) {
+    note("Nothing to dedup.");
+  }
+
+  if (DO_FIX_VOTES) {
+    section("APPLY VOTE FIX");
+    const fresh = findVoteMismatches();
+    if (!fresh.length) {
+      ok("No vote-count mismatches to fix.");
+    } else {
+      applyVoteFix(fresh);
+    }
+  }
+
+  // ── Push ──
+  if (DO_PUSH) {
+    section("APPLY PUSH");
+    if (!turso) {
+      err("Turso not configured — skipping push.");
+    } else {
+      const yes = await ask(
+        "Push local DB to Turso? This overwrites Turso rows.",
+      );
+      if (yes) {
+        await pushAll();
+        if (DO_PUSH) await verifyAfterPush();
+      } else {
+        warn("Push cancelled.");
+      }
+    }
+  }
+
+  // ── Final state ──
+  section("FINAL STATE");
+  const finalMismatches = findVoteMismatches();
+  const finalDups = findDuplicateFingerprints();
+  if (finalMismatches.length === 0 && finalDups.length === 0) {
+    ok("Local DB is clean: no vote mismatches, no duplicate fingerprints.");
+  } else {
+    if (finalMismatches.length)
+      warn(`${finalMismatches.length} vote mismatch(es) still present`);
+    if (finalDups.length)
+      warn(`${finalDups.length} duplicate fingerprint group(s) still present`);
+  }
+
+  db.close();
+  const clean = finalMismatches.length === 0 && finalDups.length === 0;
+  process.exit(clean ? 0 : 1);
+}
+
+main().catch((e) => {
+  console.error("\n✗ Fatal:", e.message);
+  console.error(e.stack);
+  try {
+    db.close();
+  } catch {}
+  process.exit(2);
+});

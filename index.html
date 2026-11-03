@@ -75,7 +75,7 @@
         />
         <script src="https://cdn.tailwindcss.com"></script>
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
             rel="stylesheet"
         />
         <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -595,6 +595,656 @@
                 min-width: 40px;
             }
 
+            /* Centered, compact category header used above the winners podium */
+            .cat-header.centered {
+                padding: 0 0 clamp(14px, 2.4vw, 22px);
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                gap: 8px;
+                flex-direction: column;
+                margin-bottom: clamp(16px, 3vw, 26px);
+                border-bottom: 1px solid rgba(251, 191, 36, 0.14);
+                position: relative;
+                z-index: 2;
+            }
+            .cat-header.centered h2 {
+                width: 100%;
+                text-align: center;
+                font-size: clamp(12px, 2.2vw, 15px);
+                font-weight: 700;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: #f8fafc;
+                margin: 0;
+                text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+            }
+            .cat-header.centered h2::before {
+                content: "✦ ";
+                color: #fbbf24;
+                font-weight: 400;
+                margin-right: 4px;
+            }
+            .cat-header.centered h2::after {
+                content: " ✦";
+                color: #fbbf24;
+                font-weight: 400;
+                margin-left: 4px;
+            }
+            .cat-header.centered .cat-badge {
+                font-size: 10px;
+                padding: 3px 10px;
+                letter-spacing: 0.04em;
+            }
+            .cat-header.centered .cat-badge.stage-info {
+                color: #fbbf24;
+                background: linear-gradient(
+                    135deg,
+                    rgba(251, 191, 36, 0.18),
+                    rgba(251, 191, 36, 0.06)
+                );
+                border-color: rgba(251, 191, 36, 0.4);
+                font-weight: 700;
+                box-shadow: 0 2px 12px -4px rgba(251, 191, 36, 0.4);
+            }
+            .cat-header.centered .rule {
+                display: none;
+            }
+
+            /* ============================================================
+               WINNERS PODIUM — Premium stage treatment
+               Rich dark backdrop, metallic gold, glass detail.
+               Only the medal sparkles; nothing animates layout.
+               ============================================================ */
+            .podium-stage {
+                position: relative;
+                background:
+                    radial-gradient(
+                        ellipse 80% 55% at 50% 0%,
+                        rgba(251, 191, 36, 0.13),
+                        transparent 60%
+                    ),
+                    radial-gradient(
+                        ellipse 55% 45% at 50% 100%,
+                        rgba(99, 102, 241, 0.06),
+                        transparent 70%
+                    ),
+                    linear-gradient(
+                        180deg,
+                        #0b0b13 0%,
+                        #14141f 45%,
+                        #08080e 100%
+                    );
+                border-radius: 26px;
+                padding: clamp(34px, 6vw, 60px) clamp(10px, 2vw, 30px)
+                    clamp(30px, 5vw, 50px);
+                overflow: hidden;
+                box-shadow:
+                    0 34px 80px -24px rgba(0, 0, 0, 0.65),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                    0 0 0 1px rgba(251, 191, 36, 0.08);
+                isolation: isolate;
+                margin-bottom: 8px;
+            }
+
+            .podium-stage::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background:
+                    radial-gradient(
+                        circle at 0% 0%,
+                        rgba(251, 191, 36, 0.12),
+                        transparent 32%
+                    ),
+                    radial-gradient(
+                        circle at 100% 0%,
+                        rgba(251, 191, 36, 0.12),
+                        transparent 32%
+                    ),
+                    radial-gradient(
+                        circle at 0% 100%,
+                        rgba(139, 92, 246, 0.07),
+                        transparent 38%
+                    ),
+                    radial-gradient(
+                        circle at 100% 100%,
+                        rgba(59, 130, 246, 0.07),
+                        transparent 38%
+                    );
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .podium-stage::after {
+                content: "";
+                position: absolute;
+                top: -40%;
+                left: 50%;
+                width: 55%;
+                height: 120%;
+                transform: translateX(-50%);
+                background: linear-gradient(
+                    180deg,
+                    rgba(251, 191, 36, 0.18) 0%,
+                    rgba(251, 191, 36, 0.04) 40%,
+                    transparent 70%
+                );
+                filter: blur(28px);
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .podium-stage .stars {
+                position: absolute;
+                inset: 0;
+                background-image:
+                    radial-gradient(
+                        1px 1px at 18% 26%,
+                        rgba(255, 255, 255, 0.55),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 62% 72%,
+                        rgba(251, 191, 36, 0.6),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1.5px 1.5px at 82% 18%,
+                        rgba(255, 255, 255, 0.5),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 28% 82%,
+                        rgba(251, 191, 36, 0.4),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 90% 58%,
+                        rgba(255, 255, 255, 0.4),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 8% 52%,
+                        rgba(251, 191, 36, 0.5),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 42% 12%,
+                        rgba(255, 255, 255, 0.35),
+                        transparent
+                    ),
+                    radial-gradient(
+                        1px 1px at 72% 42%,
+                        rgba(251, 191, 36, 0.35),
+                        transparent
+                    );
+                pointer-events: none;
+                opacity: 0.9;
+                z-index: 0;
+            }
+
+            .podium-stage .stage-floor {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 34%;
+                background: linear-gradient(
+                    180deg,
+                    transparent 0%,
+                    rgba(251, 191, 36, 0.05) 70%,
+                    rgba(251, 191, 36, 0.09) 100%
+                );
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .podium {
+                position: relative;
+                z-index: 1;
+                display: grid;
+                grid-template-columns: 1fr 1.2fr 1fr;
+                align-items: end;
+                justify-items: center;
+                gap: clamp(4px, 1.4vw, 18px);
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 0 clamp(2px, 1vw, 12px);
+            }
+
+            .podium-slot {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+                max-width: 280px;
+                cursor: pointer;
+                outline: none;
+                position: relative;
+            }
+            .podium-slot:focus-visible .podium-avatar {
+                outline: 3px solid #fbbf24;
+                outline-offset: 4px;
+            }
+            .podium-slot.empty {
+                visibility: hidden;
+                pointer-events: none;
+            }
+
+            .podium-slot::after {
+                content: "";
+                position: absolute;
+                bottom: -6px;
+                left: 12%;
+                right: 12%;
+                height: 10px;
+                background: radial-gradient(
+                    ellipse,
+                    rgba(0, 0, 0, 0.55),
+                    transparent 70%
+                );
+                filter: blur(5px);
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .podium-avatar-wrap {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2;
+            }
+            .podium-avatar {
+                position: relative;
+                width: min(100%, clamp(64px, 20vw, 128px));
+                aspect-ratio: 1;
+                border-radius: 999px;
+                overflow: hidden;
+                background: #1e293b;
+                border: 3px solid rgba(255, 255, 255, 0.88);
+                box-shadow:
+                    0 18px 36px -12px rgba(0, 0, 0, 0.7),
+                    inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+                z-index: 2;
+            }
+            .podium-avatar img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+            }
+            .place-2 .podium-avatar {
+                border-color: #d8dee7;
+                box-shadow:
+                    0 0 0 4px rgba(203, 213, 225, 0.1),
+                    0 18px 36px -12px rgba(0, 0, 0, 0.7);
+            }
+            .place-3 .podium-avatar {
+                border-color: #e6b98e;
+                box-shadow:
+                    0 0 0 4px rgba(217, 119, 6, 0.1),
+                    0 18px 36px -12px rgba(0, 0, 0, 0.7);
+            }
+            .place-1 .podium-avatar {
+                width: min(100%, clamp(86px, 26vw, 176px));
+                border: 4px solid transparent;
+                background:
+                    linear-gradient(#1e293b, #1e293b) padding-box,
+                    linear-gradient(
+                            135deg,
+                            #fef3c7 0%,
+                            #fbbf24 25%,
+                            #d97706 50%,
+                            #fbbf24 75%,
+                            #fef3c7 100%
+                        )
+                        border-box;
+                box-shadow:
+                    0 0 0 7px rgba(251, 191, 36, 0.14),
+                    0 0 36px rgba(251, 191, 36, 0.4),
+                    0 26px 52px -14px rgba(0, 0, 0, 0.85);
+            }
+
+            .podium-crown {
+                position: absolute;
+                top: -8%;
+                right: -6%;
+                font-size: clamp(18px, 3.6vw, 28px);
+                z-index: 12;
+                pointer-events: none;
+                line-height: 1;
+                filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.55))
+                    drop-shadow(0 0 12px rgba(251, 191, 36, 0.8));
+                animation: crownSway 3.2s ease-in-out infinite;
+            }
+            @keyframes crownSway {
+                0%,
+                100% {
+                    transform: rotate(10deg) translateY(0);
+                }
+                50% {
+                    transform: rotate(-2deg) translateY(-4px);
+                }
+            }
+
+            .podium-medal-wrap {
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translate(-50%, -58%);
+                z-index: 6;
+                pointer-events: none;
+                line-height: 1;
+            }
+            .podium-medal-wrap::before {
+                content: "";
+                position: absolute;
+                inset: -40%;
+                border-radius: 999px;
+                background: radial-gradient(
+                    circle,
+                    rgba(251, 191, 36, 0.45) 0%,
+                    transparent 62%
+                );
+                filter: blur(9px);
+                z-index: -1;
+                animation: medalGlow 2.6s ease-in-out infinite;
+            }
+            .place-2 .podium-medal-wrap::before {
+                background: radial-gradient(
+                    circle,
+                    rgba(203, 213, 225, 0.4) 0%,
+                    transparent 62%
+                );
+            }
+            .place-3 .podium-medal-wrap::before {
+                background: radial-gradient(
+                    circle,
+                    rgba(217, 119, 6, 0.4) 0%,
+                    transparent 62%
+                );
+            }
+            .podium-medal {
+                display: block;
+                font-size: clamp(22px, 5vw, 36px);
+                animation: medalSparkle 2.6s ease-in-out infinite;
+                filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.65))
+                    drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+            }
+            .place-1 .podium-medal {
+                font-size: clamp(30px, 6.8vw, 52px);
+                animation-duration: 2.1s;
+            }
+            @keyframes medalSparkle {
+                0%,
+                100% {
+                    transform: translateY(0) rotate(-6deg) scale(1);
+                    filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6))
+                        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+                }
+                50% {
+                    transform: translateY(-6px) rotate(6deg) scale(1.1);
+                    filter: drop-shadow(0 0 22px rgba(251, 191, 36, 1))
+                        drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+                }
+            }
+            @keyframes medalGlow {
+                0%,
+                100% {
+                    opacity: 0.65;
+                    transform: scale(1);
+                }
+                50% {
+                    opacity: 1;
+                    transform: scale(1.15);
+                }
+            }
+
+            .place-1 .podium-medal-wrap::after {
+                content: "✦";
+                position: absolute;
+                top: -30%;
+                right: -25%;
+                font-size: clamp(10px, 1.8vw, 14px);
+                color: #fef3c7;
+                text-shadow: 0 0 10px rgba(251, 191, 36, 1);
+                animation: sparkleTwinkle 1.8s ease-in-out infinite;
+            }
+            @keyframes sparkleTwinkle {
+                0%,
+                100% {
+                    opacity: 0.35;
+                    transform: scale(0.8) rotate(0deg);
+                }
+                50% {
+                    opacity: 1;
+                    transform: scale(1.15) rotate(20deg);
+                }
+            }
+
+            .podium-name {
+                margin: 12px 0 6px;
+                font-size: clamp(11px, 2.4vw, 15px);
+                font-weight: 700;
+                text-align: center;
+                line-height: 1.25;
+                color: #f8fafc;
+                letter-spacing: 0.01em;
+                max-width: 100%;
+                padding: 0 4px;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                word-break: break-word;
+                text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+                position: relative;
+                z-index: 2;
+            }
+            .place-1 .podium-name {
+                font-size: clamp(14px, 3vw, 20px);
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                background: linear-gradient(
+                    180deg,
+                    #fef9e7 0%,
+                    #fde68a 35%,
+                    #fbbf24 65%,
+                    #d97706 100%
+                );
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                filter: drop-shadow(0 2px 8px rgba(251, 191, 36, 0.35));
+            }
+
+            .podium-votes {
+                font-size: clamp(8px, 1.7vw, 10px);
+                font-weight: 700;
+                color: #94a3b8;
+                margin-bottom: 12px;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                white-space: nowrap;
+                position: relative;
+                z-index: 2;
+            }
+            .place-1 .podium-votes {
+                color: #fbbf24;
+                text-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+            }
+
+            .podium-base {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                border-radius: 10px 10px 0 0;
+                color: #ffffff;
+                position: relative;
+                overflow: hidden;
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+                    inset 0 -24px 30px -20px rgba(0, 0, 0, 0.5),
+                    0 -6px 16px -8px rgba(0, 0, 0, 0.4);
+                z-index: 1;
+            }
+            .podium-base::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 82%;
+                height: 30%;
+                background: radial-gradient(
+                    ellipse at top,
+                    rgba(255, 255, 255, 0.55) 0%,
+                    transparent 72%
+                );
+                pointer-events: none;
+                z-index: 1;
+            }
+            .podium-base::after {
+                content: "";
+                position: absolute;
+                top: 12%;
+                left: 8%;
+                right: 8%;
+                height: 1px;
+                background: linear-gradient(
+                    90deg,
+                    transparent,
+                    rgba(0, 0, 0, 0.18) 20%,
+                    rgba(0, 0, 0, 0.18) 80%,
+                    transparent
+                );
+                pointer-events: none;
+                z-index: 1;
+            }
+
+            .place-1 .podium-base {
+                min-height: clamp(104px, 20vw, 152px);
+                background: linear-gradient(
+                    180deg,
+                    #fff8e1 0%,
+                    #fde68a 14%,
+                    #fbbf24 40%,
+                    #f59e0b 65%,
+                    #b45309 88%,
+                    #7c2d12 100%
+                );
+                box-shadow:
+                    inset 0 2px 0 rgba(255, 255, 255, 0.75),
+                    inset 0 -34px 40px -22px rgba(120, 53, 15, 0.6),
+                    0 -10px 28px -8px rgba(251, 191, 36, 0.45),
+                    0 22px 44px -14px rgba(0, 0, 0, 0.55);
+            }
+            .place-2 .podium-base {
+                min-height: clamp(76px, 14vw, 108px);
+                background: linear-gradient(
+                    180deg,
+                    #ffffff 0%,
+                    #f1f5f9 18%,
+                    #e2e8f0 45%,
+                    #cbd5e1 72%,
+                    #94a3b8 92%,
+                    #64748b 100%
+                );
+                box-shadow:
+                    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+                    inset 0 -30px 36px -20px rgba(71, 85, 105, 0.55),
+                    0 18px 36px -14px rgba(0, 0, 0, 0.45);
+            }
+            .place-3 .podium-base {
+                min-height: clamp(64px, 12vw, 92px);
+                background: linear-gradient(
+                    180deg,
+                    #fde9d3 0%,
+                    #f5c99b 18%,
+                    #e8ab72 46%,
+                    #c98247 72%,
+                    #92400e 92%,
+                    #6b2f0c 100%
+                );
+                box-shadow:
+                    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+                    inset 0 -26px 32px -18px rgba(120, 53, 15, 0.5),
+                    0 16px 32px -14px rgba(0, 0, 0, 0.45);
+            }
+
+            .podium-rank-num {
+                font-size: clamp(26px, 5.6vw, 44px);
+                font-weight: 900;
+                line-height: 1;
+                color: #ffffff;
+                text-shadow:
+                    0 2px 0 rgba(0, 0, 0, 0.15),
+                    0 6px 14px rgba(0, 0, 0, 0.35);
+                position: relative;
+                z-index: 2;
+                letter-spacing: -0.02em;
+            }
+            .place-1 .podium-rank-num {
+                color: #7c2d12;
+                text-shadow:
+                    0 1px 0 rgba(255, 255, 255, 0.55),
+                    0 4px 10px rgba(120, 53, 15, 0.35);
+            }
+            .place-2 .podium-rank-num {
+                color: #334155;
+                text-shadow:
+                    0 1px 0 rgba(255, 255, 255, 0.9),
+                    0 4px 10px rgba(51, 65, 85, 0.3);
+            }
+            .place-3 .podium-rank-num {
+                color: #4a1d06;
+                text-shadow:
+                    0 1px 0 rgba(255, 255, 255, 0.45),
+                    0 4px 10px rgba(74, 29, 6, 0.3);
+            }
+
+            .podium-rank-label {
+                font-size: clamp(7px, 1.4vw, 10px);
+                font-weight: 800;
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+                margin-top: 6px;
+                position: relative;
+                z-index: 2;
+                text-align: center;
+                padding: 0 6px;
+                opacity: 0.95;
+            }
+            .place-1 .podium-rank-label {
+                color: #7c2d12;
+            }
+            .place-2 .podium-rank-label {
+                color: #334155;
+            }
+            .place-3 .podium-rank-label {
+                color: #4a1d06;
+            }
+
+            @media (max-width: 380px) {
+                .podium {
+                    gap: 3px;
+                }
+                .podium-rank-label {
+                    font-size: 6.5px;
+                    letter-spacing: 0.08em;
+                }
+                .podium-name {
+                    font-size: 10px;
+                }
+                .place-1 .podium-name {
+                    font-size: 12px;
+                }
+            }
+
             .btn {
                 background: #0071e3;
                 color: white;
@@ -1095,6 +1745,7 @@
             let liveStream = null;
             let livePollTimer = null;
             let sseRetries = 0;
+            let countdownInterval = null;
 
             const STAGE_LABELS = {
                 preliminaries: "Preliminaries",
@@ -1114,6 +1765,41 @@
                 finals: 1,
                 completed: 0,
             };
+
+            function setChromeHidden({
+                nomineeLogin = true,
+                stageBanner = true,
+                countdown = true,
+            } = {}) {
+                const toggle = (el, hide) => {
+                    if (!el) return;
+                    el.style.display = hide ? "none" : "";
+                };
+
+                toggle(document.querySelector(".event-bar-cta"), nomineeLogin);
+                toggle(document.getElementById("stage-banner"), stageBanner);
+                toggle(
+                    document.querySelector(".countdown-container"),
+                    countdown,
+                );
+            }
+
+            /* Hide nominee login, stage banner and countdown once the
+               election is completed (winners announced). Also stop the
+               running countdown interval so it doesn't keep ticking. */
+            function applyStageChrome() {
+                const cur = stageInfo?.current || "preliminaries";
+                const isCompleted = cur === "completed";
+                setChromeHidden({
+                    nomineeLogin: isCompleted,
+                    stageBanner: isCompleted,
+                    countdown: isCompleted,
+                });
+                if (isCompleted && countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
 
             function getVoterToken() {
                 let t = localStorage.getItem(VOTER_TOKEN_KEY);
@@ -1422,12 +2108,20 @@
                     nominees = noms;
                     $("stat-cats").innerText = cats.length;
                     $("stat-noms").innerText = noms.length;
-                    const d = new Date(cfg.deadline);
-                    $("stat-close").innerText = d.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                    });
-                    startCountdown(cfg.deadline);
+
+                    const isCompleted = stages.current === "completed";
+                    if (isCompleted || !cfg.deadline) {
+                        $("stat-close").innerText = isCompleted ? "Final" : "—";
+                    } else {
+                        const d = new Date(cfg.deadline);
+                        $("stat-close").innerText = d.toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric" },
+                        );
+                        startCountdown(cfg.deadline);
+                    }
+
+                    applyStageChrome();
                     renderStageBanner();
                     preloadFirstImages();
                     render();
@@ -1451,6 +2145,7 @@
                 try {
                     stageInfo = await api("/api/stages");
                     renderStageBanner();
+                    applyStageChrome();
                 } catch {}
             }
 
@@ -1490,6 +2185,7 @@
                             const { stage } = JSON.parse(e.data);
                             stageInfo = { ...stageInfo, current: stage };
                             renderStageBanner();
+                            applyStageChrome();
                             refreshNominees()
                                 .then(render)
                                 .catch(() => {});
@@ -1523,6 +2219,17 @@
                     `#nominees-container > div[data-cat-id="${n.category_id}"]`,
                 );
                 if (!sec) return;
+
+                /* Winners podium view — just update the tally text */
+                if (sec.dataset.winners === "1") {
+                    const tally = sec.querySelector(
+                        `.podium-slot[data-nom-id="${nomineeId}"] .podium-votes`,
+                    );
+                    if (tally)
+                        tally.textContent = `${(votes || 0).toLocaleString()} votes`;
+                    return;
+                }
+
                 const badge = sec.querySelector(".cat-badge");
                 if (!badge || badge.classList.contains("voted")) return;
                 const catList = nominees.filter(
@@ -1577,13 +2284,23 @@
             }
 
             function startCountdown(deadline) {
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                if (!deadline) return;
                 const target = new Date(deadline).getTime();
+                if (!Number.isFinite(target)) return;
                 const tick = () => {
                     const diff = target - Date.now();
                     if (diff < 0) {
                         ["cd-d", "cd-h", "cd-m", "cd-s"].forEach(
                             (i) => ($(i).innerText = "00"),
                         );
+                        if (countdownInterval) {
+                            clearInterval(countdownInterval);
+                            countdownInterval = null;
+                        }
                         return;
                     }
                     $("cd-d").innerText = String(
@@ -1600,7 +2317,7 @@
                     ).padStart(2, "0");
                 };
                 tick();
-                setInterval(tick, 1000);
+                countdownInterval = setInterval(tick, 1000);
             }
 
             function placeholderImg(name) {
@@ -1624,6 +2341,115 @@
                     .replace(/'/g, "&#39;");
             }
 
+            /* -----------------------------------------------------------------
+               WINNERS PODIUM BUILDER
+               Champion (rank 1) centred with an honorary medal + crown,
+               1st runner-up on the left, 2nd runner-up on the right.
+               ----------------------------------------------------------------- */
+            function buildPodiumSection(cat, list) {
+                const ranked = [...list].sort((a, b) => {
+                    const ra = Number.isFinite(Number(a.final_rank))
+                        ? Number(a.final_rank)
+                        : 999;
+                    const rb = Number.isFinite(Number(b.final_rank))
+                        ? Number(b.final_rank)
+                        : 999;
+                    if (ra !== rb) return ra - rb;
+                    return (b.votes || 0) - (a.votes || 0);
+                });
+
+                const slots = [
+                    {
+                        place: 2,
+                        nom: ranked[1],
+                        medal: "🥈",
+                        label: "1st Runner-Up",
+                    },
+                    { place: 1, nom: ranked[0], medal: "🥇", label: "Winner" },
+                    {
+                        place: 3,
+                        nom: ranked[2],
+                        medal: "🥉",
+                        label: "2nd Runner-Up",
+                    },
+                ];
+
+                const totalVotes = list.reduce((s, n) => s + (n.votes || 0), 0);
+
+                const slotsHtml = slots
+                    .map(({ place, nom, medal, label }) => {
+                        if (!nom)
+                            return `<div class="podium-slot empty place-${place}"></div>`;
+                        const src = nom.img || placeholderImg(nom.name);
+                        const fallback = escapeHtml(placeholderImg(nom.name));
+                        const crown =
+                            place === 1
+                                ? '<span class="podium-crown" aria-hidden="true">👑</span>'
+                                : "";
+                        return `
+                        <div class="podium-slot place-${place}"
+                             data-nom-id="${escapeHtml(nom.id)}"
+                             role="button" tabindex="0"
+                             aria-label="${escapeHtml(nom.name)} — ${label}">
+                            <div class="podium-avatar-wrap">
+                                ${crown}
+                                <span class="podium-medal-wrap" aria-hidden="true">
+                                    <span class="podium-medal">${medal}</span>
+                                </span>
+                                <div class="podium-avatar">
+                                    <img src="${escapeHtml(src)}"
+                                         alt="${escapeHtml(nom.name)}"
+                                         loading="lazy" decoding="async"
+                                         onerror="this.onerror=null;this.src='${fallback}';">
+                                </div>
+                            </div>
+                            <div class="podium-name">${escapeHtml(nom.name)}</div>
+                            <div class="podium-votes">${(nom.votes || 0).toLocaleString()} votes</div>
+                            <div class="podium-base">
+                                <span class="podium-rank-num">${place}</span>
+                                <span class="podium-rank-label">${label}</span>
+                            </div>
+                        </div>`;
+                    })
+                    .join("");
+
+                const sec = document.createElement("div");
+                sec.className = "w-full";
+                sec.setAttribute("data-cat-id", cat.id);
+                sec.setAttribute("data-winners", "1");
+                sec.innerHTML = `
+                    <div class="podium-stage">
+                        <div class="stars"></div>
+                        <div class="stage-floor"></div>
+                        <div class="cat-header centered">
+                            <h2>${escapeHtml(cat.name)}</h2>
+                            <div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Final Results</div>
+                            <div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${totalVotes.toLocaleString()} votes</div>
+                        </div>
+                        <div class="podium">${slotsHtml}</div>
+                    </div>`;
+
+                sec.querySelectorAll(".podium-slot[data-nom-id]").forEach(
+                    (el) => {
+                        const open = () => {
+                            const n = nominees.find(
+                                (x) => x.id === el.dataset.nomId,
+                            );
+                            if (n) openProfile(n);
+                        };
+                        el.addEventListener("click", open);
+                        el.addEventListener("keydown", (ev) => {
+                            if (ev.key === "Enter" || ev.key === " ") {
+                                ev.preventDefault();
+                                open();
+                            }
+                        });
+                    },
+                );
+
+                return sec;
+            }
+
             function render() {
                 const c = $("nominees-container");
                 if (!nominees.length) {
@@ -1636,8 +2462,25 @@
                 const cur = stageInfo?.current || "preliminaries";
                 const cutoff = STAGE_CUTOFF[cur] || 10;
                 const curLabel = STAGE_LABELS[cur] || cur;
+                const showWinners = cur === "completed";
 
                 categories.forEach((cat) => {
+                    if (showWinners) {
+                        const all = nominees.filter(
+                            (n) => n.category_id === cat.id,
+                        );
+                        const pool = all.filter(
+                            (n) =>
+                                !n.eliminated ||
+                                (Number.isFinite(Number(n.final_rank)) &&
+                                    Number(n.final_rank) <= 3),
+                        );
+                        const winnersList = pool.length ? pool : all;
+                        if (!winnersList.length) return;
+                        c.appendChild(buildPodiumSection(cat, winnersList));
+                        return;
+                    }
+
                     const list = nominees.filter(
                         (n) => n.category_id === cat.id && !n.eliminated,
                     );
@@ -1654,9 +2497,7 @@
                     const appealAllowed = list.some((n) => n.appealAllowed);
 
                     let badge;
-                    if (cur === "completed")
-                        badge = `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Final Results</div>`;
-                    else if (appealAllowed)
+                    if (appealAllowed)
                         badge = `<div class="cat-badge" style="background:rgba(16,185,129,0.15);color:#065f46;border-color:rgba(16,185,129,0.4);"><i class="ph-fill ph-arrow-clockwise"></i> Appeal approved — vote again</div>`;
                     else if (votedNominee)
                         badge = `<div class="cat-badge voted"><i class="ph-fill ph-check-circle"></i> You voted for ${escapeHtml(votedNominee.name)}</div>`;
@@ -1669,10 +2510,7 @@
                         badge = `<div class="cat-badge"><i class="ph-fill ph-chart-pie-slice"></i> ${activeTotal.toLocaleString()} votes</div>`;
                     }
 
-                    const stageBadge =
-                        cur !== "completed"
-                            ? `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`
-                            : `<div class="cat-badge stage-info"><i class="ph-fill ph-trophy"></i> Winners declared</div>`;
+                    const stageBadge = `<div class="cat-badge stage-info" title="Current stage"><i class="ph-fill ph-flag-checkered"></i> ${escapeHtml(curLabel)} · Top ${cutoff} advance</div>`;
 
                     const sec = document.createElement("div");
                     sec.className = "w-full";
@@ -1810,8 +2648,6 @@
                     btn.disabled = false;
                 }
 
-                // ✅ Report button: show when user already voted in this category
-                //    for a DIFFERENT nominee → navigates to standalone /report page
                 const reportBtn = $("profile-report-btn");
                 if (
                     n.categoryVoted &&
@@ -1943,8 +2779,6 @@
                         const retry = $("vote-error-retry");
                         if (retry) retry.style.display = "none";
 
-                        // ✅ Show report button only if the already-voted nominee is
-                        //    DIFFERENT — clicking it navigates to /report
                         const reportBtn = $("vote-error-report");
                         const sameNominee =
                             e.votedNominee?.code &&

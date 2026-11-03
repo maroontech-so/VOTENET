@@ -67,8 +67,15 @@ function deserializeArg(a) {
   return a;
 }
 
+// Local-only bookkeeping tables that must NEVER be pushed to Turso.
+// Pushing them causes "no such table" errors that stall the entire queue.
+const LOCAL_ONLY_TABLE_RE = /\b(_migrations|_sync_queue|email_log)\b/i;
+
 function enqueue(sql, args) {
   if (!isWrite(sql)) return;
+  // Skip writes to local-only tables. These tables exist only on the local
+  // side and cause unrecoverable push errors when sent to Turso.
+  if (LOCAL_ONLY_TABLE_RE.test(sql)) return;
   try {
     const normalized = makeIdempotent(sql);
     const serializable = (args || []).map(serializeArg);
@@ -214,16 +221,98 @@ async function push() {
 }
 
 /**
+ * Pull a single table from Turso with retries and backoff.
+ *
+ * insertMode:
+ *   "replace"  — INSERT OR REPLACE (config tables)
+ *   "ignore"   — INSERT OR IGNORE (append-only tables)
+ *   "nominees" — INSERT ... ON CONFLICT DO UPDATE (metadata only;
+ *                preserves local votes and stage-related columns)
+ *
+ * Returns { table, pulled, failure? }.
+ */
+async function pullTable(table, insertMode) {
+  const MAX_RETRIES = 3;
+  let lastErr;
+  const PROTECTED_NOMINEE_COLS = [
+    "id",
+    "votes",
+    "stage",
+    "eliminated",
+    "eliminated_stage",
+    "qualified_at",
+    "final_rank",
+  ];
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await remote.execute(`SELECT * FROM ${table}`);
+      if (!res.rows || !res.rows.length) return { table, pulled: 0 };
+      const cols = res.columns;
+      if (!cols || !cols.length) return { table, pulled: 0 };
+
+      // ── nominees special case ──
+      if (insertMode === "nominees") {
+        const updateCols = cols.filter(
+          (c) => !PROTECTED_NOMINEE_COLS.includes(c),
+        );
+        if (updateCols.length === 0) return { table, pulled: 0 };
+        const updateClause = updateCols
+          .map((c) => `${c} = excluded.${c}`)
+          .join(", ");
+        const sql = `INSERT INTO nominees (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})
+          ON CONFLICT(id) DO UPDATE SET ${updateClause}`;
+        const stmt = local.prepare(sql);
+        const insertMany = local.transaction((rows) => {
+          for (const row of rows) {
+            const values = Array.isArray(row) ? row : cols.map((c) => row[c]);
+            stmt.run(...values);
+          }
+        });
+        insertMany(res.rows);
+        return { table, pulled: res.rows.length };
+      }
+
+      // ── normal replace / ignore ──
+      const op =
+        insertMode === "replace" ? "INSERT OR REPLACE" : "INSERT OR IGNORE";
+      const sql = `${op} INTO ${table} (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
+      const stmt = local.prepare(sql);
+      const insertMany = local.transaction((rows) => {
+        for (const row of rows) {
+          const values = Array.isArray(row) ? row : cols.map((c) => row[c]);
+          stmt.run(...values);
+        }
+      });
+      insertMany(res.rows);
+      return { table, pulled: res.rows.length };
+    } catch (e) {
+      lastErr = e;
+      const wait = 500 * attempt;
+      console.warn(
+        `[Pull] ${table}: attempt ${attempt}/${MAX_RETRIES} failed — ${e.message} (retry in ${wait}ms)`,
+      );
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  console.warn(
+    `[Pull] ${table}: giving up after ${MAX_RETRIES} attempts — ${lastErr?.message}`,
+  );
+  return { table, pulled: 0, failure: lastErr?.message };
+}
+
+/**
  * Pull from Turso.
  *
  * - `nominees`: UPSERT updates metadata but PRESERVES local `votes` AND all
- *   stage-related columns (stage, eliminated, eliminated_stage, qualified_at,
- *   final_rank) — those are controlled locally by super admin and should never
- *   be overwritten by stale cloud values.
- * - `election_stages`: NOT pulled — super admin config is local source of truth.
- *   Table exists on Turso via ensureRemoteSchema for backup.
+ *   stage-related columns — those are controlled locally by super admin.
+ * - `election_stages`: NOT pulled — local is authoritative for stage config.
  * - Append-only tables use INSERT OR IGNORE (never overwrite local status).
  * - Config tables (categories, admins, ip_lookup_cache) use INSERT OR REPLACE.
+ * - Local-only tables (email_log, _migrations, _sync_queue) are never pulled.
+ *
+ * Returns { pulled, failures } where failures lists any tables that
+ * exhausted retries.
  */
 async function pull() {
   const REPLACE_TABLES = ["categories", "admins", "ip_lookup_cache"];
@@ -238,97 +327,35 @@ async function pull() {
     "vote_appeals",
     "vote_allowances",
   ];
-  // Election stages is intentionally NOT pulled. Local is authoritative for
-  // super-admin stage config. Push syncs local to cloud for backup only.
 
   let pulled = 0;
+  const failures = [];
 
-  for (const table of REPLACE_TABLES) {
-    try {
-      const res = await remote.execute(`SELECT * FROM ${table}`);
-      if (!res.rows || !res.rows.length) continue;
-      const cols = res.columns;
-      if (!cols || !cols.length) continue;
-      const sql = `INSERT OR REPLACE INTO ${table} (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
-      const stmt = local.prepare(sql);
-      const insertMany = local.transaction((rows) => {
-        for (const row of rows) {
-          const values = Array.isArray(row) ? row : cols.map((c) => row[c]);
-          stmt.run(...values);
-        }
-      });
-      insertMany(res.rows);
-      pulled += res.rows.length;
-    } catch (e) {
-      console.warn(`[Pull] ${table}:`, e.message);
-    }
+  for (const t of REPLACE_TABLES) {
+    const r = await pullTable(t, "replace");
+    pulled += r.pulled || 0;
+    if (r.failure) failures.push({ table: t, error: r.failure });
+    else if (r.pulled) console.log(`  [Pull] ${t}: ${r.pulled}`);
   }
 
-  for (const table of IGNORE_TABLES) {
-    try {
-      const res = await remote.execute(`SELECT * FROM ${table}`);
-      if (!res.rows || !res.rows.length) continue;
-      const cols = res.columns;
-      if (!cols || !cols.length) continue;
-      const sql = `INSERT OR IGNORE INTO ${table} (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
-      const stmt = local.prepare(sql);
-      const insertMany = local.transaction((rows) => {
-        for (const row of rows) {
-          const values = Array.isArray(row) ? row : cols.map((c) => row[c]);
-          stmt.run(...values);
-        }
-      });
-      insertMany(res.rows);
-      pulled += res.rows.length;
-    } catch (e) {
-      console.warn(`[Pull] ${table}:`, e.message);
-    }
+  for (const t of IGNORE_TABLES) {
+    const r = await pullTable(t, "ignore");
+    pulled += r.pulled || 0;
+    if (r.failure) failures.push({ table: t, error: r.failure });
+    else if (r.pulled) console.log(`  [Pull] ${t}: ${r.pulled}`);
   }
 
-  // Nominees: UPSERT metadata; preserve votes AND stage-related local columns
-  const PROTECTED_NOMINEE_COLS = [
-    "id",
-    "votes",
-    "stage",
-    "eliminated",
-    "eliminated_stage",
-    "qualified_at",
-    "final_rank",
-  ];
-  try {
-    const res = await remote.execute("SELECT * FROM nominees");
-    if (res.rows && res.rows.length) {
-      const cols = res.columns;
-      const updateCols = cols.filter(
-        (c) => !PROTECTED_NOMINEE_COLS.includes(c),
-      );
-      if (updateCols.length > 0) {
-        const updateClause = updateCols
-          .map((c) => `${c} = excluded.${c}`)
-          .join(", ");
-        const sql = `INSERT INTO nominees (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})
-          ON CONFLICT(id) DO UPDATE SET ${updateClause}`;
-        const stmt = local.prepare(sql);
-        const insertMany = local.transaction((rows) => {
-          for (const row of rows) {
-            const values = Array.isArray(row) ? row : cols.map((c) => row[c]);
-            stmt.run(...values);
-          }
-        });
-        insertMany(res.rows);
-        pulled += res.rows.length;
-      }
-    }
-  } catch (e) {
-    console.warn("[Pull] nominees:", e.message);
-  }
+  const rn = await pullTable("nominees", "nominees");
+  pulled += rn.pulled || 0;
+  if (rn.failure) failures.push({ table: "nominees", error: rn.failure });
+  else if (rn.pulled) console.log(`  [Pull] nominees: ${rn.pulled}`);
 
-  return { pulled };
+  return { pulled, failures };
 }
 
 async function reconcileVotes() {
   try {
-    // ✅ Use SUM(votes_added) so multi-boost counts are respected
+    // Use SUM(votes_added) so multi-boost counts are respected
     const mismatched = local
       .prepare(
         `
@@ -425,7 +452,6 @@ async function ensureRemoteSchema() {
     `CREATE TABLE IF NOT EXISTS free_votes (id TEXT PRIMARY KEY, voter_token TEXT NOT NULL, nominee_id TEXT NOT NULL, device_hash TEXT, ip TEXT, category_id TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(voter_token, nominee_id))`,
     `CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, data BLOB NOT NULL, mime TEXT NOT NULL, size INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, display_name TEXT, role TEXT DEFAULT 'admin', created_by TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, revoked INTEGER DEFAULT 0, revoked_at TEXT, revoked_by TEXT)`,
-    // ✅ nominee_boosts WITHOUT UNIQUE — supports multiple boosts per nominee
     `CREATE TABLE IF NOT EXISTS nominee_boosts (id TEXT PRIMARY KEY, nominee_id TEXT NOT NULL, reference TEXT NOT NULL, votes_added INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS vote_reports (id TEXT PRIMARY KEY, report_code TEXT UNIQUE NOT NULL, reported_at TEXT DEFAULT CURRENT_TIMESTAMP, ip TEXT, user_agent TEXT, voter_token TEXT, device_hash TEXT, fingerprint_details TEXT, report_description TEXT, reporter_name TEXT, reporter_contact TEXT, verdict TEXT NOT NULL, matched_votes TEXT, geo_info TEXT)`,
     `CREATE TABLE IF NOT EXISTS ip_lookup_cache (ip TEXT PRIMARY KEY, country TEXT, region TEXT, city TEXT, isp TEXT, org TEXT, asn TEXT, fetched_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
@@ -456,9 +482,7 @@ async function ensureRemoteSchema() {
   ]) {
     try {
       await remote.execute(`ALTER TABLE nominees ADD COLUMN ${col}`);
-    } catch (e) {
-      // column exists - ignore
-    }
+    } catch (e) {}
   }
 
   // Ensure free_votes has all columns on remote
@@ -469,15 +493,13 @@ async function ensureRemoteSchema() {
     "user_agent TEXT",
     "fingerprint_json TEXT",
     "is_appeal INTEGER DEFAULT 0",
+    "fingerprint_hash TEXT",
   ]) {
     try {
       await remote.execute(`ALTER TABLE free_votes ADD COLUMN ${col}`);
-    } catch (e) {
-      // column exists - ignore
-    }
+    } catch (e) {}
   }
 
-  // Ensure idx_fv_device_cat excludes appeal votes
   try {
     await remote.execute(`DROP INDEX IF EXISTS idx_fv_device_cat`);
     await remote.execute(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fv_device_cat
@@ -489,7 +511,7 @@ async function ensureRemoteSchema() {
     }
   }
 
-  // ✅ MIGRATION: remove UNIQUE constraint from remote nominee_boosts
+  // Migration: remove UNIQUE constraint from remote nominee_boosts
   try {
     const t = await remote.execute(
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='nominee_boosts'",
@@ -526,23 +548,57 @@ async function ensureRemoteSchema() {
   );
 }
 
+/**
+ * If the local DB has no data in ANY core table, pull everything from Turso.
+ *
+ * Previously this only checked `categories`. Turso has 0 categories but may
+ * have nominees/votes, so the old logic re-pulled on every restart and
+ * never stabilized. Now we check all core tables — if ANY has data, the
+ * local DB is considered populated and Turso is NOT pulled.
+ */
 async function bootstrapIfEmpty() {
   let isEmpty;
+  let stats = { cats: 0, noms: 0, votes: 0, boosts: 0 };
   try {
-    const row = local.prepare("SELECT COUNT(*) AS c FROM categories").get();
-    isEmpty = !row || Number(row.c) === 0;
+    stats.cats =
+      local.prepare("SELECT COUNT(*) AS c FROM categories").get()?.c || 0;
+    stats.noms =
+      local.prepare("SELECT COUNT(*) AS c FROM nominees").get()?.c || 0;
+    stats.votes =
+      local.prepare("SELECT COUNT(*) AS c FROM free_votes").get()?.c || 0;
+    stats.boosts =
+      local.prepare("SELECT COUNT(*) AS c FROM nominee_boosts").get()?.c || 0;
+    isEmpty =
+      Number(stats.cats) === 0 &&
+      Number(stats.noms) === 0 &&
+      Number(stats.votes) === 0 &&
+      Number(stats.boosts) === 0;
   } catch {
     isEmpty = true;
   }
 
   if (!isEmpty) {
-    console.log("  Local DB has data — using as primary");
+    console.log(
+      `  Local DB has data — using as primary ` +
+        `(categories=${stats.cats}, nominees=${stats.noms}, free_votes=${stats.votes}, boosts=${stats.boosts})`,
+    );
     return;
   }
 
   console.log("  → Local DB is empty — pulling from Turso Cloud…");
-  const { pulled } = await pull();
+  const { pulled, failures } = await pull();
   console.log(`  ✓ Pull complete — ${pulled} row(s) restored`);
+  if (failures && failures.length) {
+    console.warn(
+      `  ⚠ ${failures.length} table(s) failed to pull after retries:`,
+    );
+    for (const f of failures) {
+      console.warn(`      ${f.table}: ${f.error}`);
+    }
+    console.warn(
+      `  ⚠ Restored DB may be incomplete. Restart to retry, or verify Turso connectivity.`,
+    );
+  }
 }
 
 async function checkpoint() {

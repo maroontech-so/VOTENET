@@ -4,5 +4,7 @@ uploads
 5eef89208fc7.cap/
 voting-local.db-shm
 voting-local.db-wal
-voting-local.db
+recovered
+reshaped
+
 .kilo
